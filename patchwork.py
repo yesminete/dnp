@@ -19,6 +19,7 @@ import cv2
 from tensorflow.keras import Model
 
 from tensorflow.keras import layers
+import nibabel as nib
 
 import json
 
@@ -293,7 +294,7 @@ class CropGenerator():
       if sz is None:             
          sz = [None] * (nD+1)
          for k in range(nD):
-           sz[k+1] = patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) 
+           sz[k+1] = tf.math.floor(patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) )
 
       rans = [None] * nD
       start_abs = [None] * nD
@@ -311,6 +312,20 @@ class CropGenerator():
       qwq = tf.expand_dims(self.rep_rans(rans,patch_size,nD),0)
 
       local_box_index = tf.dtypes.cast(start_abs+qwq+0.5,dtype=tf.int32)
+
+
+      ## clip indices
+      lind = []
+      for k in range(nD):
+        tmp = local_box_index[...,k:(k+1)]
+        tmp = tf.math.maximum(tmp,0)
+        tmp = tf.math.minimum(tmp,tf.cast(sz[k+1]-1,tf.int32))
+        lind.append(tmp)
+      local_box_index = tf.concat(lind,nD+1)
+
+
+
+
       return local_box_index, sz;
 
 
@@ -684,7 +699,8 @@ class PatchWorkModel(Model):
                forward_type='simple',
                num_labels=1,
                intermediate_loss=False,
-               intermediate_out=0               
+               intermediate_out=0,
+               finalBlock=None
                ):
     super(PatchWorkModel, self).__init__()
     self.blocks = []
@@ -694,6 +710,7 @@ class PatchWorkModel(Model):
     self.num_labels = num_labels
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+    self.finalBlock=finalBlock
     
     if callable(blockCreator):
         for k in range(self.cropper.depth-1): 
@@ -737,20 +754,45 @@ class PatchWorkModel(Model):
       else:
           assert "ahhhh"
     
+    if self.finalBlock is not None:
+        output[-1] = self.finalBlock(output[-1])
+    
     if not self.intermediate_loss:
       return [output[-1]]
     else:
       return output
   
+  def apply_on_nifti(self,fname, ofname,
+                 generate_type='tree',
+                 jitter=0.05,
+                 repetitions=5):
+      nD = self.cropper.ndim
+      
+      img1 = nib.load(fname)        
+      a = np.expand_dims(np.squeeze(img1.get_fdata()),0)
+      if len(a.shape) < nD+2:
+          a = np.expand_dims(a,nD+1)
+      a = tf.convert_to_tensor(a,dtype=tf.float32)
+      res = self.apply_full(a,generate_type=generate_type,
+                            jitter=jitter,
+                            repetitions=repetitions,
+                            scale_to_original=True)
+
+      pred_nii = nib.Nifti1Image(res, img1.affine, img1.header)
+      nib.save(pred_nii,ofname)
+
+
   def apply_full(self, data,
                  level=-1,
                  generate_type='tree',
                  jitter=0.05,
                  repetitions=5,
-                 dest_resolution=None,
+                 scale_to_original=False,
                  verbose=False
                  ):
-     
+
+     nD = self.cropper.ndim
+
      zipper = lambda a,b,f : list(map(lambda pair: f(pair[0],pair[1]) , list(zip(a, b))))
 
      single = False
@@ -776,7 +818,13 @@ class PatchWorkModel(Model):
           a,b = x.stitchResult(r,k)
           pred[k] += a
           sumpred[k] += b         
-        res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))
+     res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))
+        
+     sz = data.shape
+     orig_shape = sz[1:(nD+1)]
+     if scale_to_original:
+         for k in level:
+            res[k] = tf.squeeze(self.cropper.resize(tf.expand_dims(res[k],0),orig_shape,True))
            
      
      if single:
@@ -817,7 +865,8 @@ class patchworkModelEncoder(json.JSONEncoder):
                     'intermediate_out':obj.intermediate_out,
                     'intermediate_loss':obj.intermediate_loss,   
                     'blocks':obj.blocks,
-                    'cropper':obj.cropper
+                    'cropper':obj.cropper,
+                    'finalBlock':obj.finalBlock
                  }
         if isinstance(obj,CropGenerator):
            return { 'patch_size':obj.patch_size,
