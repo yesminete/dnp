@@ -6,6 +6,9 @@ Created on Mon Mar 23 15:37:03 2020
 @author: reisertm
 """
 
+import tensorflow as tf
+from improc_utils import *
+
 
 ########## Cropmodel ##########################################
 
@@ -163,7 +166,7 @@ class CropGenerator():
       for k in range(nD):
         scfac = sz[k+1] / dest_shape[k]
         rans[k] = tf.cast(tf.range(dest_shape[k]),dtype=tf.float32)*scfac
-      qwq = self.rep_rans(rans,dest_shape,nD)
+      qwq = rep_rans(rans,dest_shape,nD)
 
       index = tf.dtypes.cast(qwq,dtype=tf.int32)
       res = []
@@ -211,24 +214,6 @@ class CropGenerator():
         break
     return i
 
-  # computes a meshgrid like thing, but  suitable for gather_nd
-  # output shape 2D : w h 2  and 3D: w h d 3
-  def rep_rans(self,rans,sizes,nD):
-      if nD == 2:
-        qwq = tf.concat( [       
-                          tf.expand_dims(tf.tile(tf.expand_dims(rans[0],1),[1, sizes[1]]),2) ,
-                          tf.expand_dims(tf.tile(tf.expand_dims(rans[1],0),[sizes[0], 1]),2) 
-                          ] , 2) 
-      elif nD == 3:        
-        qwq = tf.concat( [       
-                          tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[0],1),2),[1, sizes[1], sizes[2]]),3) ,
-                          tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[1],0),2),[sizes[0], 1, sizes[2]]),3) ,
-                          tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[2],0),1),[sizes[0], sizes[1], 1]),3) 
-                        ] , 3) 
-      else: 
-        assert "other than 2D/3D not implemented"
-      return qwq
-
   # Converts normalized coordinates (as used in tf.crop_and_resize) in local_boxes 
   # to actual pixel coordinates, it assumed that all boxes are of the same size!! 
   #  local_boxes - normalized coordinates of shape [N,4] (2D) or [N,6] (3D), 
@@ -255,7 +240,7 @@ class CropGenerator():
       res_shape[nD+1] = nD
       start_abs = tf.reshape(start_abs,res_shape)
 
-      qwq = tf.expand_dims(self.rep_rans(rans,patch_size,nD),0)
+      qwq = tf.expand_dims(rep_rans(rans,patch_size,nD),0)
 
       local_box_index = tf.dtypes.cast(start_abs+qwq+0.5,dtype=tf.int32)
 
@@ -310,7 +295,7 @@ class CropGenerator():
         frac = nums[k]*delta-1
         centers[k] = tf.cast(tf.range(nums[k]),dtype=tf.float32)*delta + (delta-frac)*0.5
         totnum *= nums[k]
-      centers = self.rep_rans(centers,nums,nD)
+      centers = rep_rans(centers,nums,nD)
 
       if randfun is not None:
         centers = centers + randfun(centers.shape)
