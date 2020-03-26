@@ -61,23 +61,32 @@ class CropGenerator():
                                            # b) if init_scale = sfac, it's the scale factor which the full image is scaled to
                                            # c) if init_scale = [sx,sy], it's the shape the full image is scaled to
                     keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
-                    overlap = 4,           # overlap of patches in percent
+                    smoothfac_data = 0.5,  # 
+                    smoothfac_label = 1.0, #
                     depth=3,               # depth of patchwork
                     ndim=2,
                     ):
     self.model = None
     self.patch_size = patch_size
     self.scale_fac = scale_fac
+    self.smoothfac_data = smoothfac_data
+    self.smoothfac_label = smoothfac_label
     self.init_scale = init_scale
     self.keepAspect = keepAspect
     self.depth = depth
     self.ndim = ndim
-    self.overlap_perc = overlap # for serizalization
-    self.overlap = 1+tf.constant(overlap,dtype=tf.float32)/100 + 0.000001
 
     assert scale_fac < 1 and scale_fac > 0.01, "please choose scale_fac in the interval (0.01, 1)"
-    assert overlap >= 0 and overlap < 50 , "please choose overlap in the interval (0,50) "
 
+  def serialize_(self):
+      return { 'patch_size':self.patch_size,
+               'scale_fac' :self.scale_fac,
+               'init_scale':self.init_scale,
+               'smoothfac_data':self.smoothfac_data,
+               'smoothfac_label':self.smoothfac_label,
+               'depth':self.depth,
+               'ndim':self.ndim
+            }
 
 
   # generates cropped data structure
@@ -92,7 +101,8 @@ class CropGenerator():
   def sample(self,trainset,labelset,test=False,
              generate_type='random',  # 'random' or 'tree' or 'tree_full'
              num_patches=1,           #  if 'random' this gives the number of draws, otherwise no function
-             randfun=None,            #  if 'tree' this is the funtion which computes the random jitter (e.g. lambda s : tf.random.normal(s,stddev=0.05)
+             jitter=0,                #  if 'tree' this is the amount of random jitter
+             overlap=0,
              verbose=False):
 
 
@@ -113,10 +123,10 @@ class CropGenerator():
 
     for j in range(N):
 
-      x = self.createCropsLocal(trainset[j],labelset[j],None,generate_type,test,num_patches=num_patches,randfun=randfun,verbose=verbose)
+      x = self.createCropsLocal(trainset[j],labelset[j],None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
       scales = [x]
       for k in range(self.depth-1):
-        x = self.createCropsLocal(trainset[j],labelset[j],x,generate_type,test,num_patches=num_patches,randfun=randfun,verbose=verbose)
+        x = self.createCropsLocal(trainset[j],labelset[j],x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
         scales.append(x)
 
       if reptree:
@@ -152,33 +162,6 @@ class CropGenerator():
           multiples[0] = b//s[j].shape[0]
           s[j] = tf.tile(s[j],multiples)          
     return scales
-
-  # a simple resize of the image
-  # 2D image array of size [w,h,f] (if batch_dim=False) or [b,w,h,f] (if batch_dim=True)
-  # 3D image array of size [w,h,d,f] (if batch_dim=False) or [b,w,h,d,f] (if batch_dim=True)
-  # dest_shape a list of new size (len(dest_shape) = 2 or 3)
-  def resize(self,image,dest_shape,batch_dim=False):
-      if not batch_dim:
-        image = tf.expand_dims(image,0)
-      nD = self.ndim      
-      sz = image.shape
-      rans = [None] * nD
-      for k in range(nD):
-        scfac = sz[k+1] / dest_shape[k]
-        rans[k] = tf.cast(tf.range(dest_shape[k]),dtype=tf.float32)*scfac
-      qwq = rep_rans(rans,dest_shape,nD)
-
-      index = tf.dtypes.cast(qwq,dtype=tf.int32)
-      res = []
-      for i in range(sz[0]):
-        res.append(tf.expand_dims(tf.gather_nd(tf.squeeze(image[i,...]),index),0))
-      res = tf.concat(res,0)
-      if len(res.shape) == 3:
-        res = tf.expand_dims(res,3)
-      if not batch_dim:
-        res = tf.squeeze(res[0,...])
-
-      return res
  
   # Computes a crop of the input image stack <data_parent> according to indices 
   # given in <parent_box_index>. 
@@ -197,7 +180,7 @@ class CropGenerator():
       elif self.ndim == 3:
           conv_gauss = conv_gauss3D
           
-      if smoothfac is not None:
+      if smoothfac is not None and smoothfac > 0.0:
         data_smoothed =  conv_gauss(data_parent,tf.constant(smoothfac,dtype=tf.float32))
       else:
         data_smoothed =  data_parent
@@ -207,12 +190,6 @@ class CropGenerator():
       res_data = tf.concat(res_data,0)
       return res_data
 
-  # to get a nice shape which dividable by divisor 
-  def getClosestDivisable(self,x,divisor):
-    for i in range(x,2*x):
-      if i % divisor == 0:
-        break
-    return i
 
   # Converts normalized coordinates (as used in tf.crop_and_resize) in local_boxes 
   # to actual pixel coordinates, it assumed that all boxes are of the same size!! 
@@ -264,26 +241,26 @@ class CropGenerator():
   #  bbox_sz - a list of size 4 (2D) or 6 (3D) representing the template of the box
   #              with origin zero.
   #  numboxes - number of boxes to be distributed
-  #  overlap - a float >=1 (e.g. 1.1 means 10% oversize)
   # returns boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) suitable as
   #  input for convert_to_gatherND_index
-  def random_boxes(self,bbox_sz,numboxes,overlap):
+  def random_boxes(self,bbox_sz,numboxes):
       nD = self.ndim
       centers = [None]*(nD*2)
       for k in range(nD):
         c = tf.random.uniform(shape=(numboxes, 1))*(1-bbox_sz[k+nD]+bbox_sz[k])-bbox_sz[k]
         centers[k] = c
         centers[k+nD] = c
-      local_boxes = tf.concat(centers,1) + bbox_sz*overlap
+      local_boxes = tf.concat(centers,1) + bbox_sz
+      
       return local_boxes
 
   # Computes normalized coordinates of random crops
   #  bbox_sz - a list of size 4 (2D) or 6 (3D) representing the template of the box
   #              with origin zero.
-  #  overlap - a float >=1 (e.g. 1.1 means 10% oversize)
-  #  randfun - to add random jitter 
+  #  overlap - an integer giving the additoinal number of boxes per dimension
+  #  jitter - to add random jitter 
   # return boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) 
-  def tree_boxes(self,bbox_sz,overlap,randfun=None):
+  def tree_boxes(self,bbox_sz,overlap,jitter=0):
 
       nD = self.ndim
       centers = [None] * nD
@@ -291,26 +268,42 @@ class CropGenerator():
       totnum = 1
       for k in range(nD):
         delta = bbox_sz[nD+k]-bbox_sz[k]
-        nums[k] = tf.floor(1/delta)+1
+        nums[k] = tf.floor(1/delta)+1+overlap
+        delta_small= (1-delta)/(nums[k]-1) -0.000001
         frac = nums[k]*delta-1
-        centers[k] = tf.cast(tf.range(nums[k]),dtype=tf.float32)*delta + (delta-frac)*0.5
+        centers[k] = tf.cast(tf.range(nums[k]),dtype=tf.float32)*delta_small + delta*0.5
         totnum *= nums[k]
       centers = rep_rans(centers,nums,nD)
+      
+      if jitter > 0:
+          sh = centers.shape
+          rands = []
+          for k in range(nD):
+             delta = bbox_sz[nD+k]-bbox_sz[k]              
+             rng = np.random.uniform(-delta/2*jitter,delta/2*jitter,sh[0:nD])
+             if k == 0: 
+                 rng[0,:,:] = 0
+                 rng[-1,:,:] = 0
+             elif k == 1:
+                 rng[:,0,:] = 0
+                 rng[:,-1,:] = 0
+             else:
+                 rng[:,:,0] = 0
+                 rng[:,:,-1] = 0
+             rands.append(np.expand_dims(rng,nD))
+          rands = np.concatenate(rands,nD)
+          centers = centers + rands
 
-      if randfun is not None:
-        centers = centers + randfun(centers.shape)
-      qwq = tf.tile(tf.reshape(centers,[totnum,nD]),[1,2]) + bbox_sz*overlap
-
+      qwq = tf.tile(tf.reshape(centers,[totnum,nD]),[1,2]) + bbox_sz
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,generate_type,test,randfun=None,num_patches=1,verbose=True):
+  def createCropsLocal(self,data_parent,labels_parent,crops,generate_type,test,jitter=0,num_patches=1,overlap=0,verbose=True):
       patch_size = self.patch_size
       scale_fac = self.scale_fac
       init_scale = self.init_scale
       keepAspect = self.keepAspect
       divisor = 8 # used for initital scale to get a nice image size
-      overlap = self.overlap
       nD = self.ndim
       
       forwarded_aspects = [1]*nD
@@ -358,7 +351,7 @@ class CropGenerator():
         qbox = [None] * (2*nD)
         for d in range(nD):
           desired = round(init_scale*sz[d+1])
-          patch_size[d] = self.getClosestDivisable(desired,divisor)
+          patch_size[d] = getClosestDivisable(desired,divisor)
           fac = 1 #patch_size[d]/desired
           qbox[d] = tf.zeros(shape=(replicate_patches*bsize, 1))
           qbox[d+nD] = fac*tf.ones(shape=(replicate_patches*bsize, 1))
@@ -374,9 +367,9 @@ class CropGenerator():
             bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]
             bbox_sz[d+nD] = asp*patch_size[d]/sz[d+1] *aspect_correction[d]
         if generate_type == 'random':     
-          local_boxes = self.random_boxes(bbox_sz,replicate_patches*bsize,overlap)
+          local_boxes = self.random_boxes(bbox_sz,replicate_patches*bsize)
         elif generate_type == 'tree':          
-          local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,randfun=randfun)
+          local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter)
 
 
 
@@ -404,7 +397,7 @@ class CropGenerator():
               rans[k+nD] = local_boxes[:,:,(k+nD):(k+nD+1)]*delta + last_boxes[:,:,k:(k+1)]
           parent_boxes = tf.concat(rans,2)
           parent_boxes = tf.reshape(parent_boxes,[parent_boxes.shape[0]*parent_boxes.shape[1], 2*nD])
-          local_boxes =  local_boxes + 0*last_boxes
+          local_boxes =  tf.tile(local_boxes,[1,last_boxes.shape[1],1])
           local_boxes = tf.reshape(local_boxes,[local_boxes.shape[0]*local_boxes.shape[1], 2*nD])
       
 
@@ -429,16 +422,18 @@ class CropGenerator():
 
 
       ############## do the actual cropping
-      res_data = self.crop(data_parent,parent_box_index,resolution[0]/2.0)        
+      res_data = self.crop(data_parent,parent_box_index,resolution[0]*self.smoothfac_data)        
       if labels_parent is not None:      
-        res_labels = self.crop(labels_parent,parent_box_index,resolution[0])
+        res_labels = self.crop(labels_parent,parent_box_index,resolution[0]*self.smoothfac_label)
       else:
         res_labels = None
 
       # for testing
       if test:
         if crops is None:
-          images = tf.tile(images,[num_patches,1,1,1])
+          mult = (nD+2)*[1]
+          mult[0] = num_patches
+          images = tf.tile(images,mult)
        # test = tf.image.crop_and_resize(images,local_boxes,box_indices,patch_size)
         test = tf.gather_nd(images,local_box_index,batch_dims=1)
       else:
@@ -471,9 +466,8 @@ class CropGenerator():
 
 
   def testtree(self,im):
-    randfun = lambda shape : tf.random.normal(shape,stddev=0.05)
     print(im.shape)
-    c = self.sample(im[0:1,...],None,test=False,generate_type='tree',randfun=randfun,verbose=True)
+    c = self.sample(im[0:1,...],None,test=False,generate_type='tree',jitter=0.1,verbose=True)
     self.showtest(c)
 
   def testrandom(self,im):

@@ -26,6 +26,7 @@ import json
 
 from crop_generator import *
 
+from improc_utils import *
 
 
 
@@ -141,6 +142,16 @@ class PatchWorkModel(Model):
         for k in range(self.cropper.depth-1): 
           self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
         self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+  
+  def serialize_(self):
+    return   { 'forward_type':self.forward_type,
+               'num_labels':self.num_labels,
+               'intermediate_out':self.intermediate_out,
+               'intermediate_loss':self.intermediate_loss,   
+               'blocks':self.blocks,
+               'cropper':self.cropper,
+               'finalBlock':self.finalBlock
+            }
 
   def call(self, inputs, training=False):
     nD = self.cropper.ndim
@@ -149,19 +160,20 @@ class PatchWorkModel(Model):
       ## get data and cropcoords at currnet scale
       inp = inputs['input' + str(k)]
       coords = inputs['cropcoords' + str(k)]
-
       if len(output) > 0:
          # get result from last scale
          last = output[-1]
          if last.shape[0] is not None and coords.shape[0] != last.shape[0]:            
             multiples = [1]*(nD+2)
             multiples[0] = coords.shape[0]//last.shape[0]
-            last = tf.tile(last,multiples)         
+            last = tf.tile(last,multiples)     
+            
          last_cropped = tf.gather_nd(last,coords,batch_dims=1)
          
          # cat with input
          if self.forward_type == 'simple':
-            inp = tf.concat([inp,last_cropped],(nD+1))
+             # for testing: inp = last_cropped
+             inp = tf.concat([inp,last_cropped],(nD+1))
          elif self.forward_type == 'mult':
             multiples = [1]*(nD+2)
             multiples[nD+1] = last_cropped.shape[nD+1]
@@ -172,6 +184,7 @@ class PatchWorkModel(Model):
 
       ## apply the network at the current scale 
       res = self.blocks[k](inp)
+      # for testing: res = inp
       if nD == 2:
           output.append(res[:,:,:,0:self.num_labels])
       elif nD == 3:
@@ -180,7 +193,7 @@ class PatchWorkModel(Model):
           assert "ahhhh"
     
     if self.finalBlock is not None:
-        output[-1] = self.finalBlock(output[-1])
+       output[-1] = self.finalBlock(output[-1])
     
     if not self.intermediate_loss:
       return [output[-1]]
@@ -190,6 +203,7 @@ class PatchWorkModel(Model):
   # for multi-contrast data fname is a list
   def apply_on_nifti(self,fname, ofname=None,
                  generate_type='tree',
+                 overlap=0,
                  jitter=0.05,
                  repetitions=5):
       nD = self.cropper.ndim
@@ -207,6 +221,7 @@ class PatchWorkModel(Model):
           
       res = self.apply_full(a,generate_type=generate_type,
                             jitter=jitter,
+                            overlap=overlap,                            
                             repetitions=repetitions,
                             scale_to_original=True)
 
@@ -220,6 +235,7 @@ class PatchWorkModel(Model):
                  level=-1,
                  generate_type='tree',
                  jitter=0.05,
+                 overlap=0,
                  repetitions=5,
                  scale_to_original=False,
                  verbose=False
@@ -244,21 +260,28 @@ class PatchWorkModel(Model):
      
      for i in range(repetitions):
         x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
-                                randfun = lambda s : tf.random.normal(s,stddev=jitter),
+                                jitter = jitter,
+                                overlap=overlap,
                                  num_patches=reps,verbose=verbose)
         data_ = x.getInputData()
-        r = self(data_)
-        for k in level:
+        if generate_type == 'random' or generate_type == 'tree_full':
+            r = self.predict(data_)
+            if not isinstance(r,list):
+                r = [r]
+        else:
+            r = self(data_)
+        for k in level:            
           a,b = x.stitchResult(r,k)
           pred[k] += a
           sumpred[k] += b         
      res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))
+     #res = sumpred
         
      sz = data.shape
      orig_shape = sz[1:(nD+1)]
      if scale_to_original:
          for k in level:
-            res[k] = tf.squeeze(self.cropper.resize(tf.expand_dims(res[k],0),orig_shape,True))
+            res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=True))
            
      
      if single:
@@ -300,25 +323,14 @@ class PatchWorkModel(Model):
 
 class patchworkModelEncoder(json.JSONEncoder):
     def default(self, obj):
+        
+        name = obj.__class__.__name__
 
-        if isinstance(obj,PatchWorkModel):
-           return { 'forward_type':obj.forward_type,
-                    'num_labels':obj.num_labels,
-                    'intermediate_out':obj.intermediate_out,
-                    'intermediate_loss':obj.intermediate_loss,   
-                    'blocks':obj.blocks,
-                    'cropper':obj.cropper,
-                    'finalBlock':obj.finalBlock
-                 }
-        if isinstance(obj,CropGenerator):
-           return { 'patch_size':obj.patch_size,
-                    'scale_fac' :obj.scale_fac,
-                    'init_scale':obj.init_scale,
-                    'overlap':obj.overlap_perc,
-                    'depth':obj.depth,
-                    'ndim':obj.ndim
-                 }
-        if isinstance(obj,CNNblock):            
+        if name == "PatchWorkModel":
+           return obj.serialize_()
+        if name =="CropGenerator":
+           return obj.serialize_()
+        if name == "CNNblock":            
            return {'CNNblock': obj.theLayers }
         if isinstance(obj,layers.Layer):
            return {'keras_layer':obj.get_config(), 'name': obj.__class__.__name__ }

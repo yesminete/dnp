@@ -8,7 +8,7 @@ Created on Mon Mar 23 15:29:09 2020
 
 import tensorflow as tf
 
-
+import numpy as np
 
 ########## Cropmodel ##########################################
 
@@ -50,7 +50,15 @@ def conv_gauss3D(img,std):
   return r
 
 
-# a simple resize of the image
+  # to get a nice shape which dividable by divisor 
+def getClosestDivisable(x,divisor):
+    for i in range(x,2*x):
+      if i % divisor == 0:
+        break
+    return i
+
+
+# a simple resize of the image by nearest neighbor interp.
 # 2D image array of size [w,h,f] (if batch_dim=False) or [b,w,h,f] (if batch_dim=True)
 # 3D image array of size [w,h,d,f] (if batch_dim=False) or [b,w,h,d,f] (if batch_dim=True)
 # dest_shape a list of new size (len(dest_shape) = 2 or 3)
@@ -75,6 +83,115 @@ def resizeND(image,dest_shape,batch_dim=False,nD=2):
       res = tf.squeeze(res[0,...])
 
     return res
+
+
+# a simple resize of the image by linear interpolation
+# 2D image array of size [w,h,f] (if batch_dim=False) or [b,w,h,f] (if batch_dim=True)
+# 3D image array of size [w,h,d,f] (if batch_dim=False) or [b,w,h,d,f] (if batch_dim=True)
+# dest_shape a list of new size (len(dest_shape) = 2 or 3)
+def resizeNDlinear(image,dest_shape,batch_dim=False,nD=2,edge_center=False):
+    if not batch_dim:
+      image = tf.expand_dims(image,0)
+    sz = image.shape
+    rans0 = [None] * nD
+    rans1 = [None] * nD
+    fracs = [None] * nD
+
+
+    for k in range(nD):
+      scfac = sz[k+1] / dest_shape[k]
+      tmp = np.arange(dest_shape[k])*scfac
+      if edge_center:
+          tmp = tmp + 0.5
+      ints = np.floor(tmp)
+      rans0[k] = tf.convert_to_tensor(ints,dtype=tf.int32)
+      rans1[k] = ints+1
+      rans1[k][rans1[k]>=sz[k+1]] = sz[k+1] - 1    
+      rans1[k] = tf.convert_to_tensor(rans1[k],dtype=tf.int32)
+      fracs[k] = tf.convert_to_tensor(tmp-ints,dtype=tf.float32)
+    
+    
+    weights = rep_rans(fracs,dest_shape,nD)
+        
+    res = [0]*sz[0]
+    
+    if nD == 2:
+
+        index =   rep_rans([rans0[0],rans0[1]],dest_shape,nD)
+        w = tf.expand_dims((1-weights[...,0])*(1-weights[...,1]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(tf.squeeze(image[i,...]),index),0)
+
+        index =   rep_rans([rans1[0],rans0[1]],dest_shape,nD)
+        w = tf.expand_dims((weights[...,0])*(1-weights[...,1]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(tf.squeeze(image[i,...]),index),0)
+
+        index =   rep_rans([rans0[0],rans1[1]],dest_shape,nD)
+        w = tf.expand_dims((1-weights[...,0])*(weights[...,1]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(tf.squeeze(image[i,...]),index),0)
+
+        index =   rep_rans([rans1[0],rans1[1]],dest_shape,nD)
+        w = tf.expand_dims((weights[...,0])*(weights[...,1]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(tf.squeeze(image[i,...]),index),0)
+    
+    elif nD == 3:
+        if image.shape[4] == 1:
+            im =  lambda i: tf.expand_dims(tf.squeeze(image[i,...]),3)
+        else:
+            im =  lambda i: tf.squeeze(image[i,...])
+
+        index =   rep_rans([rans0[0],rans0[1],rans0[2]],dest_shape,nD)
+        w = tf.expand_dims((1-weights[...,0])*(1-weights[...,1])*(1-weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans1[0],rans0[1],rans0[2]],dest_shape,nD)
+        w = tf.expand_dims((weights[...,0])*(1-weights[...,1])*(1-weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans0[0],rans1[1],rans0[2]],dest_shape,nD)
+        w = tf.expand_dims((1-weights[...,0])*(weights[...,1])*(1-weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans1[0],rans1[1],rans0[2]],dest_shape,nD)
+        w = tf.expand_dims((weights[...,0])*(weights[...,1])*(1-weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans0[0],rans0[1],rans1[2]],dest_shape,nD)
+        w = tf.expand_dims((1-weights[...,0])*(1-weights[...,1])*(weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans1[0],rans0[1],rans1[2]],dest_shape,nD)
+        w = tf.expand_dims((weights[...,0])*(1-weights[...,1])*(weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans0[0],rans1[1],rans1[2]],dest_shape,nD)
+        w = tf.expand_dims((1-weights[...,0])*(weights[...,1])*(weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+        index =   rep_rans([rans1[0],rans1[1],rans1[2]],dest_shape,nD)
+        w = tf.expand_dims((weights[...,0])*(weights[...,1])*(weights[...,2]),nD)
+        for i in range(sz[0]): 
+            res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
+
+    res = tf.concat(res,0)
+    if len(res.shape) == 3:
+      res = tf.expand_dims(res,3)
+    if not batch_dim:
+      res = tf.squeeze(res[0,...])
+
+    return res
+
+
 
 # computes a meshgrid like thing, but  suitable for gather_nd
 # output shape 2D : w h 2  and 3D: w h d 3
