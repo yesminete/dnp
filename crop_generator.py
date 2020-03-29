@@ -8,6 +8,7 @@ Created on Mon Mar 23 15:37:03 2020
 
 import tensorflow as tf
 from improc_utils import *
+import matplotlib.pyplot as plt
 
 
 ########## Cropmodel ##########################################
@@ -281,15 +282,23 @@ class CropGenerator():
           for k in range(nD):
              delta = bbox_sz[nD+k]-bbox_sz[k]              
              rng = np.random.uniform(-delta/2*jitter,delta/2*jitter,sh[0:nD])
-             if k == 0: 
-                 rng[0,:,:] = 0
-                 rng[-1,:,:] = 0
-             elif k == 1:
-                 rng[:,0,:] = 0
-                 rng[:,-1,:] = 0
+             if nD ==2:
+                 if k == 0: 
+                     rng[0,:] = 0
+                     rng[-1,:] = 0
+                 elif k == 1:
+                     rng[:,0] = 0
+                     rng[:,-1] = 0
              else:
-                 rng[:,:,0] = 0
-                 rng[:,:,-1] = 0
+                  if k == 0: 
+                      rng[0,:,:] = 0
+                      rng[-1,:,:] = 0
+                  elif k == 1:
+                      rng[:,0,:] = 0
+                      rng[:,-1,:] = 0
+                  else:
+                      rng[:,:,0] = 0
+                      rng[:,:,-1] = 0
              rands.append(np.expand_dims(rng,nD))
           rands = np.concatenate(rands,nD)
           centers = centers + rands

@@ -17,8 +17,12 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
 from tensorflow.keras import Model
-
 from tensorflow.keras import layers
+from tensorflow.keras.callbacks import History 
+
+from timeit import default_timer as timer
+
+
 import nibabel as nib
 
 import json
@@ -137,6 +141,11 @@ class PatchWorkModel(Model):
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
     self.finalBlock=finalBlock
+    
+    self.trainloss_hist = []
+    self.validloss_hist = []
+    self.trained_epochs = 0
+    self.modelname = None
     
     if callable(blockCreator):
         for k in range(self.cropper.depth-1): 
@@ -319,6 +328,105 @@ class PatchWorkModel(Model):
     model.load_weights(name + ".tf")
     return model
     
+  def train(self,
+            trainset,labelset, 
+            epochs=20, 
+            num_its=100,
+            traintype='random',
+            num_patches=10,
+            valid_ids = [],
+            jitter=0,
+            num_samples_per_epoch=-1,
+            showplot=True,
+            autosave=True
+            ):
+    
+      
+    def getSample(subset):
+        tset = [trainset[i] for i in subset]
+        lset = [labelset[i] for i in subset]      
+        if traintype == 'random':
+            c = cgen.sample(tset,lset,generate_type='random',  num_patches=num_patches)
+        elif traintype == 'tree':
+            c = cgen.sample(tset,lset,generate_type='tree_full', jitter=jitter)
+        return c
+      
+    history = History()
+    cgen = self.cropper
+        
+    
+    for i in range(num_its):
+        print("======================================================================================")
+        print("iteration:" + str(i))
+        print("======================================================================================")
+
+        trainidx = list(range(len(trainset)))
+        trainidx = [item for item in trainidx if item not in valid_ids]
+        
+        ### sampling
+        print("sampling patches for training")
+        start = timer()
+        if num_samples_per_epoch == -1:          
+           subset = trainidx
+        else:            
+           subset = sample(trainidx,num_samples_per_epoch)
+        c = getSample(subset)            
+        end = timer()
+        print("time elapsed, sampling: " + str(end - start) )
+      
+        ### fitting
+        print("starting training")
+        start = timer()
+        self.fit(c.getInputData(),c.getTargetData(),
+                  epochs=epochs,
+                  verbose=2,
+                  callbacks=[history])
+        end = timer()
+        
+        self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),history.history['loss']))
+        self.trained_epochs += epochs
+        print("time elapsed, fitting: " + str(end - start) )
+        
+        ### validation
+        if len(valid_ids) > 0:
+            print("sampling patches for validation")
+            c = getSample(valid_ids)    
+            print("validating")
+            res = self.evaluate(c.getInputData(),c.getTargetData(),
+                  verbose=2)                
+            self.validloss_hist = self.validloss_hist + [(self.trained_epochs,res)]
+            
+
+        
+        
+        if autosave:
+           if self.modelname is None:
+               print("no name given, not able to save model!")
+           else:
+               self.save(self.modelname)
+
+        if showplot:
+            x = [ i for i, j in self.trainloss_hist ]
+            y = [ j for i, j in self.trainloss_hist ]
+            plt.semilogy(x,y,'r',label="train loss")
+            if len(self.validloss_hist) > 0:
+                x = [ i for i, j in self.validloss_hist ]
+                y = [ j for i, j in self.validloss_hist ]
+                plt.semilogy(x,y,'g',label="valid loss")
+            plt.legend()
+            plt.pause(0.001)
+
+# #%%
+#             x = [ i for i, j in model.trainloss_hist ]
+#             y = [ j for i, j in model.trainloss_hist ]
+#             plt.semilogy(x,y,'r',label="train loss")
+#             x = [ i for i, j in model.validloss_hist ]
+#             y = [ j for i, j in model.validloss_hist ]
+#             plt.semilogy(x,y,'g')
+#             plt.legend()
+      
+#%%
+
 
 
 class patchworkModelEncoder(json.JSONEncoder):
