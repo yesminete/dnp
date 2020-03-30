@@ -22,12 +22,13 @@ from tensorflow.keras.callbacks import History
 
 from timeit import default_timer as timer
 
+from os import path
 
 import nibabel as nib
 
 import json
 
-
+import warnings
 from crop_generator import *
 
 from improc_utils import *
@@ -130,7 +131,11 @@ class PatchWorkModel(Model):
                num_labels=1,
                intermediate_loss=False,
                intermediate_out=0,
-               finalBlock=None
+               finalBlock=None,
+               trainloss_hist = [],
+               validloss_hist = [],
+               trained_epochs = 0,
+               modelname = None
                ):
     super(PatchWorkModel, self).__init__()
     self.blocks = []
@@ -142,10 +147,14 @@ class PatchWorkModel(Model):
     self.intermediate_out = intermediate_out
     self.finalBlock=finalBlock
     
-    self.trainloss_hist = []
-    self.validloss_hist = []
-    self.trained_epochs = 0
-    self.modelname = None
+    self.trainloss_hist = trainloss_hist
+    self.validloss_hist = validloss_hist
+    self.trained_epochs = trained_epochs
+    self.modelname = modelname
+    
+    if modelname is not None and path.exists(modelname + ".json"):
+         warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
+        
     
     if callable(blockCreator):
         for k in range(self.cropper.depth-1): 
@@ -159,7 +168,10 @@ class PatchWorkModel(Model):
                'intermediate_loss':self.intermediate_loss,   
                'blocks':self.blocks,
                'cropper':self.cropper,
-               'finalBlock':self.finalBlock
+               'finalBlock':self.finalBlock,
+               'trainloss_hist':self.trainloss_hist,
+               'validloss_hist':self.validloss_hist,
+               'trained_epochs':self.trained_epochs
             }
 
   def call(self, inputs, training=False):
@@ -326,6 +338,8 @@ class PatchWorkModel(Model):
     
     model = PatchWorkModel(cropper, blkCreator,finalBlock=finalBlock,**x)
     model.load_weights(name + ".tf")
+    model.modelname = name
+    
     return model
     
   def train(self,
