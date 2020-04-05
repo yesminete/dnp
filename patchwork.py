@@ -44,7 +44,15 @@ class CNNblock(layers.Layer):
     super(CNNblock, self).__init__()
     self.theLayers = theLayers
 
-  def call(self, inputs, training=False):
+  def call(self, inputs, alphas=None, training=False):
+    
+    def apply_fun(f,x):
+        if hasattr(f,'isBi') and f.isBi:
+            return f(x,alphas,training=training)
+        else:
+            return f(x,training=training)
+        
+    
     x = inputs
     nD = len(inputs.shape)-2 
     cats = {}
@@ -74,9 +82,12 @@ class CNNblock(layers.Layer):
             res = x
             if isinstance(fun,list):
               for f in fun:
-                  res = f(res,training=training)
+                  res = apply_fun(f,res)
+                  #res = f(res,training=training)
             else:
-              res = fun(res,training=training)
+                res = apply_fun(fun,res)
+                #res = fun(res,training=training)
+              
 
             if 'dest' in d:
               dest = d['dest']
@@ -86,9 +97,11 @@ class CNNblock(layers.Layer):
           x = y
         else:
           for f in a:
-            x = f(x,training=training)
+            #x = f(x,training=training)
+            x = apply_fun(f,x)
       else:
-        x = a(x,training=training)
+        #x = a(x,training=training)
+        x = apply_fun(a,x)
 
     return x
 
@@ -121,17 +134,121 @@ def createCNNBlockFromObj(obj,custom_objects=None):
       
 
 
+############################ biConv
+
+
+class biConvolution(layers.Layer):
+
+  def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=(1,1),**kwargs):
+      
+      
+    super(biConvolution, self).__init__(**kwargs)
+    self.out_n = out_n
+    self.ksize = ksize
+    self.strides = strides
+    self.padding = padding
+    self.transpose = transpose
+    self.nD = nD
+    self.initializer = tf.random_normal_initializer(0, 0.05)
+    self.num_alpha = 0
+    self.isBi=True
+
+  def get_config(self):
+
+        config = super().get_config().copy()
+        config.update(
+        {
+            'out_n': self.out_n,
+            'ksize': self.ksize,
+            'strides': self.strides,
+            'padding': self.padding,
+            'transpose': self.transpose,
+            'nD': self.nD,
+            
+        } )
+    
+        return config    
+              
+  def call(self, image,alphas = None):
+
+    shape_im = image.shape
+ 
+    if not hasattr(self,"weight"):
+        
+        
+        if self.transpose:
+            self.N = shape_im[3]
+            self.M = self.out_n
+        else:
+            self.M = shape_im[3]
+            self.N = self.out_n
+        
+        
+        if alphas is not None:
+          shape_alpha = alphas.shape
+    
+          self.num_alpha = shape_alpha[1]
+          self.weight = self.add_weight(shape=(self.num_alpha,self.ksize,self.ksize,self.M,self.N), 
+                        initializer=self.initializer, trainable=True,name=self.name)
+        else:
+          self.weight = self.add_weight(shape=(self.ksize,self.ksize,self.M,self.N), 
+                        initializer=self.initializer, trainable=True,name=self.name)
+    else:
+        if alphas is not None and self.num_alpha == 0:
+            assert 0,"inconsitent usage"
+        if alphas is None and self.num_alpha > 0:
+            assert 0,"inconsitent usage"
+
+
+    if self.transpose:
+        im_shape = tf.shape(image)
+        output_shape_transpose = [0]*(self.nD+2)
+        output_shape_transpose[0] = im_shape[0]
+        output_shape_transpose[-1] = self.M
+        for k in range(self.nD):
+            output_shape_transpose[k+1] = im_shape[k+1]*self.strides[k] 
+
+        if self.nD == 2:
+            conv = lambda *a,**kw: tf.nn.conv2d_transpose(*a,**kw,output_shape=output_shape_transpose)
+        else:
+            conv = lambda *a,**kw: tf.nn.conv3d_transpose(*a,**kw,output_shape=output_shape_transpose)
+    else:
+        if self.nD == 2:
+            conv = tf.nn.conv2d
+        else:
+            conv = tf.nn.conv3d
+
+
+    x = 0
+    if self.num_alpha == 0:
+        x = conv(image, self.weight, strides=self.strides, padding=self.padding)
+        
+    else:
+        for k in range(self.num_alpha):
+            kernel = self.weight[k,...]
+            alpha = alphas[:,k:k+1]
+            for j in range(self.nD):
+                alpha = tf.expand_dims(alpha,j+2)
+            c = conv(image, kernel, strides=self.strides, padding=self.padding)
+            x = x+alpha*c
+    
+    return x
+
+
 
 ############################ The definition of the Patchwork model
 
 class PatchWorkModel(Model):
   def __init__(self,cropper,
                blockCreator,
+               classifierCreator=None,
                forward_type='simple',
                num_labels=1,
-               intermediate_loss=False,
                intermediate_out=0,
                finalBlock=None,
+               intermediate_loss=False,
+               spatial_train=True,
+               classifier_train=False,
                trainloss_hist = [],
                validloss_hist = [],
                trained_epochs = 0,
@@ -139,12 +256,16 @@ class PatchWorkModel(Model):
                ):
     super(PatchWorkModel, self).__init__()
     self.blocks = []
+    self.classifiers = []
     self.cropper = cropper
     cropper.model = self
     self.forward_type = forward_type
     self.num_labels = num_labels
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+    self.classifier_train=classifier_train
+    self.spatial_train=spatial_train
+
     self.finalBlock=finalBlock
     
     self.trainloss_hist = trainloss_hist
@@ -160,13 +281,22 @@ class PatchWorkModel(Model):
         for k in range(self.cropper.depth-1): 
           self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
         self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+        
+    if classifierCreator is not None:
+        for k in range(self.cropper.depth): 
+          self.classifiers.append(classifierCreator(level=k))
+        
+        
   
   def serialize_(self):
     return   { 'forward_type':self.forward_type,
                'num_labels':self.num_labels,
                'intermediate_out':self.intermediate_out,
                'intermediate_loss':self.intermediate_loss,   
+               'spatial_train':self.spatial_train,
+               'classifier_train':self.classifier_train,
                'blocks':self.blocks,
+               'classifiers':self.classifiers,
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
                'trainloss_hist':self.trainloss_hist,
@@ -177,21 +307,34 @@ class PatchWorkModel(Model):
   def call(self, inputs, training=False):
     nD = self.cropper.ndim
     output = []
+    res = None
+    res_nonspatial = None
     for k in range(self.cropper.depth):
+      
       ## get data and cropcoords at currnet scale
       inp = inputs['input' + str(k)]
+      inp_nonspatial = res_nonspatial
       coords = inputs['cropcoords' + str(k)]
-      if len(output) > 0:
+      
+      
+      if len(output) > 0: # is it's not the initial scale
+          
          # get result from last scale
-         last = output[-1]
-         if last.shape[0] is not None and coords.shape[0] != last.shape[0]:            
+         last = res
+         if last.shape[0] is not None and coords.shape[0] != last.shape[0]:         
+            mtimes = coords.shape[0]//last.shape[0]
             multiples = [1]*(nD+2)
-            multiples[0] = coords.shape[0]//last.shape[0]
-            last = tf.tile(last,multiples)     
-            
+            multiples[0] = mtimes
+            last = tf.tile(last,multiples)   
+            if inp_nonspatial is not None:
+                multiples = [1]*(2)
+                multiples[0] = mtimes
+                inp_nonspatial = tf.tile(inp_nonspatial,multiples)
+        
+         # crop the relevant rgion
          last_cropped = tf.gather_nd(last,coords,batch_dims=1)
          
-         # cat with input
+         # cat with total input
          if self.forward_type == 'simple':
              # for testing: inp = last_cropped
              inp = tf.concat([inp,last_cropped],(nD+1))
@@ -201,23 +344,33 @@ class PatchWorkModel(Model):
             inp_ = tf.tile(inp,multiples) * last_cropped
             inp = tf.concat([inp,inp_,last_cropped],nD+1)
          else: 
-            assert "unknown forward type"
+            assert 0,"unknown forward type"
 
-      ## apply the network at the current scale 
-      res = self.blocks[k](inp)
-      # for testing: res = inp
-      if nD == 2:
-          output.append(res[:,:,:,0:self.num_labels])
-      elif nD == 3:
-          output.append(res[:,:,:,:,0:self.num_labels])
-      else:
-          assert "ahhhh"
+      ## now, apply the network at the current scale 
+      
+      # the classifier part
+      current_output = []
+      if len(self.classifiers) > 0:
+         if self.classifier_train or k < self.cropper.depth-1:
+             res_nonspatial = self.classifiers[k](inp,inp_nonspatial) 
+         if self.classifier_train:
+             current_output.append(res_nonspatial)
+      
+      # the spatial/segmentation part
+      res = self.blocks[k](inp,inp_nonspatial)      # for testing: res = inp      
+      if self.spatial_train:
+          current_output.append(res[...,0:self.num_labels])
+
+      output = output + current_output
     
-    if self.finalBlock is not None:
+    if self.finalBlock is not None and self.spatial_train:
        output[-1] = self.finalBlock(output[-1])
     
     if not self.intermediate_loss:
-      return [output[-1]]
+      if self.spatial_train and self.classifier_train:
+         return [output[-2], output[-1]]
+      else:
+         return [output[-1]]          
     else:
       return output
   
@@ -319,15 +472,25 @@ class PatchWorkModel(Model):
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects=None):
+  def load(name,custom_objects={}):
+
+    custom_objects['biConvolution'] = biConvolution
+
     fname = name + ".json"
     with open(fname) as f:
         x = json.load(f)
+
     cropper = CropGenerator(**x['cropper'])
     del x['cropper']
+
     blocks = x['blocks']
     blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level]['CNNblock'],custom_objects=custom_objects)
     del x['blocks']
+
+    classi = x['classifiers']
+    clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
+    del x['classifiers']
+
     fb = x['finalBlock']
     del x['finalBlock']
 
@@ -354,21 +517,18 @@ class PatchWorkModel(Model):
             showplot=True,
             autosave=True
             ):
-    
       
     def getSample(subset):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
         if traintype == 'random':
-            c = cgen.sample(tset,lset,generate_type='random',  num_patches=num_patches)
+            c = self.cropper.sample(tset,lset,generate_type='random',  num_patches=num_patches)
         elif traintype == 'tree':
-            c = cgen.sample(tset,lset,generate_type='tree_full', jitter=jitter)
+            c = self.cropper.sample(tset,lset,generate_type='tree_full', jitter=jitter)
         return c
       
     history = History()
-    cgen = self.cropper
-        
-    
+            
     for i in range(num_its):
         print("======================================================================================")
         print("iteration:" + str(i))
@@ -384,7 +544,9 @@ class PatchWorkModel(Model):
            subset = trainidx
         else:            
            subset = sample(trainidx,num_samples_per_epoch)
-        c = getSample(subset)            
+        c = getSample(subset)      
+
+        # print(c.scales[0].keys())
         end = timer()
         print("time elapsed, sampling: " + str(end - start) )
       

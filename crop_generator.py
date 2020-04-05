@@ -123,15 +123,34 @@ class CropGenerator():
     pool = []
 
     for j in range(N):
+        
+      labels_ = None
+      class_labels_ = None
+      if labelset[j] is not None:
+          if self.model.classifier_train:
+              class_labels_ = labelset[j][0]
+              labels_ = labelset[j][1]
+          else:
+              labels_ = labelset[j]
 
-      x = self.createCropsLocal(trainset[j],labelset[j],None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+      x = self.createCropsLocal(trainset[j],labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+      x['class_labels'] = class_labels_
       scales = [x]
       for k in range(self.depth-1):
-        x = self.createCropsLocal(trainset[j],labelset[j],x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+        x = self.createCropsLocal(trainset[j],labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+        x['class_labels'] = class_labels_
         scales.append(x)
 
       if reptree:
         scales = self.tree_complete(scales)
+
+      if self.model.classifier_train:
+          for k in range(len(scales)):
+              m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
+              tmp = scales[k]['class_labels']
+              tmp = tf.reshape(tf.tile(tf.expand_dims(tmp,1),[1,m,1]),[m*tmp.shape[0],tmp.shape[1]])              
+              scales[k]['class_labels'] = tmp
+
         
 
       if len(pool) == 0:
