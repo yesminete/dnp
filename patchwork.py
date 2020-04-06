@@ -488,9 +488,10 @@ class PatchWorkModel(Model):
     blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level]['CNNblock'],custom_objects=custom_objects)
     del x['blocks']
 
-    classi = x['classifiers']
-    clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
-    del x['classifiers']
+    if hasattr(x,'classifiers'):
+        classi = x['classifiers']
+        clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
+        del x['classifiers']
 
     fb = x['finalBlock']
     del x['finalBlock']
