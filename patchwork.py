@@ -246,7 +246,8 @@ class PatchWorkModel(Model):
                             repetitions=repetitions,
                             scale_to_original=True)
 
-      pred_nii = nib.Nifti1Image(res, img1.affine, img1.header)
+      pred_nii = nib.Nifti1Image(res.numpy()*64000, img1.affine, img1.header)
+      pred_nii.header.set_slope_inter(1/64000,0.00000001)
       if ofname is not None:
           nib.save(pred_nii,ofname)
       return pred_nii,res;
