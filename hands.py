@@ -137,10 +137,15 @@ model = patchwork.PatchWorkModel(cgen,
                       classifierCreator = lambda level: createClassifier(outK=2),
                       intermediate_loss=False,
                       intermediate_out=3,
-                      classifier_train=True,
+                      classifier_train=False,
                       finalBlock=layers.Activation('sigmoid'),
                       forward_type='simple',num_labels = labelset[0][1].shape[3])
 
+model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
+
+
+model.save('xxx')
+model = patchwork.PatchWorkModel.load('xxx')
 model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
 #cgen.testtree(labelset[0][0:1,:,:,5:6])

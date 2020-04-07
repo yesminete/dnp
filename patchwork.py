@@ -515,7 +515,7 @@ class PatchWorkModel(Model):
         finalBlock = createCNNBlockFromObj(fb, custom_objects=custom_objects)
     
     
-    model = PatchWorkModel(cropper, blkCreator,finalBlock=finalBlock,**x)
+    model = PatchWorkModel(cropper, blkCreator,classifierCreator=clsCreator, finalBlock=finalBlock,**x)
     model.load_weights(name + ".tf")
     model.modelname = name
     
