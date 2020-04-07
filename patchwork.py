@@ -139,19 +139,26 @@ def createCNNBlockFromObj(obj,custom_objects=None):
 
 class biConvolution(layers.Layer):
 
-  def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=(1,1),**kwargs):
+  def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=None,**kwargs):
       
       
     super(biConvolution, self).__init__(**kwargs)
     self.out_n = out_n
     self.ksize = ksize
-    self.strides = strides
     self.padding = padding
     self.transpose = transpose
     self.nD = nD
     self.initializer = tf.random_normal_initializer(0, 0.05)
     self.num_alpha = 0
     self.isBi=True
+    
+    if strides is None:
+        if nD == 2:
+            strides = (1,1)
+        else: 
+            strides = (1,1,1,1,1)
+
+    self.strides = strides
 
   def get_config(self):
 
@@ -177,21 +184,28 @@ class biConvolution(layers.Layer):
         
         
         if self.transpose:
-            self.N = shape_im[3]
+            self.N = shape_im[self.nD+1]
             self.M = self.out_n
         else:
-            self.M = shape_im[3]
+            self.M = shape_im[self.nD+1]
             self.N = self.out_n
         
         
         if alphas is not None:
-          shape_alpha = alphas.shape
-    
+          shape_alpha = alphas.shape    
           self.num_alpha = shape_alpha[1]
-          self.weight = self.add_weight(shape=(self.num_alpha,self.ksize,self.ksize,self.M,self.N), 
-                        initializer=self.initializer, trainable=True,name=self.name)
+          if self.nD == 2:
+              weight_shape = (self.num_alpha,self.ksize,self.ksize,self.M,self.N)                        
+          else:
+              weight_shape = (self.num_alpha,self.ksize,self.ksize,self.ksize,self.M,self.N)
+             
         else:
-          self.weight = self.add_weight(shape=(self.ksize,self.ksize,self.M,self.N), 
+          if self.nD == 2:
+              weight_shape = (self.ksize,self.ksize,self.M,self.N)
+          else:
+              weight_shape = (self.ksize,self.ksize,self.ksize,self.M,self.N)
+            
+        self.weight = self.add_weight(shape=weight_shape, 
                         initializer=self.initializer, trainable=True,name=self.name)
     else:
         if alphas is not None and self.num_alpha == 0:
@@ -488,7 +502,7 @@ class PatchWorkModel(Model):
     blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level]['CNNblock'],custom_objects=custom_objects)
     del x['blocks']
 
-    if hasattr(x,'classifiers'):
+    if 'classifiers' in x:
         classi = x['classifiers']
         clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
         del x['classifiers']
