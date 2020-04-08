@@ -49,8 +49,8 @@ for k in range(5):
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-#  labelset.append( a  )
-  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
+  labelset.append( a  )
+#  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
   
   #plt.pause(0.001)
 
@@ -136,17 +136,17 @@ model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : createBlock(outK=outK),
                       classifierCreator = lambda level: createClassifier(outK=2),
                       intermediate_loss=False,
-                      intermediate_out=3,
+                      intermediate_out=0,
                       classifier_train=False,
                       finalBlock=layers.Activation('sigmoid'),
-                      forward_type='simple',num_labels = labelset[0][1].shape[3])
+                      forward_type='simple',num_labels = labelset[0].shape[3])
 
 model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
 
-model.save('xxx')
-model = patchwork.PatchWorkModel.load('xxx')
-model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
+# model.save('xxx')
+# model = patchwork.PatchWorkModel.load('xxx')
+# model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
 #cgen.testtree(labelset[0][0:1,:,:,5:6])
 
@@ -156,7 +156,12 @@ model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 #%%
 
 
-#model = patchwork.PatchWorkModel.load('models/test')
+model = patchwork.PatchWorkModel.load('models/test')
+
+
+
+
+#%%
 #l = lambda x,y: tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
 #l = tf.keras.losses.mean_squared_error
 l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
