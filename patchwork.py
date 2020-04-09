@@ -492,7 +492,7 @@ class PatchWorkModel(Model):
      orig_shape = sz[1:(nD+1)]
      if scale_to_original:
          for k in level:
-            res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=True))
+            res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))
            
      
      if single:
@@ -524,10 +524,12 @@ class PatchWorkModel(Model):
     blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level]['CNNblock'],custom_objects=custom_objects)
     del x['blocks']
 
+    clsCreator = None
     if 'classifiers' in x:
         classi = x['classifiers']
-        clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
         del x['classifiers']
+        if classi is not None and len(classi) > 0:
+            clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
 
     fb = x['finalBlock']
     del x['finalBlock']
