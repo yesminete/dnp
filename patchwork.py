@@ -487,7 +487,7 @@ class PatchWorkModel(Model):
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects={}):
+  def load(name,custom_objects={},show_history=True):
 
     custom_objects['biConvolution'] = biConvolution
 
@@ -521,8 +521,24 @@ class PatchWorkModel(Model):
     model.load_weights(name + ".tf")
     model.modelname = name
     
+    if show_history:
+        model.show_train_stat()
+
+    
     return model
     
+  def show_train_stat(self):
+    x = [ i for i, j in self.trainloss_hist ]
+    y = [ j for i, j in self.trainloss_hist ]
+    plt.semilogy(x,y,'r',label="train loss")
+    if len(self.validloss_hist) > 0:
+        x = [ i for i, j in self.validloss_hist ]
+        y = [ j for i, j in self.validloss_hist ]
+        plt.semilogy(x,y,'g',label="valid loss")
+    plt.legend()
+    plt.pause(0.001)
+
+
   def train(self,
             trainset,labelset, 
             epochs=20, 
@@ -600,15 +616,7 @@ class PatchWorkModel(Model):
                self.save(self.modelname)
 
         if showplot:
-            x = [ i for i, j in self.trainloss_hist ]
-            y = [ j for i, j in self.trainloss_hist ]
-            plt.semilogy(x,y,'r',label="train loss")
-            if len(self.validloss_hist) > 0:
-                x = [ i for i, j in self.validloss_hist ]
-                y = [ j for i, j in self.validloss_hist ]
-                plt.semilogy(x,y,'g',label="valid loss")
-            plt.legend()
-            plt.pause(0.001)
+            self.show_train_stat()
 
 # #%%
 #             x = [ i for i, j in model.trainloss_hist ]
