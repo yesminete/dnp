@@ -72,29 +72,38 @@ for k in range(5):
 
 
 
-
-
-
-
-
 biConvolution = patchwork.biConvolution
 
-def BNrelu():
-  return [layers.BatchNormalization(), layers.LeakyReLU()]
+def BNrelu(name=None):
+  return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
 
 n = 10
 
-def conv_down():
+def conv_down(name=None,dest=None):
+  x = biConvolution(n,3,name=name)
+  x.dest = dest
   #return layers.Conv2D(n,3,padding='SAME') 
-  return biConvolution(n,3)
-def conv_up():
+  return x
+def conv_up(name=None):
   #return layers.Conv2DTranspose(n,3,padding='SAME',strides=(2,2)) 
-  return biConvolution(n,3,transpose=True,strides=(2,2))
-def conv_out(outK):
+  return biConvolution(n,3,transpose=True,strides=(2,2),name=name)
+def conv_out(outK,name=None):
   #return layers.Conv2D(outK,3,padding='SAME') 
-  return biConvolution(outK,3)
+  return biConvolution(outK,3,name=name)
 
-def createBlock(depth=4,outK=1):
+def createBlock_(name="None",depth=1,outK=1):
+  block = patchwork.CNNblock()
+  for z in range(depth):
+    id_d = name+str(1000 + z+1)
+    id_u = name+str(2000 + depth-z+1)
+    block.add( conv_down(id_d+"1conv")) #  conv_down(name=id_d+"2conv",  dest=id_u+"relu" ) )
+    block.add( BNrelu(name=id_d+"2relu") + [layers.MaxPooling2D(pool_size=(2,2)) ] )    
+    block.add( conv_up(name=id_u+"conv"))
+    block.add( BNrelu(name=id_u+"relu"))
+  block.add([layers.Dropout(name=name+"3001",rate=0.5) , conv_out(outK)] )
+  return block
+
+def createBlock(depth=1,outK=1):
   theLayers = {}
   for z in range(depth):
     id_d = str(1000 + z+1)
@@ -119,6 +128,12 @@ def createClassifier(depth=4,outK=2):
   return patchwork.CNNblock(theLayers)
 
 
+x = createBlock_(name="aa",outK=3)
+#print(x(trainset[0][0:1,0:32,0:32,:]).shappatchwork.CNNblock()e)
+#y = createBlock(outK=3)
+#print(y(trainset[0][0:1,0:32,0:32,:]).shape)
+#%%
+
 # x = createBlock()
 # tmp = tf.tile(trainset[0],[4,1,1,1])
 # tmp = tmp[:,0:64,0:64,:]
@@ -133,8 +148,8 @@ cgen = patchwork.CropGenerator(patch_size = (32,32),
 
 
 model = patchwork.PatchWorkModel(cgen,
-                      blockCreator= lambda level,outK : createBlock(outK=outK),
-                      classifierCreator = lambda level: createClassifier(outK=2),
+                      blockCreator= lambda level,outK : createBlock_(name='b'+str(level)+"_",outK=outK),
+                    #  classifierCreator = lambda level: createClassifier(outK=2),
                       intermediate_loss=False,
                       intermediate_out=0,
                       classifier_train=False,

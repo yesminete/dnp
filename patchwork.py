@@ -40,9 +40,31 @@ from improc_utils import *
 ## A CNN wrapper to allow easy layer references and stacking
 
 class CNNblock(layers.Layer):
-  def __init__(self,theLayers):
+  def __init__(self,theLayers=None):
     super(CNNblock, self).__init__()
-    self.theLayers = theLayers
+    if theLayers is None:
+        self.theLayers = {}
+    else:
+        self.theLayers = theLayers
+
+  def add(self,*args):
+      if len(args) > 1:
+        l = [];
+        for a in args:
+           if hasattr(a,'dest') and a.dest is not None:
+               l.append({'f':a,'dest':a.dest})
+           else:
+               l.append({'f':a})
+        self.theLayers[l[0]['f'].name] =l
+      else:     
+        if isinstance(args[0],list):
+            self.theLayers[args[0][0].name] = list(args[0])
+        else:
+            self.theLayers[args[0].name] = args[0]
+            
+          
+   
+
 
   def call(self, inputs, alphas=None, training=False):
     
