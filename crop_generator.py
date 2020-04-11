@@ -37,7 +37,10 @@ class CropInstance:
       for x in self.scales:
         out.append(x['labels_cropped'])
     else:
-        out.append(self.scales[-1]['labels_cropped'])
+        if self.cropper.model.classifier_train:
+            out.append(self.scales[-1]['class_labels'])
+        if self.cropper.model.spatial_train:
+            out.append(self.scales[-1]['labels_cropped'])
     return out
 
 
@@ -127,11 +130,13 @@ class CropGenerator():
       labels_ = None
       class_labels_ = None
       if labelset[j] is not None:
-          if self.model.classifier_train:
+          if self.model.classifier_train and self.model.spatial_train:
               class_labels_ = labelset[j][0]
               labels_ = labelset[j][1]
-          else:
+          elif self.model.spatial_train:
               labels_ = labelset[j]
+          else:
+              class_labels_ = labelset[j]
 
       x = self.createCropsLocal(trainset[j],labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
       x['class_labels'] = class_labels_
@@ -144,7 +149,7 @@ class CropGenerator():
       if reptree:
         scales = self.tree_complete(scales)
 
-      if self.model.classifier_train:
+      if self.model.classifier_train and scales[k]['class_labels'] is not None:
           for k in range(len(scales)):
               m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
               tmp = scales[k]['class_labels']
@@ -164,6 +169,8 @@ class CropGenerator():
             if p['labels_cropped'] is not None:
               p['labels_cropped'] = tf.concat([p['labels_cropped'],s['labels_cropped']],0)            
             p['local_box_index'] = tf.concat([p['local_box_index'],s['local_box_index']],0)
+            if p['class_labels'] is not None:
+              p['class_labels'] = tf.concat([p['class_labels'],s['class_labels']],0)            
 
     intermediate_loss = True     # whether we save output of intermediate layers
     if self.model is not None:

@@ -28,7 +28,7 @@ skip = 1
 
 flip = [0,0,1,1,1]
 nfacs = np.zeros([15,5])
-for k in range(5):
+for k in range(2):
   img = nib.load('data/hands2/data' + str(k+1) + '.nii.gz')
   a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
   a = a[:,0::skip,0::skip,:]
@@ -49,9 +49,10 @@ for k in range(5):
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-  labelset.append( a  )
-#  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
+#  labelset.append( a  )
+  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
   
+ # labelset.append(  tf.convert_to_tensor([[flip[k]]])  )
   #plt.pause(0.001)
 
 
@@ -91,8 +92,8 @@ def conv_out(outK,name=None):
   #return layers.Conv2D(outK,3,padding='SAME') 
   return biConvolution(outK,3,name=name)
 
-def createBlock_(name="None",depth=1,outK=1):
-  block = patchwork.CNNblock()
+def createBlock_(name=None,depth=2,outK=1):
+  block = patchwork.CNNblock(name=name)
   for z in range(depth):
     id_d = name+str(1000 + z+1)
     id_u = name+str(2000 + depth-z+1)
@@ -103,7 +104,7 @@ def createBlock_(name="None",depth=1,outK=1):
   block.add([layers.Dropout(name=name+"3001",rate=0.5) , conv_out(outK)] )
   return block
 
-def createBlock(depth=1,outK=1):
+def createBlock(depth=2,outK=1):
   theLayers = {}
   for z in range(depth):
     id_d = str(1000 + z+1)
@@ -115,7 +116,7 @@ def createBlock(depth=1,outK=1):
   theLayers["3000"] =  [layers.Dropout(rate=0.5), conv_out(outK)]
   return patchwork.CNNblock(theLayers)
 
-def createClassifier(depth=4,outK=2):
+def createClassifier(name=None,depth=4,outK=2):
   theLayers = {}
   for z in range(depth):
     id_d = str(1000 + z+1)
@@ -128,7 +129,7 @@ def createClassifier(depth=4,outK=2):
   return patchwork.CNNblock(theLayers)
 
 
-x = createBlock_(name="aa",outK=3)
+#x = createBlock_(name="aa",outK=3)
 #print(x(trainset[0][0:1,0:32,0:32,:]).shappatchwork.CNNblock()e)
 #y = createBlock(outK=3)
 #print(y(trainset[0][0:1,0:32,0:32,:]).shape)
@@ -148,17 +149,23 @@ cgen = patchwork.CropGenerator(patch_size = (32,32),
 
 
 model = patchwork.PatchWorkModel(cgen,
-                      blockCreator= lambda level,outK : createBlock_(name='b'+str(level)+"_",outK=outK),
-                    #  classifierCreator = lambda level: createClassifier(outK=2),
+                      blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
+                     # blockCreator= lambda level,outK : createBlock(outK=outK),
+                      classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                      spatial_train=True,
                       intermediate_loss=False,
                       intermediate_out=0,
-                      classifier_train=False,
+                      #cls_intermediate_out=2,
+                      #classifier_train=True,
                       finalBlock=layers.Activation('sigmoid'),
-                      forward_type='simple',num_labels = labelset[0].shape[3])
+                      forward_type='simple',
+                      num_labels = labelset[0][1].shape[3],
+#                      num_classes = 1                      
+                      )
 
 model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
-
+model.summary()
 # model.save('xxx')
 # model = patchwork.PatchWorkModel.load('xxx')
 # model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
@@ -166,12 +173,7 @@ model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 #cgen.testtree(labelset[0][0:1,:,:,5:6])
 
 
-
-
-#%%
-
-
-model = patchwork.PatchWorkModel.load('models/test')
+#model = patchwork.PatchWorkModel.load('models/test')
 
 
 
@@ -183,7 +185,7 @@ l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
 loss = l
 
 
-adam = tf.optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+adam = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
 model.compile(loss=loss, optimizer=adam)
 cgen = model.cropper
@@ -195,11 +197,32 @@ apply = lambda x,levels : model.apply_full(x,level=levels,
 
 
 #%%
-model.modelname = "models/test"
+#model.modelname = "models/test"
 
 model.train(trainset,labelset,
-            valid_ids = [0,1],
+            valid_ids = [],
+            num_patches=11,
             epochs=100)
+
+
+
+
+
+
+
+
+#%%
+
+
+
+
+
+
+
+
+
+
+
 
 
 

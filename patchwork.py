@@ -40,8 +40,8 @@ from improc_utils import *
 ## A CNN wrapper to allow easy layer references and stacking
 
 class CNNblock(layers.Layer):
-  def __init__(self,theLayers=None):
-    super(CNNblock, self).__init__()
+  def __init__(self,theLayers=None,name=None):
+    super(CNNblock, self).__init__(name=name)
     if theLayers is None:
         self.theLayers = {}
     else:
@@ -276,15 +276,21 @@ class biConvolution(layers.Layer):
 
 class PatchWorkModel(Model):
   def __init__(self,cropper,
+
                blockCreator,
-               classifierCreator=None,
-               forward_type='simple',
                num_labels=1,
                intermediate_out=0,
-               finalBlock=None,
                intermediate_loss=False,
                spatial_train=True,
+               finalBlock=None,
+
+               classifierCreator=None,
+               num_classes=1,
+               cls_intermediate_out=0,
+               cls_intermediate_loss=False,
                classifier_train=False,
+
+               forward_type='simple',
                trainloss_hist = [],
                validloss_hist = [],
                trained_epochs = 0,
@@ -297,8 +303,12 @@ class PatchWorkModel(Model):
     cropper.model = self
     self.forward_type = forward_type
     self.num_labels = num_labels
+    self.num_classes = num_classes
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+    self.cls_intermediate_loss = cls_intermediate_loss
+    self.cls_intermediate_out = cls_intermediate_out
+    self.num_classes=num_classes
     self.classifier_train=classifier_train
     self.spatial_train=spatial_train
 
@@ -316,23 +326,32 @@ class PatchWorkModel(Model):
     if callable(blockCreator):
         for k in range(self.cropper.depth-1): 
           self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
-        self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+        if self.spatial_train:
+          self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
         
     if classifierCreator is not None:
-        for k in range(self.cropper.depth): 
-          self.classifiers.append(classifierCreator(level=k))
+       for k in range(self.cropper.depth-1): 
+         self.classifiers.append(classifierCreator(level=k,outK=num_classes+cls_intermediate_out))
+       if self.classifier_train:
+         self.classifiers.append(classifierCreator(level=cropper.depth-1,outK=num_classes))
         
         
   
   def serialize_(self):
     return   { 'forward_type':self.forward_type,
-               'num_labels':self.num_labels,
+
+               'blocks':self.blocks,
                'intermediate_out':self.intermediate_out,
                'intermediate_loss':self.intermediate_loss,   
                'spatial_train':self.spatial_train,
-               'classifier_train':self.classifier_train,
-               'blocks':self.blocks,
+               'num_labels':self.num_labels,
+
                'classifiers':self.classifiers,
+               'cls_intermediate_out':self.cls_intermediate_out,
+               'cls_intermediate_loss':self.cls_intermediate_loss,   
+               'classifier_train':self.classifier_train,
+               'num_classes':self.num_classes,
+
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
                'trainloss_hist':self.trainloss_hist,
@@ -390,10 +409,11 @@ class PatchWorkModel(Model):
          if self.classifier_train or k < self.cropper.depth-1:
              res_nonspatial = self.classifiers[k](inp,inp_nonspatial) 
          if self.classifier_train:
-             current_output.append(res_nonspatial)
+             current_output.append(res_nonspatial[:,0:self.num_classes])
       
       # the spatial/segmentation part
-      res = self.blocks[k](inp,inp_nonspatial)      # for testing: res = inp      
+      if self.spatial_train or  k < self.cropper.depth-1:
+          res = self.blocks[k](inp,inp_nonspatial)      # for testing: res = inp      
       if self.spatial_train:
           current_output.append(res[...,0:self.num_labels])
 
@@ -481,22 +501,22 @@ class PatchWorkModel(Model):
                 r = [r]
         else:
             r = self(data_)
-        for k in level:            
-          a,b = x.stitchResult(r,k)
-          pred[k] += a
-          sumpred[k] += b         
-     res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))
-     #res = sumpred
-        
-     sz = data.shape
-     orig_shape = sz[1:(nD+1)]
-     if scale_to_original:
-         for k in level:
-            res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))
-           
-     
-     if single:
-       res = res[0]
+       
+        if self.spatial_train:
+            for k in level:            
+              a,b = x.stitchResult(r,k)
+              pred[k] += a
+              sumpred[k] += b         
+              
+     if self.spatial_train:
+         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))        
+         sz = data.shape
+         orig_shape = sz[1:(nD+1)]
+         if scale_to_original:
+             for k in level:
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+         if single:
+           res = res[0]
      
      return res
 
