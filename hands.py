@@ -49,8 +49,8 @@ for k in range(2):
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-#  labelset.append( a  )
-  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
+  labelset.append( a  )
+#  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
   
  # labelset.append(  tf.convert_to_tensor([[flip[k]]])  )
   #plt.pause(0.001)
@@ -151,7 +151,7 @@ cgen = patchwork.CropGenerator(patch_size = (32,32),
 model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                      # blockCreator= lambda level,outK : createBlock(outK=outK),
-                      classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                    #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
                       intermediate_loss=False,
                       intermediate_out=0,
@@ -159,7 +159,7 @@ model = patchwork.PatchWorkModel(cgen,
                       #classifier_train=True,
                       finalBlock=layers.Activation('sigmoid'),
                       forward_type='simple',
-                      num_labels = labelset[0][1].shape[3],
+                      num_labels = labelset[0].shape[3],
 #                      num_classes = 1                      
                       )
 

@@ -626,10 +626,16 @@ class PatchWorkModel(Model):
         end = timer()
         print("time elapsed, sampling: " + str(end - start) )
       
+        
+      
         ### fitting
+      
+        inputdata = c.getInputData()
+        targetdata = c.getTargetData()
+        print(inputdata['input0'].shape)
         print("starting training")
         start = timer()
-        self.fit(c.getInputData(),c.getTargetData(),
+        self.fit(inputdata,targetdata,
                   epochs=epochs,
                   verbose=2,
                   callbacks=[history])
