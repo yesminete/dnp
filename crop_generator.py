@@ -107,6 +107,7 @@ class CropGenerator():
              num_patches=1,           #  if 'random' this gives the number of draws, otherwise no function
              jitter=0,                #  if 'tree' this is the amount of random jitter
              overlap=0,
+             augment=None,
              verbose=False):
 
 
@@ -138,11 +139,18 @@ class CropGenerator():
           else:
               class_labels_ = labelset[j]
 
-      x = self.createCropsLocal(trainset[j],labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+      trainset_ = trainset[j]
+      
+      if augment is not None:
+          print("augmenting ...")
+          trainset_,labels_ = augment(trainset_,labels_)
+          print("augmenting done. ")
+
+      x = self.createCropsLocal(trainset_,labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
       x['class_labels'] = class_labels_
       scales = [x]
       for k in range(self.depth-1):
-        x = self.createCropsLocal(trainset[j],labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+        x = self.createCropsLocal(trainset_,labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
         x['class_labels'] = class_labels_
         scales.append(x)
 
@@ -526,6 +534,11 @@ class CropGenerator():
       ax = plt.subplot(2,self.depth,level+1+self.depth)
       qq = self.scatter_valid(pbox_index,dqq*0+1,[sha[1],sha[2],1])
       ax.imshow(tf.transpose(qq[:,:,0],[0,1]))
+
+
+
+
+
 
 
 

@@ -49,7 +49,7 @@ for k in range(2):
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-  labelset.append( a  )
+  labelset.append( tf.convert_to_tensor(a,dtype=tf.float32)   )
 #  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
   
  # labelset.append(  tf.convert_to_tensor([[flip[k]]])  )
@@ -154,7 +154,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
                       intermediate_loss=False,
-                      intermediate_out=0,
+                      intermediate_out=4,
                       #cls_intermediate_out=2,
                       #classifier_train=True,
                       finalBlock=layers.Activation('sigmoid'),
@@ -190,10 +190,13 @@ adam = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad
 model.compile(loss=loss, optimizer=adam)
 cgen = model.cropper
 
-apply = lambda x,levels : model.apply_full(x,level=levels, 
-                                            generate_type='tree',
-                                            jitter=0.05,
-                                            repetitions=10)
+
+augment = patchwork.Augmenter(    morph_width = 150
+                , morph_strength=0.25
+                , rotation_dphi=0.1
+                , repetitions=2
+                , include_original=True
+                )
 
 
 #%%
@@ -201,6 +204,7 @@ apply = lambda x,levels : model.apply_full(x,level=levels,
 
 model.train(trainset,labelset,
             valid_ids = [],
+            augment=None,
             num_patches=11,
             epochs=100)
 

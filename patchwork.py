@@ -591,16 +591,17 @@ class PatchWorkModel(Model):
             jitter=0,
             num_samples_per_epoch=-1,
             showplot=True,
-            autosave=True
+            autosave=True,
+            augment=None
             ):
       
     def getSample(subset):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
         if traintype == 'random':
-            c = self.cropper.sample(tset,lset,generate_type='random',  num_patches=num_patches)
+            c = self.cropper.sample(tset,lset,generate_type='random',  num_patches=num_patches,augment=augment)
         elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,generate_type='tree_full', jitter=jitter)
+            c = self.cropper.sample(tset,lset,generate_type='tree_full', jitter=jitter,augment=augment)
         return c
       
     history = History()
@@ -632,7 +633,6 @@ class PatchWorkModel(Model):
       
         inputdata = c.getInputData()
         targetdata = c.getTargetData()
-        print(inputdata['input0'].shape)
         print("starting training")
         start = timer()
         self.fit(inputdata,targetdata,
@@ -696,6 +696,81 @@ class patchworkModelEncoder(json.JSONEncoder):
            return dict(obj)
         return json.dumps(obj,cls=patchworkModelEncoder)
         
+
+
+
+
+
+def Augmenter( morph_width = 150,
+                morph_strength=0.25,
+                rotation_dphi=0.1,
+                flip = None ,
+                normal_noise=0,
+                repetitions=1,
+                include_original=True):
+                
+
+    def augment(data,labels):
+        
+        sz = data.shape
+        if len(sz) == 4:
+            nD = 2
+        if len(sz) == 5:
+            nD = 3
+
+        if not include_original:
+            data_res = []
+            labels_res = []
+        else:
+            data_res = [data]
+            labels_res = [labels]
+
+        for k in range(repetitions):            
+            if nD == 2:
+                X,Y = sampleDefField_2D(sz)                    
+                data_ = interp2lin(data,Y,X)        
+                labels_ = interp2lin(labels,Y,X)            
+            if nD == 3:
+                X,Y,Z = sampleDefField_3D(sz)
+                data_ = interp2lin(data,Z,Y,X)        
+                labels_ = interp2lin(labels,Z,Y,X)            
+            
+            if normal_noise > 0:
+                data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
+            
+            data_res.append(data_)
+            labels_res.append(labels_)
+        data_res = tf.concat(data_res,0)
+        labels_res = tf.concat(labels_res,0)
+        
+        return data_res,labels_res
+        
+
+
+
+    def sampleDefField_2D(sz):
+        
+        X,Y = np.meshgrid(np.arange(0,sz[2]),np.arange(0,sz[1]))
+        
+        phi = np.random.uniform(low=-rotation_dphi,high=rotation_dphi)
+        
+        wid = morph_width/4
+        s = wid*wid*morph_strength
+        dx = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
+        dx = np.squeeze(dx)
+        dy = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
+        dy = np.squeeze(dy)
+        
+        cx = 0.5*sz[2]
+        cy = 0.5*sz[1]
+        nX = tf.math.cos(phi)*(X-cx) - tf.math.sin(phi)*(Y-cy) + cx + s*dx
+        nY = tf.math.sin(phi)*(X-cx) + tf.math.cos(phi)*(Y-cy) + cy + s*dy
+        #dY = np.random.normal(0,s,X.shape)
+        
+        return nX,nY        
+    
+
+    return augment
 
 
 
