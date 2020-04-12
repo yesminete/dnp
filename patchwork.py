@@ -156,6 +156,31 @@ def createCNNBlockFromObj(obj,custom_objects=None):
       
 
 
+class normalizedConvolution(layers.Layer):
+
+  def __init__(self, out_n=7, ksize=3, eps=0.001,**kwargs):
+    super(normalizedConvolution, self).__init__(**kwargs)
+    self.conv = layers.Conv2D(out_n,ksize,padding='SAME') 
+    self.out_n=out_n
+    self.ksize=ksize
+    self.eps = eps
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'out_n': self.out_n,
+            'ksize': self.ksize,
+            'eps': self.eps,
+        } )    
+        return config                  
+  def call(self, image):
+      x = self.conv(image)
+      n = tf.reduce_sum(x*x,axis=3,keepdims=True)
+      n = tf.math.sqrt(n+self.eps)
+      #x = x / n
+      return x
+      
+
 ############################ biConv
 
 
@@ -290,6 +315,8 @@ class PatchWorkModel(Model):
                cls_intermediate_loss=False,
                classifier_train=False,
 
+               preprocCreator=None,
+
                forward_type='simple',
                trainloss_hist = [],
                validloss_hist = [],
@@ -297,8 +324,11 @@ class PatchWorkModel(Model):
                modelname = None
                ):
     super(PatchWorkModel, self).__init__()
+    self.preprocessor = []
     self.blocks = []
     self.classifiers = []
+    self.finalBlock=finalBlock
+
     self.cropper = cropper
     cropper.model = self
     self.forward_type = forward_type
@@ -312,7 +342,6 @@ class PatchWorkModel(Model):
     self.classifier_train=classifier_train
     self.spatial_train=spatial_train
 
-    self.finalBlock=finalBlock
     
     self.trainloss_hist = trainloss_hist
     self.validloss_hist = validloss_hist
@@ -323,11 +352,14 @@ class PatchWorkModel(Model):
          warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
         
     
-    if callable(blockCreator):
-        for k in range(self.cropper.depth-1): 
-          self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
-        if self.spatial_train:
-          self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+    for k in range(self.cropper.depth-1): 
+      self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
+    if self.spatial_train:
+      self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+
+    if preprocCreator is not None:
+       for k in range(self.cropper.depth-1): 
+           self.preprocessor.append(preprocCreator(level=k))
         
     if classifierCreator is not None:
        for k in range(self.cropper.depth-1): 
@@ -351,6 +383,8 @@ class PatchWorkModel(Model):
                'cls_intermediate_loss':self.cls_intermediate_loss,   
                'classifier_train':self.classifier_train,
                'num_classes':self.num_classes,
+               
+               'preprocessor':self.preprocessor,
 
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
@@ -370,6 +404,10 @@ class PatchWorkModel(Model):
       inp = inputs['input' + str(k)]
       inp_nonspatial = res_nonspatial
       coords = inputs['cropcoords' + str(k)]
+      
+      
+      if k < len(self.preprocessor) :
+          inp = self.preprocessor[k](inp)
       
       
       if len(output) > 0: # is it's not the initial scale
@@ -532,6 +570,7 @@ class PatchWorkModel(Model):
   def load(name,custom_objects={},show_history=True):
 
     custom_objects['biConvolution'] = biConvolution
+    custom_objects['normalizedConvolution'] = normalizedConvolution
 
     fname = name + ".json"
     with open(fname) as f:
@@ -551,6 +590,14 @@ class PatchWorkModel(Model):
         if classi is not None and len(classi) > 0:
             clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
 
+    preprocCreator = None
+    if 'preprocessor' in x:
+        pproc = x['preprocessor']
+        del x['preprocessor']
+        if pproc is not None and len(pproc) > 0:
+            preprocCreator = lambda level,outK=0 : createCNNBlockFromObj(pproc[level],custom_objects=custom_objects)
+
+
     fb = x['finalBlock']
     del x['finalBlock']
 
@@ -559,7 +606,10 @@ class PatchWorkModel(Model):
         finalBlock = createCNNBlockFromObj(fb, custom_objects=custom_objects)
     
     
-    model = PatchWorkModel(cropper, blkCreator,classifierCreator=clsCreator, finalBlock=finalBlock,**x)
+    model = PatchWorkModel(cropper, blkCreator,
+                           classifierCreator=clsCreator, 
+                           preprocCreator=preprocCreator,
+                           finalBlock=finalBlock,**x)
     model.load_weights(name + ".tf")
     model.modelname = name
     

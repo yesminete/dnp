@@ -149,8 +149,9 @@ cgen = patchwork.CropGenerator(patch_size = (32,32),
 
 
 model = patchwork.PatchWorkModel(cgen,
-                      blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
-                     # blockCreator= lambda level,outK : createBlock(outK=outK),
+                      #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
+                      blockCreator= lambda level,outK : createBlock(outK=outK),
+                      preprocCreator = lambda level: patchwork.normalizedConvolution(out_n=5,ksize=11),
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
                       intermediate_loss=False,
@@ -174,7 +175,8 @@ model.summary()
 
 
 #model = patchwork.PatchWorkModel.load('models/test')
-
+#%%
+model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
 
 
