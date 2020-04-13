@@ -5,6 +5,10 @@ Created on Tue Mar 17 16:08:44 2020
 
 @author: reisertm
 """
+import sys 
+sys.path.append("/home/reisertm/patchwork")
+
+
 import numpy as np
 import tensorflow as tf
 import math
@@ -16,10 +20,10 @@ from timeit import default_timer as timer
 import nibabel as nib
 import matplotlib.pyplot as plt
 
-import patchwork 
-from improc_utils import *
+import patchwork.model as patchwork
+from patchwork.improc_utils import *
 
-#%
+#%%
 trainset = []
 labelset = []
 class_set = []

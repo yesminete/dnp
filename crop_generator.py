@@ -7,8 +7,8 @@ Created on Mon Mar 23 15:37:03 2020
 """
 
 import tensorflow as tf
-from improc_utils import *
 import matplotlib.pyplot as plt
+from . improc_utils import *
 
 
 ########## Cropmodel ##########################################
