@@ -6,7 +6,7 @@ Created on Tue Mar 17 16:08:44 2020
 @author: reisertm
 """
 import sys 
-sys.path.append("/home/reisertm/patchwork")
+sys.path.append("/home/reisertm")
 
 
 import numpy as np
@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import patchwork.model as patchwork
 from patchwork.improc_utils import *
 
-#%%
+
 trainset = []
 labelset = []
 class_set = []
@@ -155,7 +155,7 @@ cgen = patchwork.CropGenerator(patch_size = (32,32),
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : createBlock(outK=outK),
-                      preprocCreator = lambda level: patchwork.normalizedConvolution(out_n=5,ksize=11),
+                      preprocCreator = lambda level: patchwork.normalizedConvolution(),
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
                       intermediate_loss=False,
@@ -224,8 +224,9 @@ model.train(trainset,labelset,
 #%%
 
 
-
-
+u, s, vh = np.linalg.svd(np.random.normal(0,1,[3,3]), full_matrices=True)
+R = np.dot(u[:, :6] , vh)
+print(np.matmul(R,np.transpose(R)))
 
 
 

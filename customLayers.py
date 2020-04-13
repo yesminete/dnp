@@ -13,26 +13,33 @@ import tensorflow as tf
 
 class normalizedConvolution(layers.Layer):
 
-  def __init__(self, out_n=7, ksize=3, eps=0.001,**kwargs):
+  def __init__(self, out_n0=7,  ksize0=3, 
+                     out_n1=3,  ksize1=9, eps=0.001,**kwargs):
     super(normalizedConvolution, self).__init__(**kwargs)
-    self.conv = layers.Conv2D(out_n,ksize,padding='SAME') 
-    self.out_n=out_n
-    self.ksize=ksize
+    self.conv0 = layers.Conv2D(out_n0,ksize0,use_bias=False,padding='SAME') 
+    self.conv1 = layers.Conv2D(out_n1,ksize1,use_bias=False,padding='SAME') 
+    self.out_n0=out_n0
+    self.ksize0=ksize0
+    self.out_n1=out_n1
+    self.ksize1=ksize1
     self.eps = eps
   def get_config(self):
         config = super().get_config().copy()
         config.update(
         {
-            'out_n': self.out_n,
-            'ksize': self.ksize,
+            'out_n0': self.out_n0,
+            'ksize0': self.ksize0,
+            'out_n1': self.out_n1,
+            'ksize1': self.ksize1,
             'eps': self.eps,
         } )    
         return config                  
   def call(self, image):
-      x = self.conv(image)
-      n = tf.reduce_sum(x*x,axis=3,keepdims=True)
+      x = self.conv0(image)
+      y = self.conv1(image)
+      n = tf.reduce_sum(y*y,axis=3,keepdims=True)
       n = tf.math.sqrt(n+self.eps)
-      #x = x / n
+      x = x / n
       return x
       
 

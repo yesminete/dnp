@@ -32,7 +32,7 @@ def conv_gauss2D(img,std):
 
 def conv_gauss2D_fft(img,std):
   sz = img.shape
-  pad = np.floor(std*3)
+  pad = np.floor(std*2)
   s0 = np.int32(sz[1]+pad)
   s1 = np.int32(sz[2]+pad)
   X,Y = tf.meshgrid(list(range(0,s1)),list(range(0,s0)))
@@ -67,18 +67,21 @@ def conv_gauss2D_fft(img,std):
 
 def conv_gauss3D_fft(img,std):
   sz = img.shape
-  pad = np.floor(std*3)
+  pad = np.floor(std*2)
   s0 = np.int32(sz[1]+pad)
   s1 = np.int32(sz[2]+pad)
   s2 = np.int32(sz[3]+pad)
-  X,Y = tf.meshgrid(list(range(0,s2)),list(range(0,s1)),list(range(0,s0)))
+  X,Y,Z = tf.meshgrid(list(range(0,s0)),list(range(0,s1)),list(range(0,s2)),indexing='ij')
+  X = tf.cast(X,dtype=tf.float32)
+  Y = tf.cast(Y,dtype=tf.float32)
+  Z = tf.cast(Z,dtype=tf.float32)
   X = X - 0.5*(sz[3]+pad)
   Y = Y - 0.5*(sz[2]+pad)
   Z = Z - 0.5*(sz[1]+pad)
   gauss_kernel = tf.exp(-(X*X + Y*Y + Z*Z)/(2*std*std))
   gauss_kernel = gauss_kernel / tf.reduce_sum(gauss_kernel)
   gauss_kernel = tf.cast(gauss_kernel,dtype=tf.complex64)
-  gauss_kernel = tf.signal.fftshift(gauss_kernel,[0,1])
+  gauss_kernel = tf.signal.fftshift(gauss_kernel,[0,1,2])
   gfft = tf.signal.fft3d(gauss_kernel)  
   gfft = tf.expand_dims(gfft,0)
   pads = tf.cast([[0,0],[0,pad],[0,pad],[0,pad]],tf.int32)
@@ -289,6 +292,33 @@ def rep_rans(rans,sizes,nD):
 
 
 
+def resizeNDlinear_(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
+
+    if not batch_dim:
+        image = tf.expand_dims(image,0)
+    
+    if nD==2:
+        sz = image.shape
+        X,Y = np.meshgrid(np.arange(0,dest_shape[0]),np.arange(0,dest_shape[1]),indexing='ij')
+        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
+        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
+        res = interp2lin(image,X,Y)
+    if nD==3:
+        sz = image.shape
+        X,Y,Z = np.meshgrid(np.arange(0,dest_shape[0]),np.arange(0,dest_shape[1]),np.arange(0,dest_shape[2]),indexing='ij')
+        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
+        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
+        Z = tf.cast(Z,dtype=tf.float32)/dest_shape[2]*sz[3]
+        res = interp3lin(image,X,Y,Z)
+        
+    if not batch_dim:
+        return res[0,...]
+    else:
+        return res
+    
+
+
+
 def interp2lin(image,X,Y):
 
     nD = 2    
@@ -361,7 +391,7 @@ def interp3lin(image,X,Y,Z):
     Zint = np.floor(Z)
     Xfrc = X-Xint
     Yfrc = Y-Yint
-    Zfrc = Z-Yint
+    Zfrc = Z-Zint
     sz = image.shape
     
     if image.shape[4] == 1:

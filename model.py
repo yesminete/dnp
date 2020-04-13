@@ -638,8 +638,8 @@ def Augmenter( morph_width = 150,
                 labels_ = interp2lin(labels,Y,X)            
             if nD == 3:
                 X,Y,Z = sampleDefField_3D(sz)
-                data_ = interp2lin(data,Z,Y,X)        
-                labels_ = interp2lin(labels,Z,Y,X)            
+                data_ = interp3lin(data,X,Y,Z)        
+                labels_ = interp3lin(labels,X,Y,Z)            
             
             if normal_noise > 0:
                 data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
@@ -674,6 +674,38 @@ def Augmenter( morph_width = 150,
         #dY = np.random.normal(0,s,X.shape)
         
         return nX,nY        
+    
+
+    def sampleDefField_3D(sz):
+        
+        X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
+        
+        
+        wid = morph_width/4
+        s = wid*wid*morph_strength
+        dx = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
+        dx = np.squeeze(dx)
+        dy = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
+        dy = np.squeeze(dy)
+        dz = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
+        dz = np.squeeze(dy)
+        
+        cx = 0.5*sz[1]
+        cy = 0.5*sz[2]
+        cz = 0.5*sz[3]
+        
+        u, _, vh = np.linalg.svd(np.eye(3) + rotation_dphi*np.random.normal(0,1,[3,3]), full_matrices=True)
+        R = np.dot(u[:, :6] , vh)
+        
+        dx = s*dx
+        dy = s*dy
+        dz = s*dz
+        
+        nX = R[0,0]*(X-cx) + R[0,1]*(Y-cy) + R[0,2]*(Z-cz) + cx + dx
+        nY = R[1,0]*(X-cx) + R[1,1]*(Y-cy) + R[1,2]*(Z-cz) + cy + dy
+        nZ = R[2,0]*(X-cx) + R[2,1]*(Y-cy) + R[2,2]*(Z-cz) + cz + dz
+        
+        return nX,nY,nZ
     
 
     return augment
