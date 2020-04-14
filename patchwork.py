@@ -487,7 +487,7 @@ class PatchWorkModel(Model):
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects={},show_history=True):
+  def load(name,custom_objects={},show_history=False):
 
     custom_objects['biConvolution'] = biConvolution
 
