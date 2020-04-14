@@ -10,25 +10,23 @@ This is a temporary script file.
 
 #%%
 
-import tensorflow as tf
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from PIL import Image
-import cv2
+#from PIL import Image
+#import cv2
+
+import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import layers
 from tensorflow.keras.callbacks import History 
 
 from timeit import default_timer as timer
-
 from os import path
-
 import nibabel as nib
-
 import json
-
 import warnings
+
 from .crop_generator import *
 from .improc_utils import *
 from .customLayers import *
@@ -571,16 +569,8 @@ class PatchWorkModel(Model):
 
         if showplot:
             self.show_train_stat()
-
-# #%%
-#             x = [ i for i, j in model.trainloss_hist ]
-#             y = [ j for i, j in model.trainloss_hist ]
-#             plt.semilogy(x,y,'r',label="train loss")
-#             x = [ i for i, j in model.validloss_hist ]
-#             y = [ j for i, j in model.validloss_hist ]
-#             plt.semilogy(x,y,'g')
-#             plt.legend()
-      
+            
+            
 #%%
 
 

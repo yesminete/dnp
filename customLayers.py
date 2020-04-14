@@ -23,6 +23,7 @@ class normalizedConvolution(layers.Layer):
     self.out_n1=out_n1
     self.ksize1=ksize1
     self.eps = eps
+    
   def get_config(self):
         config = super().get_config().copy()
         config.update(
