@@ -10,14 +10,18 @@ from tensorflow.keras import layers
 import tensorflow as tf
 
 
-
 class normalizedConvolution(layers.Layer):
 
-  def __init__(self, out_n0=7,  ksize0=3, 
+  def __init__(self, nD=3, out_n0=7,  ksize0=3, 
                      out_n1=3,  ksize1=9, eps=0.001,**kwargs):
-    super(normalizedConvolution, self).__init__(**kwargs)
-    self.conv0 = layers.Conv2D(out_n0,ksize0,use_bias=False,padding='SAME') 
-    self.conv1 = layers.Conv2D(out_n1,ksize1,use_bias=False,padding='SAME') 
+    super().__init__(**kwargs)
+    if nD == 2:
+        self.conv0 = layers.Conv2D(out_n0,ksize0,use_bias=False,padding='SAME') 
+        self.conv1 = layers.Conv2D(out_n1,ksize1,use_bias=False,padding='SAME') 
+    else:
+        self.conv0 = layers.Conv3D(out_n0,ksize0,use_bias=False,padding='SAME') 
+        self.conv1 = layers.Conv3D(out_n1,ksize1,use_bias=False,padding='SAME') 
+    self.nD = nD
     self.out_n0=out_n0
     self.ksize0=ksize0
     self.out_n1=out_n1
@@ -32,13 +36,14 @@ class normalizedConvolution(layers.Layer):
             'ksize0': self.ksize0,
             'out_n1': self.out_n1,
             'ksize1': self.ksize1,
+            'nD': self.nD,
             'eps': self.eps,
         } )    
         return config                  
   def call(self, image):
       x = self.conv0(image)
       y = self.conv1(image)
-      n = tf.reduce_sum(y*y,axis=3,keepdims=True)
+      n = tf.reduce_sum(y*y,axis=self.nD+1,keepdims=True)
       n = tf.math.sqrt(n+self.eps)
       x = x / n
       return x
@@ -52,7 +57,7 @@ class biConvolution(layers.Layer):
   def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=None,**kwargs):
       
       
-    super(biConvolution, self).__init__(**kwargs)
+    super().__init__(**kwargs)
     self.out_n = out_n
     self.ksize = ksize
     self.padding = padding
