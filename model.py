@@ -10,39 +10,57 @@ This is a temporary script file.
 
 #%%
 
-import tensorflow as tf
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from PIL import Image
-import cv2
+#from PIL import Image
+#import cv2
+
+import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import layers
 from tensorflow.keras.callbacks import History 
 
 from timeit import default_timer as timer
-
 from os import path
-
 import nibabel as nib
-
 import json
-
 import warnings
-from crop_generator import *
 
-from improc_utils import *
-
-
+from .crop_generator import *
+from .improc_utils import *
+from .customLayers import *
 
 #%%###############################################################################################
 
 ## A CNN wrapper to allow easy layer references and stacking
 
 class CNNblock(layers.Layer):
-  def __init__(self,theLayers):
-    super(CNNblock, self).__init__()
-    self.theLayers = theLayers
+  def __init__(self,theLayers=None,name=None):
+    super(CNNblock, self).__init__(name=name)
+    if theLayers is None:
+        self.theLayers = {}
+    else:
+        self.theLayers = theLayers
+
+  def add(self,*args):
+      if len(args) > 1:
+        l = [];
+        for a in args:
+           if hasattr(a,'dest') and a.dest is not None:
+               l.append({'f':a,'dest':a.dest})
+           else:
+               l.append({'f':a})
+        self.theLayers[l[0]['f'].name] =l
+      else:     
+        if isinstance(args[0],list):
+            self.theLayers[args[0][0].name] = list(args[0])
+        else:
+            self.theLayers[args[0].name] = args[0]
+            
+          
+   
+
 
   def call(self, inputs, alphas=None, training=False):
     
@@ -133,154 +151,51 @@ def createCNNBlockFromObj(obj,custom_objects=None):
       return CNNblock(theLayers)
       
 
-
-############################ biConv
-
-
-class biConvolution(layers.Layer):
-
-  def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=None,**kwargs):
-      
-      
-    super(biConvolution, self).__init__(**kwargs)
-    self.out_n = out_n
-    self.ksize = ksize
-    self.padding = padding
-    self.transpose = transpose
-    self.nD = nD
-    self.initializer = tf.random_normal_initializer(0, 0.05)
-    self.num_alpha = 0
-    self.isBi=True
-    
-    if strides is None:
-        if nD == 2:
-            strides = (1,1)
-        else: 
-            strides = (1,1,1,1,1)
-
-    self.strides = strides
-
-  def get_config(self):
-
-        config = super().get_config().copy()
-        config.update(
-        {
-            'out_n': self.out_n,
-            'ksize': self.ksize,
-            'strides': self.strides,
-            'padding': self.padding,
-            'transpose': self.transpose,
-            'nD': self.nD,
-            
-        } )
-    
-        return config    
-              
-  def call(self, image,alphas = None):
-
-    shape_im = image.shape
- 
-    if not hasattr(self,"weight"):
-        
-        
-        if self.transpose:
-            self.N = shape_im[self.nD+1]
-            self.M = self.out_n
-        else:
-            self.M = shape_im[self.nD+1]
-            self.N = self.out_n
-        
-        
-        if alphas is not None:
-          shape_alpha = alphas.shape    
-          self.num_alpha = shape_alpha[1]
-          if self.nD == 2:
-              weight_shape = (self.num_alpha,self.ksize,self.ksize,self.M,self.N)                        
-          else:
-              weight_shape = (self.num_alpha,self.ksize,self.ksize,self.ksize,self.M,self.N)
-             
-        else:
-          if self.nD == 2:
-              weight_shape = (self.ksize,self.ksize,self.M,self.N)
-          else:
-              weight_shape = (self.ksize,self.ksize,self.ksize,self.M,self.N)
-            
-        self.weight = self.add_weight(shape=weight_shape, 
-                        initializer=self.initializer, trainable=True,name=self.name)
-    else:
-        if alphas is not None and self.num_alpha == 0:
-            assert 0,"inconsitent usage"
-        if alphas is None and self.num_alpha > 0:
-            assert 0,"inconsitent usage"
-
-
-    if self.transpose:
-        im_shape = tf.shape(image)
-        output_shape_transpose = [0]*(self.nD+2)
-        output_shape_transpose[0] = im_shape[0]
-        output_shape_transpose[-1] = self.M
-        for k in range(self.nD):
-            output_shape_transpose[k+1] = im_shape[k+1]*self.strides[k] 
-
-        if self.nD == 2:
-            conv = lambda *a,**kw: tf.nn.conv2d_transpose(*a,**kw,output_shape=output_shape_transpose)
-        else:
-            conv = lambda *a,**kw: tf.nn.conv3d_transpose(*a,**kw,output_shape=output_shape_transpose)
-    else:
-        if self.nD == 2:
-            conv = tf.nn.conv2d
-        else:
-            conv = tf.nn.conv3d
-
-
-    x = 0
-    if self.num_alpha == 0:
-        x = conv(image, self.weight, strides=self.strides, padding=self.padding)
-        
-    else:
-        for k in range(self.num_alpha):
-            kernel = self.weight[k,...]
-            alpha = alphas[:,k:k+1]
-            for j in range(self.nD):
-                alpha = tf.expand_dims(alpha,j+2)
-            c = conv(image, kernel, strides=self.strides, padding=self.padding)
-            x = x+alpha*c
-    
-    return x
-
-
-
 ############################ The definition of the Patchwork model
 
 class PatchWorkModel(Model):
   def __init__(self,cropper,
+
                blockCreator,
-               classifierCreator=None,
-               forward_type='simple',
                num_labels=1,
                intermediate_out=0,
-               finalBlock=None,
                intermediate_loss=False,
                spatial_train=True,
+               finalBlock=None,
+
+               classifierCreator=None,
+               num_classes=1,
+               cls_intermediate_out=0,
+               cls_intermediate_loss=False,
                classifier_train=False,
+
+               preprocCreator=None,
+
+               forward_type='simple',
                trainloss_hist = [],
                validloss_hist = [],
                trained_epochs = 0,
                modelname = None
                ):
     super(PatchWorkModel, self).__init__()
+    self.preprocessor = []
     self.blocks = []
     self.classifiers = []
+    self.finalBlock=finalBlock
+
     self.cropper = cropper
     cropper.model = self
     self.forward_type = forward_type
     self.num_labels = num_labels
+    self.num_classes = num_classes
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+    self.cls_intermediate_loss = cls_intermediate_loss
+    self.cls_intermediate_out = cls_intermediate_out
+    self.num_classes=num_classes
     self.classifier_train=classifier_train
     self.spatial_train=spatial_train
 
-    self.finalBlock=finalBlock
     
     self.trainloss_hist = trainloss_hist
     self.validloss_hist = validloss_hist
@@ -291,26 +206,40 @@ class PatchWorkModel(Model):
          warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
         
     
-    if callable(blockCreator):
-        for k in range(self.cropper.depth-1): 
-          self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
-        self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+    for k in range(self.cropper.depth-1): 
+      self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
+    if self.spatial_train:
+      self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+
+    if preprocCreator is not None:
+       for k in range(self.cropper.depth-1): 
+           self.preprocessor.append(preprocCreator(level=k))
         
     if classifierCreator is not None:
-        for k in range(self.cropper.depth): 
-          self.classifiers.append(classifierCreator(level=k))
+       for k in range(self.cropper.depth-1): 
+         self.classifiers.append(classifierCreator(level=k,outK=num_classes+cls_intermediate_out))
+       if self.classifier_train:
+         self.classifiers.append(classifierCreator(level=cropper.depth-1,outK=num_classes))
         
         
   
   def serialize_(self):
     return   { 'forward_type':self.forward_type,
-               'num_labels':self.num_labels,
+
+               'blocks':self.blocks,
                'intermediate_out':self.intermediate_out,
                'intermediate_loss':self.intermediate_loss,   
                'spatial_train':self.spatial_train,
-               'classifier_train':self.classifier_train,
-               'blocks':self.blocks,
+               'num_labels':self.num_labels,
+
                'classifiers':self.classifiers,
+               'cls_intermediate_out':self.cls_intermediate_out,
+               'cls_intermediate_loss':self.cls_intermediate_loss,   
+               'classifier_train':self.classifier_train,
+               'num_classes':self.num_classes,
+               
+               'preprocessor':self.preprocessor,
+
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
                'trainloss_hist':self.trainloss_hist,
@@ -329,6 +258,10 @@ class PatchWorkModel(Model):
       inp = inputs['input' + str(k)]
       inp_nonspatial = res_nonspatial
       coords = inputs['cropcoords' + str(k)]
+      
+      
+      if k < len(self.preprocessor) :
+          inp = self.preprocessor[k](inp)
       
       
       if len(output) > 0: # is it's not the initial scale
@@ -368,10 +301,11 @@ class PatchWorkModel(Model):
          if self.classifier_train or k < self.cropper.depth-1:
              res_nonspatial = self.classifiers[k](inp,inp_nonspatial) 
          if self.classifier_train:
-             current_output.append(res_nonspatial)
+             current_output.append(res_nonspatial[:,0:self.num_classes])
       
       # the spatial/segmentation part
-      res = self.blocks[k](inp,inp_nonspatial)      # for testing: res = inp      
+      if self.spatial_train or  k < self.cropper.depth-1:
+          res = self.blocks[k](inp,inp_nonspatial)      # for testing: res = inp      
       if self.spatial_train:
           current_output.append(res[...,0:self.num_labels])
 
@@ -459,22 +393,22 @@ class PatchWorkModel(Model):
                 r = [r]
         else:
             r = self(data_)
-        for k in level:            
-          a,b = x.stitchResult(r,k)
-          pred[k] += a
-          sumpred[k] += b         
-     res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))
-     #res = sumpred
-        
-     sz = data.shape
-     orig_shape = sz[1:(nD+1)]
-     if scale_to_original:
-         for k in level:
-            res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))
-           
-     
-     if single:
-       res = res[0]
+       
+        if self.spatial_train:
+            for k in level:            
+              a,b = x.stitchResult(r,k)
+              pred[k] += a
+              sumpred[k] += b         
+              
+     if self.spatial_train:
+         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))        
+         sz = data.shape
+         orig_shape = sz[1:(nD+1)]
+         if scale_to_original:
+             for k in level:
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+         if single:
+           res = res[0]
      
      return res
 
@@ -490,6 +424,7 @@ class PatchWorkModel(Model):
   def load(name,custom_objects={},show_history=False):
 
     custom_objects['biConvolution'] = biConvolution
+    custom_objects['normalizedConvolution'] = normalizedConvolution
 
     fname = name + ".json"
     with open(fname) as f:
@@ -509,6 +444,14 @@ class PatchWorkModel(Model):
         if classi is not None and len(classi) > 0:
             clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
 
+    preprocCreator = None
+    if 'preprocessor' in x:
+        pproc = x['preprocessor']
+        del x['preprocessor']
+        if pproc is not None and len(pproc) > 0:
+            preprocCreator = lambda level,outK=0 : createCNNBlockFromObj(pproc[level],custom_objects=custom_objects)
+
+
     fb = x['finalBlock']
     del x['finalBlock']
 
@@ -517,7 +460,10 @@ class PatchWorkModel(Model):
         finalBlock = createCNNBlockFromObj(fb, custom_objects=custom_objects)
     
     
-    model = PatchWorkModel(cropper, blkCreator,classifierCreator=clsCreator, finalBlock=finalBlock,**x)
+    model = PatchWorkModel(cropper, blkCreator,
+                           classifierCreator=clsCreator, 
+                           preprocCreator=preprocCreator,
+                           finalBlock=finalBlock,**x)
     model.load_weights(name + ".tf")
     model.modelname = name
     
@@ -549,16 +495,17 @@ class PatchWorkModel(Model):
             jitter=0,
             num_samples_per_epoch=-1,
             showplot=True,
-            autosave=True
+            autosave=True,
+            augment=None
             ):
       
     def getSample(subset):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
         if traintype == 'random':
-            c = self.cropper.sample(tset,lset,generate_type='random',  num_patches=num_patches)
+            c = self.cropper.sample(tset,lset,generate_type='random',  num_patches=num_patches,augment=augment)
         elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,generate_type='tree_full', jitter=jitter)
+            c = self.cropper.sample(tset,lset,generate_type='tree_full', jitter=jitter,augment=augment)
         return c
       
     history = History()
@@ -584,10 +531,15 @@ class PatchWorkModel(Model):
         end = timer()
         print("time elapsed, sampling: " + str(end - start) )
       
+        
+      
         ### fitting
+      
+        inputdata = c.getInputData()
+        targetdata = c.getTargetData()
         print("starting training")
         start = timer()
-        self.fit(c.getInputData(),c.getTargetData(),
+        self.fit(inputdata,targetdata,
                   epochs=epochs,
                   verbose=2,
                   callbacks=[history])
@@ -617,16 +569,8 @@ class PatchWorkModel(Model):
 
         if showplot:
             self.show_train_stat()
-
-# #%%
-#             x = [ i for i, j in model.trainloss_hist ]
-#             y = [ j for i, j in model.trainloss_hist ]
-#             plt.semilogy(x,y,'r',label="train loss")
-#             x = [ i for i, j in model.validloss_hist ]
-#             y = [ j for i, j in model.validloss_hist ]
-#             plt.semilogy(x,y,'g')
-#             plt.legend()
-      
+            
+            
 #%%
 
 
@@ -648,6 +592,113 @@ class patchworkModelEncoder(json.JSONEncoder):
            return dict(obj)
         return json.dumps(obj,cls=patchworkModelEncoder)
         
+
+
+
+
+
+def Augmenter( morph_width = 150,
+                morph_strength=0.25,
+                rotation_dphi=0.1,
+                flip = None ,
+                normal_noise=0,
+                repetitions=1,
+                include_original=True):
+                
+
+    def augment(data,labels):
+        
+        sz = data.shape
+        if len(sz) == 4:
+            nD = 2
+        if len(sz) == 5:
+            nD = 3
+
+        if not include_original:
+            data_res = []
+            labels_res = []
+        else:
+            data_res = [data]
+            labels_res = [labels]
+
+        for k in range(repetitions):            
+            if nD == 2:
+                X,Y = sampleDefField_2D(sz)                    
+                data_ = interp2lin(data,Y,X)        
+                labels_ = interp2lin(labels,Y,X)            
+            if nD == 3:
+                X,Y,Z = sampleDefField_3D(sz)
+                data_ = interp3lin(data,X,Y,Z)        
+                labels_ = interp3lin(labels,X,Y,Z)            
+            
+            if normal_noise > 0:
+                data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
+            
+            data_res.append(data_)
+            labels_res.append(labels_)
+        data_res = tf.concat(data_res,0)
+        labels_res = tf.concat(labels_res,0)
+        
+        return data_res,labels_res
+        
+
+
+
+    def sampleDefField_2D(sz):
+        
+        X,Y = np.meshgrid(np.arange(0,sz[2]),np.arange(0,sz[1]))
+        
+        phi = np.random.uniform(low=-rotation_dphi,high=rotation_dphi)
+        
+        wid = morph_width/4
+        s = wid*wid*morph_strength
+        dx = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
+        dx = np.squeeze(dx)
+        dy = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
+        dy = np.squeeze(dy)
+        
+        cx = 0.5*sz[2]
+        cy = 0.5*sz[1]
+        nX = tf.math.cos(phi)*(X-cx) - tf.math.sin(phi)*(Y-cy) + cx + s*dx
+        nY = tf.math.sin(phi)*(X-cx) + tf.math.cos(phi)*(Y-cy) + cy + s*dy
+        #dY = np.random.normal(0,s,X.shape)
+        
+        return nX,nY        
+    
+
+    def sampleDefField_3D(sz):
+        
+        X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
+        
+        
+        wid = morph_width/4
+        s = wid*wid*morph_strength
+        dx = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
+        dx = np.squeeze(dx)
+        dy = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
+        dy = np.squeeze(dy)
+        dz = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
+        dz = np.squeeze(dy)
+        
+        cx = 0.5*sz[1]
+        cy = 0.5*sz[2]
+        cz = 0.5*sz[3]
+        
+        u, _, vh = np.linalg.svd(np.eye(3) + rotation_dphi*np.random.normal(0,1,[3,3]), full_matrices=True)
+        R = np.dot(u[:, :6] , vh)
+        
+        dx = s*dx
+        dy = s*dy
+        dz = s*dz
+        
+        nX = R[0,0]*(X-cx) + R[0,1]*(Y-cy) + R[0,2]*(Z-cz) + cx + dx
+        nY = R[1,0]*(X-cx) + R[1,1]*(Y-cy) + R[1,2]*(Z-cz) + cy + dy
+        nZ = R[2,0]*(X-cx) + R[2,1]*(Y-cy) + R[2,2]*(Z-cz) + cz + dz
+        
+        return nX,nY,nZ
+    
+
+    return augment
 
 
 
