@@ -37,7 +37,7 @@ from .customLayers import *
 
 class CNNblock(layers.Layer):
   def __init__(self,theLayers=None,name=None):
-    super(CNNblock, self).__init__(name=name)
+    super().__init__(name=name)
     if theLayers is None:
         self.theLayers = {}
     else:
@@ -177,7 +177,7 @@ class PatchWorkModel(Model):
                trained_epochs = 0,
                modelname = None
                ):
-    super(PatchWorkModel, self).__init__()
+    super().__init__()
     self.preprocessor = []
     self.blocks = []
     self.classifiers = []
@@ -212,7 +212,7 @@ class PatchWorkModel(Model):
       self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
 
     if preprocCreator is not None:
-       for k in range(self.cropper.depth-1): 
+       for k in range(self.cropper.depth): 
            self.preprocessor.append(preprocCreator(level=k))
         
     if classifierCreator is not None:
@@ -327,7 +327,8 @@ class PatchWorkModel(Model):
                  generate_type='tree',
                  overlap=0,
                  jitter=0.05,
-                 repetitions=5):
+                 repetitions=5,
+                 scalevalue=None):
       nD = self.cropper.ndim
       if not isinstance(fname,list):
           fname = [fname]
@@ -340,6 +341,8 @@ class PatchWorkModel(Model):
           a = tf.convert_to_tensor(a,dtype=tf.float32)
           ims.append(a)
       a = tf.concat(ims,nD+1)
+      if scalevalue is not None:
+          a = a * scalevalue
           
       res = self.apply_full(a,generate_type=generate_type,
                             jitter=jitter,
@@ -421,7 +424,7 @@ class PatchWorkModel(Model):
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects={},show_history=True):
+  def load(name,custom_objects={},show_history=False):
 
     custom_objects['biConvolution'] = biConvolution
     custom_objects['normalizedConvolution'] = normalizedConvolution
@@ -608,40 +611,40 @@ def Augmenter( morph_width = 150,
 
     def augment(data,labels):
         
-        sz = data.shape
-        if len(sz) == 4:
-            nD = 2
-        if len(sz) == 5:
-            nD = 3
-
-        if not include_original:
-            data_res = []
-            labels_res = []
-        else:
-            data_res = [data]
-            labels_res = [labels]
-
-        for k in range(repetitions):            
-            if nD == 2:
-                X,Y = sampleDefField_2D(sz)                    
-                data_ = interp2lin(data,Y,X)        
-                labels_ = interp2lin(labels,Y,X)            
-            if nD == 3:
-                X,Y,Z = sampleDefField_3D(sz)
-                data_ = interp3lin(data,X,Y,Z)        
-                labels_ = interp3lin(labels,X,Y,Z)            
+            sz = data.shape
+            if len(sz) == 4:
+                nD = 2
+            if len(sz) == 5:
+                nD = 3
+    
+            if not include_original:
+                data_res = []
+                labels_res = []
+            else:
+                data_res = [data]
+                labels_res = [labels]
+    
+            for k in range(repetitions):            
+                if nD == 2:
+                    X,Y = sampleDefField_2D(sz)                    
+                    data_ = interp2lin(data,Y,X)        
+                    labels_ = interp2lin(labels,Y,X)            
+                if nD == 3:
+                    X,Y,Z = sampleDefField_3D(sz)
+                    data_ = interp3lin(data,X,Y,Z)        
+                    labels_ = interp3lin(labels,X,Y,Z)            
+                
+                if normal_noise > 0:
+                    data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
+                
+                data_res.append(data_)
+                labels_res.append(labels_)
+            data_res = tf.concat(data_res,0)
+            labels_res = tf.concat(labels_res,0)
             
-            if normal_noise > 0:
-                data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
+            return data_res,labels_res
             
-            data_res.append(data_)
-            labels_res.append(labels_)
-        data_res = tf.concat(data_res,0)
-        labels_res = tf.concat(labels_res,0)
-        
-        return data_res,labels_res
-        
-
+    
 
 
     def sampleDefField_2D(sz):

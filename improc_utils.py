@@ -75,9 +75,9 @@ def conv_gauss3D_fft(img,std):
   X = tf.cast(X,dtype=tf.float32)
   Y = tf.cast(Y,dtype=tf.float32)
   Z = tf.cast(Z,dtype=tf.float32)
-  X = X - 0.5*(sz[3]+pad)
+  X = X - 0.5*(sz[1]+pad)
   Y = Y - 0.5*(sz[2]+pad)
-  Z = Z - 0.5*(sz[1]+pad)
+  Z = Z - 0.5*(sz[3]+pad)
   gauss_kernel = tf.exp(-(X*X + Y*Y + Z*Z)/(2*std*std))
   gauss_kernel = gauss_kernel / tf.reduce_sum(gauss_kernel)
   gauss_kernel = tf.cast(gauss_kernel,dtype=tf.complex64)
@@ -164,7 +164,7 @@ def resizeND(image,dest_shape,batch_dim=False,nD=2):
 # 2D image array of size [w,h,f] (if batch_dim=False) or [b,w,h,f] (if batch_dim=True)
 # 3D image array of size [w,h,d,f] (if batch_dim=False) or [b,w,h,d,f] (if batch_dim=True)
 # dest_shape a list of new size (len(dest_shape) = 2 or 3)
-def resizeNDlinear(image,dest_shape,batch_dim=False,nD=2,edge_center=False):
+def resizeNDlinear_old(image,dest_shape,batch_dim=False,nD=2,edge_center=False):
     if not batch_dim:
       image = tf.expand_dims(image,0)
     sz = image.shape
@@ -292,7 +292,7 @@ def rep_rans(rans,sizes,nD):
 
 
 
-def resizeNDlinear_(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
+def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
 
     if not batch_dim:
         image = tf.expand_dims(image,0)
@@ -401,7 +401,7 @@ def interp3lin(image,X,Y,Z):
     
     def getIndex(X,Y,Z,x,y,z):
         X = X+x
-        X[X<0] = 0
+        X[X<0.0] = 0.0
         X[X>=sz[1]] = sz[1]-1
         Y = Y+y
         Y[Y<0] = 0
