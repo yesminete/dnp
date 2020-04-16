@@ -148,14 +148,14 @@ def createClassifier(name=None,depth=4,outK=2):
 
 cgen = patchwork.CropGenerator(patch_size = (32,32), 
                   scale_fac = 0.6, 
-                  init_scale = -1,
+                  init_scale = [48,96],
                   depth=2)
 
 
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : createBlock(outK=outK),
-                      preprocCreator = lambda level: patchwork.normalizedConvolution(),
+                      preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
                       intermediate_loss=False,

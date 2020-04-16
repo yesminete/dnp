@@ -390,6 +390,8 @@ class CropGenerator():
         for d in range(nD):
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
       elif crops is None and init_scale != -1:               # the first layer is a isotropically scaled version
+   
+
         patch_size = [0] * nD        
         qbox = [None] * (2*nD)
         for d in range(nD):
@@ -404,7 +406,11 @@ class CropGenerator():
         for d in range(nD):
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
       else:                                  # the first layer is already patched                
-        asp = 0.5 * max(sz[1:nD+1])/max(patch_size)*scale_fac
+        asp = []
+        for d in range(nD):
+            asp.append(sz[d+1]/patch_size[d]*scale_fac*0.5)
+        asp = min(asp)
+        #asp = 0.5 * max(sz[1:nD+1])/max(patch_size)*scale_fac
         bbox_sz = [0] * (nD*2)
         for d in range(nD):
             bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]
