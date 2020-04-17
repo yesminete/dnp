@@ -38,6 +38,8 @@ from .customLayers import *
 class CNNblock(layers.Layer):
   def __init__(self,theLayers=None,name=None):
     super().__init__(name=name)
+    
+    self.verbose = False
     if theLayers is None:
         self.theLayers = {}
     else:
@@ -65,6 +67,8 @@ class CNNblock(layers.Layer):
   def call(self, inputs, alphas=None, training=False):
     
     def apply_fun(f,x):
+        if self.verbose:
+            print(f.name , "input_shape: " ,  x.shape)
         if hasattr(f,'isBi') and f.isBi:
             return f(x,alphas,training=training)
         else:
@@ -77,7 +81,11 @@ class CNNblock(layers.Layer):
     for l in self.theLayers:
         cats[l] = []
 
-    
+    if self.verbose:
+        print("----------------------")
+        if alphas is not None:
+            print("with alphas: " , alphas.shape)
+
     for l in sorted(self.theLayers):
 
         
@@ -350,8 +358,17 @@ class PatchWorkModel(Model):
                             repetitions=repetitions,
                             scale_to_original=True)
 
-      pred_nii = nib.Nifti1Image(res.numpy()*64000, img1.affine, img1.header)
+      res = res.numpy()
+      if nD == 2:
+          res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
+          img1.header.set_data_shape(res.shape)
+          
+      pred_nii = nib.Nifti1Image(res*64000, img1.affine, img1.header)
       pred_nii.header.set_slope_inter(1/64000,0.00000001)
+      pred_nii.header['cal_max'] = 1
+      pred_nii.header['cal_min'] = 0
+      pred_nii.header['glmax'] = 1
+      pred_nii.header['glmin'] = 0
       if ofname is not None:
           nib.save(pred_nii,ofname)
       return pred_nii,res;
@@ -396,7 +413,7 @@ class PatchWorkModel(Model):
                 r = [r]
         else:
             r = self(data_)
-       
+            
         if self.spatial_train:
             for k in level:            
               a,b = x.stitchResult(r,k)
@@ -426,8 +443,10 @@ class PatchWorkModel(Model):
   @staticmethod
   def load(name,custom_objects={},show_history=False):
 
-    custom_objects['biConvolution'] = biConvolution
-    custom_objects['normalizedConvolution'] = normalizedConvolution
+    custom_objects = custom_layers
+    # custom_objects['biConvolution'] = biConvolution
+    # custom_objects['normalizedConvolution'] = normalizedConvolution
+    # custom_objects['squeezeLayer'] = squeezeLayer
 
     fname = name + ".json"
     with open(fname) as f:
@@ -636,6 +655,15 @@ def Augmenter( morph_width = 150,
                 
                 if normal_noise > 0:
                     data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
+                
+                if flip is not None:
+                    for j in range(nD):
+                        if flip[j]:
+                            if np.random.uniform() > 0.5:
+                                data_ = np.flip(data_,j+1)
+                                labels_ = np.flip(labels_,j+1)
+                                
+                
                 
                 data_res.append(data_)
                 labels_res.append(labels_)

@@ -13,7 +13,7 @@ import numpy as np
 ########## Cropmodel ##########################################
 
 def gaussian2D(std):  
-  size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()
+  size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()+1
   X,Y = tf.meshgrid(list(range(-size,size)),list(range(-size,size)))
   X = tf.cast(X,dtype=tf.float32)
   Y = tf.cast(Y,dtype=tf.float32)
@@ -106,7 +106,7 @@ def conv_gauss3D_fft(img,std):
 
 
 def gaussian3D(std):  
-  size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()
+  size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()+1
   X,Y,Z = tf.meshgrid(list(range(-size,size)),list(range(-size,size)),list(range(-size,size)))
   X = tf.cast(X,dtype=tf.float32)
   Y = tf.cast(Y,dtype=tf.float32)

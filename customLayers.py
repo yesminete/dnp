@@ -10,6 +10,25 @@ from tensorflow.keras import layers
 import tensorflow as tf
 
 
+custom_layers = {}
+
+
+class squeezeLayer(layers.Layer):
+
+  def __init__(self,**kwargs):
+    super().__init__(**kwargs)
+  def build(self, input_shape):
+      sz = input_shape
+      tot = 1
+      for k in range(len(sz)-1):
+          tot = tot * sz[k+1]
+      self.reshape = layers.Reshape((tot,))
+  def call(self, image):         
+      return  self.reshape(image)
+  
+custom_layers['squeezeLayer'] = squeezeLayer
+
+
 class normalizedConvolution(layers.Layer):
 
   def __init__(self, nD=3, out_n0=7,  ksize0=3, 
@@ -48,6 +67,7 @@ class normalizedConvolution(layers.Layer):
       x = x / n
       return x
       
+custom_layers['normalizedConvolution'] = normalizedConvolution
 
 ############################ biConv
 
@@ -162,5 +182,17 @@ class biConvolution(layers.Layer):
             x = x+alpha*c
     
     return x
+
+custom_layers['biConvolution'] = biConvolution
+
+
+
+
+
+
+
+
+
+
 
 
