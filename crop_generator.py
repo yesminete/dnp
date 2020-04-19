@@ -237,7 +237,7 @@ class CropGenerator():
       if sz is None:             
          sz = [None] * (nD+1)
          for k in range(nD):
-           sz[k+1] = tf.math.floor(patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) )
+           sz[k+1] = tf.math.round(patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) )
 
       rans = [None] * nD
       start_abs = [None] * nD
@@ -470,6 +470,9 @@ class CropGenerator():
       local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size)
       parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size)
       parent_box_scatter_index, dest_full_size = self.convert_to_gatherND_index(parent_boxes,None,patch_size)
+  
+      for k in range(nD):
+          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=tf.int32)
 
 
       resolution = []
@@ -483,6 +486,7 @@ class CropGenerator():
         print("voxsize (relative to original scale): ", *resolution)
         print("numpatches in level: %d" % (parent_box_index.shape[0] / data_parent.shape[0]))
         print("shape of full output: ",  *list(map(lambda x: x.numpy(), dest_full_size[1:])))
+   #     print("shape of full output: ",   dest_full_size[1:])
 
 
 
