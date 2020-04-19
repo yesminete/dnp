@@ -400,28 +400,37 @@ class PatchWorkModel(Model):
      if generate_type == 'random':
          reps = repetitions
          repetitions = 1         
+         
+     self.maxtries = 10
+     self.repetitions_steps = repetitions//self.maxtries
      
-     for i in range(repetitions):
-        x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
-                                jitter = jitter,
-                                overlap=overlap,
-                                 num_patches=reps,verbose=verbose)
-        data_ = x.getInputData()
-        if generate_type == 'random' or generate_type == 'tree_full':
-            r = self.predict(data_)
-            if not isinstance(r,list):
-                r = [r]
-        else:
-            r = self(data_)
-            
-        if self.spatial_train:
-            for k in level:            
-              a,b = x.stitchResult(r,k)
-              pred[k] += a
-              sumpred[k] += b         
+     for w in range(self.maxtries):
+         if w > 0:
+             print('gathering more to get full coverage: ' + str(w) + "/" +  str(self.maxtries))
+         for i in range(repetitions):
+            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
+                                    jitter = jitter,
+                                    overlap=overlap,
+                                     num_patches=reps,verbose=verbose)
+            data_ = x.getInputData()
+            if generate_type == 'random' or generate_type == 'tree_full':
+                r = self.predict(data_)
+                if not isinstance(r,list):
+                    r = [r]
+            else:
+                r = self(data_)
+                
+            if self.spatial_train:
+                for k in level:            
+                  a,b = x.stitchResult(r,k)
+                  pred[k] += a
+                  sumpred[k] += b                
+         if (np.amin(sumpred[-1])) > 0:
+             break
               
      if self.spatial_train:
-         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))        
+         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
+         res = sumpred
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:

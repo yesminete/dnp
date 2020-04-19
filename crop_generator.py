@@ -281,12 +281,28 @@ class CropGenerator():
   def random_boxes(self,bbox_sz,numboxes):
       nD = self.ndim
       centers = [None]*(nD*2)
+      # for k in range(nD):
+      #   c = tf.random.uniform(shape=(numboxes, 1))*(1-bbox_sz[k+nD]+bbox_sz[k])-bbox_sz[k]
+      #   centers[k] = c
+      #   centers[k+nD] = c
+      # local_boxes = tf.concat(centers,1) + bbox_sz      
+      # return local_boxes
+      
       for k in range(nD):
-        c = tf.random.uniform(shape=(numboxes, 1))*(1-bbox_sz[k+nD]+bbox_sz[k])-bbox_sz[k]
+        c = np.random.uniform(0,1,(numboxes, 1))
         centers[k] = c
         centers[k+nD] = c
-      local_boxes = tf.concat(centers,1) + bbox_sz
+      local_boxes = np.concatenate(centers,1) + bbox_sz
       
+      for k in range(nD):
+          idx = local_boxes[:,k]<0
+          local_boxes[idx,nD+k] = local_boxes[idx,nD+k] - local_boxes[idx,k]
+          local_boxes[idx,k] = 0
+          idx = local_boxes[:,k+nD]>1
+          local_boxes[idx,k] = local_boxes[idx,k] - local_boxes[idx,k+nD] + 1
+          local_boxes[idx,nD+k] = 1
+      local_boxes = tf.convert_to_tensor(local_boxes,dtype=tf.float32)
+            
       return local_boxes
 
   # Computes normalized coordinates of random crops
