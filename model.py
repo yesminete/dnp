@@ -430,7 +430,6 @@ class PatchWorkModel(Model):
               
      if self.spatial_train:
          res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
-         res = sumpred
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
