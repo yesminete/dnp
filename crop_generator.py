@@ -102,12 +102,14 @@ class CropGenerator():
   #  only allowed to differ, if init_scale=-1 .
   # output:
   #   a list of levels (see createCropsLocal for content)
-  def sample(self,trainset,labelset,test=False,
+  def sample(self,trainset,labelset,
+             resolutions=None,             
              generate_type='random',  # 'random' or 'tree' or 'tree_full'
              num_patches=1,           #  if 'random' this gives the number of draws, otherwise no function
              jitter=0,                #  if 'tree' this is the amount of random jitter
              overlap=0,
              augment=None,
+             test=False,
              verbose=False):
 
 
@@ -121,6 +123,7 @@ class CropGenerator():
     if not isinstance(trainset,list):
       trainset = [trainset]
       labelset = [labelset]
+      resolutions = [resolutions]
 
     N = len(trainset)
 
@@ -140,17 +143,18 @@ class CropGenerator():
               class_labels_ = labelset[j]
 
       trainset_ = trainset[j]
+      resolution_ = resolutions[j]
       
       if augment is not None:
           print("augmenting ...")
           trainset_,labels_ = augment(trainset_,labels_)
           print("augmenting done. ")
 
-      x = self.createCropsLocal(trainset_,labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+      x = self.createCropsLocal(trainset_,labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
       x['class_labels'] = class_labels_
       scales = [x]
       for k in range(self.depth-1):
-        x = self.createCropsLocal(trainset_,labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,verbose=verbose)
+        x = self.createCropsLocal(trainset_,labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
         x['class_labels'] = class_labels_
         scales.append(x)
 
@@ -357,7 +361,7 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,generate_type,test,jitter=0,num_patches=1,overlap=0,verbose=True):
+  def createCropsLocal(self,data_parent,labels_parent,crops,generate_type,test,jitter=0,num_patches=1,overlap=0,resolution=None,verbose=True):
       patch_size = self.patch_size
       scale_fac = self.scale_fac
       init_scale = self.init_scale
@@ -405,7 +409,7 @@ class CropGenerator():
         fac = max(sz[1:nD+1])/max(patch_size)
         for d in range(nD):
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
-      elif crops is None and init_scale != -1:               # the first layer is a isotropically scaled version
+      elif crops is None and init_scale != -1 and not isinstance(init_scale,str):               # the first layer is a isotropically scaled version
    
 
         patch_size = [0] * nD        
@@ -422,15 +426,28 @@ class CropGenerator():
         for d in range(nD):
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
       else:                                  # the first layer is already patched                
-        asp = []
-        for d in range(nD):
-            asp.append(sz[d+1]/patch_size[d]*scale_fac*0.5)
-        asp = min(asp)
-        #asp = 0.5 * max(sz[1:nD+1])/max(patch_size)*scale_fac
-        bbox_sz = [0] * (nD*2)
-        for d in range(nD):
-            bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]
-            bbox_sz[d+nD] = asp*patch_size[d]/sz[d+1] *aspect_correction[d]
+
+        if crops is None and isinstance(init_scale,str):
+            assert (resolution is not None), "for absolute init_scale you have to pass resolution"
+            sizes_mm = init_scale.replace("mm","").split(",")
+            sizes_vx = [] * nD
+            for d in range(nD):
+                sfac = sizes_mm[d]/resolution[d]/sz[d+1]
+                bbox_sz[d]    = -sfac*0.5
+                bbox_sz[d+nD] = sfac*0.5
+                forwarded_aspects[d] = sfac
+            
+        else:
+            asp = []
+            for d in range(nD):
+                asp.append(sz[d+1]/patch_size[d]*scale_fac*0.5)
+            asp = min(asp)
+            bbox_sz = [0] * (nD*2)
+            for d in range(nD):
+                bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]
+                bbox_sz[d+nD] = asp*patch_size[d]/sz[d+1] *aspect_correction[d]
+
+
         if generate_type == 'random':     
           local_boxes = self.random_boxes(bbox_sz,replicate_patches*bsize)
         elif generate_type == 'tree':          

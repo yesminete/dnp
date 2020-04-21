@@ -517,6 +517,7 @@ class PatchWorkModel(Model):
 
   def train(self,
             trainset,labelset, 
+            resolutions=None,
             epochs=20, 
             num_its=100,
             traintype='random',
@@ -532,10 +533,14 @@ class PatchWorkModel(Model):
     def getSample(subset):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
+        rset = None
+        if resolutions is not None:
+            rset = [resolutions[i] for i in subset]      
+            
         if traintype == 'random':
-            c = self.cropper.sample(tset,lset,generate_type='random',  num_patches=num_patches,augment=augment)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random',  num_patches=num_patches,augment=augment)
         elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,generate_type='tree_full', jitter=jitter,augment=augment)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,augment=augment)
         return c
       
     history = History()

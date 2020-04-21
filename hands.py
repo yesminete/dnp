@@ -26,6 +26,7 @@ from patchwork.improc_utils import *
 
 trainset = []
 labelset = []
+resolutions = []
 class_set = []
 
 skip = 1
@@ -54,6 +55,8 @@ for k in range(2):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
   labelset.append( tf.convert_to_tensor(a,dtype=tf.float32)   )
+  
+  resolutions.append(img.header['pixdim'][1:4])
 #  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
   
  # labelset.append(  tf.convert_to_tensor([[flip[k]]])  )
@@ -168,7 +171,7 @@ model = patchwork.PatchWorkModel(cgen,
 #                      num_classes = 1                      
                       )
 
-x = model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,  generate_type='random', repetitions=200,verbose=True,scale_to_original=False)
+x = model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,  generate_type='random', repetitions=5,verbose=True,scale_to_original=False)
 
 plt.imshow(x[:,:,2])
 #model.summary()
