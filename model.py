@@ -381,7 +381,8 @@ class PatchWorkModel(Model):
                  overlap=0,
                  repetitions=5,
                  scale_to_original=False,
-                 verbose=False
+                 verbose=False,
+                 maxtries=1
                  ):
 
      nD = self.cropper.ndim
@@ -401,12 +402,10 @@ class PatchWorkModel(Model):
          reps = repetitions
          repetitions = 1         
          
-     self.maxtries = 10
-     self.repetitions_steps = repetitions//self.maxtries
      
-     for w in range(self.maxtries):
+     for w in range(maxtries):
          if w > 0:
-             print('gathering more to get full coverage: ' + str(w) + "/" +  str(self.maxtries))
+             print('gathering more to get full coverage: ' + str(w) + "/" +  str(maxtries))
          for i in range(repetitions):
             x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
                                     jitter = jitter,
