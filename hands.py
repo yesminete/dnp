@@ -149,10 +149,10 @@ def createClassifier(name=None,depth=4,outK=2):
 # print(q.shape)
 #model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
 
-cgen = patchwork.CropGenerator(patch_size = (32,32), 
-                  scale_fac = 0.2, 
-                  init_scale = [48,96],
-                  depth=2)
+cgen = patchwork.CropGenerator(patch_size = (16,16), 
+                  scale_fac = 0.5, 
+                  init_scale = '50mm,50mm',
+                  depth=1)
 
 
 model = patchwork.PatchWorkModel(cgen,
@@ -171,7 +171,8 @@ model = patchwork.PatchWorkModel(cgen,
 #                      num_classes = 1                      
                       )
 
-x = model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,  generate_type='random', repetitions=5,verbose=True,scale_to_original=False)
+x = model.apply_full(trainset[0][0:1,:,:,:],resolution=resolutions[0],
+                     jitter=0.05, generate_type='random', repetitions=5,verbose=True,scale_to_original=False)
 
 plt.imshow(x[:,:,2])
 #model.summary()
@@ -204,7 +205,7 @@ cgen = model.cropper
 augment = patchwork.Augmenter(    morph_width = 150
                 , morph_strength=0.25
                 , rotation_dphi=0.1
-                , repetitions=2
+                , repetitions=1
                 , include_original=True
                 )
 
@@ -213,8 +214,9 @@ augment = patchwork.Augmenter(    morph_width = 150
 #model.modelname = "models/test"
 
 model.train(trainset,labelset,
+            resolutions=resolutions,
             valid_ids = [],
-            augment=None,
+            augment=augment,
             num_patches=11,
             epochs=100)
 

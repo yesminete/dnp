@@ -343,6 +343,7 @@ class PatchWorkModel(Model):
       ims = []
       for f in fname:          
           img1 = nib.load(f)        
+          resolution = nib.header['pixdim'][1:4]
           a = np.expand_dims(np.squeeze(img1.get_fdata()),0)
           if len(a.shape) < nD+2:
               a = np.expand_dims(a,nD+1)
@@ -356,6 +357,7 @@ class PatchWorkModel(Model):
                             jitter=jitter,
                             overlap=overlap,                            
                             repetitions=repetitions,
+                            resolution = resolution,
                             scale_to_original=True)
 
       res = res.numpy()
@@ -375,11 +377,12 @@ class PatchWorkModel(Model):
 
 
   def apply_full(self, data,
+                 resolution=None,
                  level=-1,
                  generate_type='tree',
                  jitter=0.05,
                  overlap=0,
-                 repetitions=5,
+                 repetitions=5,                 
                  scale_to_original=False,
                  verbose=False,
                  maxtries=1
@@ -408,6 +411,7 @@ class PatchWorkModel(Model):
              print('gathering more to get full coverage: ' + str(w) + "/" +  str(maxtries))
          for i in range(repetitions):
             x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
+                                    resolutions=resolution,
                                     jitter = jitter,
                                     overlap=overlap,
                                      num_patches=reps,verbose=verbose)

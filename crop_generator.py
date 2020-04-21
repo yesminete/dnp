@@ -143,7 +143,9 @@ class CropGenerator():
               class_labels_ = labelset[j]
 
       trainset_ = trainset[j]
-      resolution_ = resolutions[j]
+      resolution_ = None
+      if resolutions is not None:
+          resolution_ = resolutions[j]
       
       if augment is not None:
           print("augmenting ...")
@@ -369,8 +371,8 @@ class CropGenerator():
       divisor = 8 # used for initital scale to get a nice image size
       nD = self.ndim
       
-      forwarded_aspects = [1]*nD
-      aspect_correction = nD*[1]
+      forwarded_aspects = np.ones(nD) #[1]*nD
+      aspect_correction = np.ones(nD) #nD*[1]
       if keepAspect and crops is not None:
           aspect_correction = crops['aspect_correction']
 
@@ -430,12 +432,15 @@ class CropGenerator():
         if crops is None and isinstance(init_scale,str):
             assert (resolution is not None), "for absolute init_scale you have to pass resolution"
             sizes_mm = init_scale.replace("mm","").split(",")
-            sizes_vx = [] * nD
+            sizes_mm = list(map(int, sizes_mm))
+            bbox_sz = [0] * (nD*2)            
             for d in range(nD):
                 sfac = sizes_mm[d]/resolution[d]/sz[d+1]
                 bbox_sz[d]    = -sfac*0.5
                 bbox_sz[d+nD] = sfac*0.5
-                forwarded_aspects[d] = sfac
+                forwarded_aspects[d] = sfac*sz[d+1]
+            forwarded_aspects = forwarded_aspects / np.amax(forwarded_aspects)
+            
             
         else:
             asp = []
