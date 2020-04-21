@@ -2540,9 +2540,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.98994949"
-     inkscape:cx="592.39555"
-     inkscape:cy="403.06519"
+     inkscape:zoom="1.4"
+     inkscape:cx="542.98316"
+     inkscape:cy="364.66104"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -2551,7 +2551,8 @@
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:snap-global="false" />
+     inkscape:snap-global="false"
+     showguides="false" />
   <metadata
      id="metadata7">
     <rdf:RDF>
@@ -2569,24 +2570,6 @@
      inkscape:groupmode="layer"
      id="layer1"
      transform="translate(0,-308.26772)">
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="831.8736"
-       y="383.76147"
-       id="text6182-47"><tspan
-         sodipodi:role="line"
-         id="tspan6184-2"
-         x="831.8736"
-         y="383.76147"
-         style="font-size:14.37680912px;line-height:1.25">N=128</tspan></text>
-    <rect
-       style="fill:#ffffff;stroke:#1a1a1a;stroke-width:3.0916419;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect6606-4"
-       width="87.966431"
-       height="107.43221"
-       x="162.48482"
-       y="572.00568" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2.56935096;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-start:url(#StopL-36-54);marker-end:url(#StopL-36-54)"
        d="m 290.05817,390.08483 596.38356,-1.09556"
@@ -2628,7 +2611,7 @@
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="ccccccc" />
     <rect
-       style="fill:#ffffff;stroke:#1a1a1a;stroke-width:3.00191426;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.00191426;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect6606-9-0"
        width="82.865288"
        height="107.52194"
@@ -2639,13 +2622,6 @@
        d="M 541.99717,676.70815 541.08012,574.73537"
        id="path4136-9-2-2-9-1"
        inkscape:connector-curvature="0" />
-    <rect
-       style="fill:#ffffff;stroke:#1a1a1a;stroke-width:3.00191426;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect6606-9-3-4"
-       width="82.865288"
-       height="107.52194"
-       x="681.38062"
-       y="571.96088" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2.45930505;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-start:url(#StopL-2-2-5-2-0-5);marker-end:url(#StopL-2-2-5-2-0-5)"
        d="M 790.64174,677.73147 789.72469,575.75869"
@@ -2653,7 +2629,7 @@
        inkscape:connector-curvature="0" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.28467548px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:url(#marker69490);marker-end:url(#marker60286)"
-       d="m 564.8065,445.79773 -19.16848,-0.36703 0.28922,33.01222 53.70735,0.15993 0.43223,96.54628 29.0843,-0.19365 0.53352,65.26293"
+       d="m 564.8065,445.79773 -19.16848,-0.36703 0.76273,61.42276 53.70735,0.15993 -0.0413,68.13574 29.0843,-0.19365 0.53352,65.26293"
        id="path20329-9"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="ccccccc" />
@@ -2676,10 +2652,10 @@
        sodipodi:nodetypes="cc" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.28467548px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker24332-9-6)"
-       d="m 791.67235,675.57194 26.40892,-55.34311 -0.21722,237.14655 -326.15755,-1.49937 10e-6,38.2827"
+       d="m 791.67235,675.57194 26.40892,-55.34311 68.90371,0.21408 -0.81002,236.45286 -68.31091,0.47961 -326.15755,-1.49937 10e-6,38.2827"
        id="path20329-7-9"
        inkscape:connector-curvature="0"
-       sodipodi:nodetypes="ccccc" />
+       sodipodi:nodetypes="ccccccc" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -2695,28 +2671,6 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="766.95276"
-       y="412.93289"
-       id="text6182-4-8"><tspan
-         sodipodi:role="line"
-         id="tspan6184-5-0"
-         x="766.95276"
-         y="412.93289"
-         style="font-size:14.37680912px;line-height:1.25">N=64</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="653.06738"
-       y="441.21408"
-       id="text6182-4-2-5"><tspan
-         sodipodi:role="line"
-         id="tspan6184-5-5-6"
-         x="653.06738"
-         y="441.21408"
-         style="font-size:14.37680912px;line-height:1.25">N=32</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
        x="368.72357"
        y="441.54541"
        id="text29513-4-6"
@@ -2727,13 +2681,13 @@
          y="441.54541"
          style="font-size:12.84675503px;line-height:1.25">subsample N=64 to 32</tspan></text>
     <path
-       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2.95475364;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 163.96473,726.45769 -0.22941,111.9503 33.26391,0 53.68109,-55.74574 -55.28692,-56.20456 z"
+       style="fill:#f2f2f2;fill-rule:evenodd;stroke:#000000;stroke-width:2.95475364;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 163.96473,724.58269 -0.22941,111.9503 h 33.26391 l 53.68109,-55.74574 -55.28692,-56.20456 z"
        id="path39557"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cccccc" />
     <path
-       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2.95475364;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="fill:#f2f2f2;fill-rule:evenodd;stroke:#000000;stroke-width:2.95475364;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="m 447.70957,727.00827 -0.2294,111.95029 33.26391,0 53.68109,-55.74574 -55.28692,-56.20455 z"
        id="path39557-5"
        inkscape:connector-curvature="0"
@@ -2792,106 +2746,64 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="172.37505"
-       y="608.35986"
-       id="text58488-6"><tspan
-         sodipodi:role="line"
-         id="tspan58490-0"
-         x="172.37505"
-         y="608.35986"
-         style="font-size:19.27013206px;line-height:1.25">CNN</tspan><tspan
-         sodipodi:role="line"
-         x="172.37505"
-         y="626.76434"
-         id="tspan58492-4"
-         style="font-size:12.84675503px;line-height:1.25">segmenter</tspan><tspan
-         sodipodi:role="line"
-         x="172.37505"
-         y="642.82281"
-         style="font-size:12.84675503px;line-height:1.25"
-         id="tspan70638">level 0</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="441.28717"
+       x="437.53717"
        y="604.68933"
        id="text58488-1"><tspan
          sodipodi:role="line"
          id="tspan58490-04"
-         x="441.28717"
+         x="437.53717"
          y="604.68933"
-         style="font-size:19.27013206px;line-height:1.25">CNN</tspan><tspan
+         style="font-size:15px;line-height:1.25">CNNblock</tspan><tspan
          sodipodi:role="line"
-         x="441.28717"
-         y="623.09381"
+         x="437.53717"
+         y="621.53424"
          id="tspan58492-8"
          style="font-size:12.84675503px;line-height:1.25">segmenter</tspan><tspan
          sodipodi:role="line"
-         x="441.28717"
-         y="639.15228"
+         x="437.53717"
+         y="637.59265"
          style="font-size:12.84675503px;line-height:1.25"
          id="tspan70640">level 1</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="689.77594"
-       y="604.68933"
-       id="text58488-7"><tspan
-         sodipodi:role="line"
-         id="tspan58490-08"
-         x="689.77594"
-         y="604.68933"
-         style="font-size:19.27013206px;line-height:1.25">CNN</tspan><tspan
-         sodipodi:role="line"
-         x="689.77594"
-         y="623.09381"
-         id="tspan58492-62"
-         style="font-size:12.84675503px;line-height:1.25">segmenter</tspan><tspan
-         sodipodi:role="line"
-         x="689.77594"
-         y="639.15228"
-         style="font-size:12.84675503px;line-height:1.25"
-         id="tspan70642">level 2</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="171.45744"
-       y="778.12054"
+       x="170.03691"
+       y="774.80597"
        id="text58488-4"><tspan
          sodipodi:role="line"
          id="tspan58490-79"
-         x="171.45744"
-         y="778.12054"
+         x="170.03691"
+         y="774.80597"
          style="font-size:19.27013206px;line-height:1.25">CNN</tspan><tspan
          sodipodi:role="line"
-         x="171.45744"
-         y="796.52502"
+         x="170.03691"
+         y="793.21045"
          id="tspan58492-3"
          style="font-size:12.84675503px;line-height:1.25">classifier</tspan><tspan
          sodipodi:role="line"
-         x="171.45744"
-         y="812.5835"
+         x="170.03691"
+         y="809.26892"
          style="font-size:12.84675503px;line-height:1.25"
          id="tspan70644">level 0</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="452.2673"
-       y="781.20087"
+       x="454.16135"
+       y="775.51874"
        id="text58488-4-9"><tspan
          sodipodi:role="line"
          id="tspan58490-79-2"
-         x="452.2673"
-         y="781.20087"
+         x="454.16135"
+         y="775.51874"
          style="font-size:19.27013206px;line-height:1.25">CNN</tspan><tspan
          sodipodi:role="line"
-         x="452.2673"
-         y="799.60535"
+         x="454.16135"
+         y="793.92322"
          id="tspan58492-3-8"
          style="font-size:12.84675503px;line-height:1.25">classifier</tspan><tspan
          sodipodi:role="line"
-         x="452.2673"
-         y="815.66382"
+         x="454.16135"
+         y="809.98169"
          style="font-size:12.84675503px;line-height:1.25"
          id="tspan70646">level 1</tspan></text>
     <ellipse
@@ -2909,133 +2821,122 @@
        rx="13.626041"
        ry="9.0840273" />
     <g
-       id="g59189"
-       transform="matrix(1.2846755,0,0,1.2846755,11.469947,-384.85181)">
-      <rect
-         y="668.13031"
-         x="18.308319"
-         height="51.5215"
-         width="56.730713"
-         id="rect58646"
-         style="fill:#ffffff;stroke:#1a1a1a;stroke-width:2.81367087;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         id="text58488-6-1"
-         y="690.39111"
-         x="23.161438"
-         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-size:15px;line-height:1.25"
-           y="690.39111"
-           x="23.161438"
-           id="tspan58490-0-7"
-           sodipodi:role="line">pre</tspan><tspan
-           id="tspan59187"
-           style="font-size:15px;line-height:1.25"
-           y="709.14111"
-           x="23.161438"
-           sodipodi:role="line">CNN</tspan><tspan
-           style="font-size:15px;line-height:1.25"
-           id="tspan58492-4-8"
-           y="727.89111"
-           x="23.161438"
-           sodipodi:role="line"> </tspan></text>
+       id="g9857">
+      <g
+         id="g9984">
+        <rect
+           style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.61465406;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           id="rect58646"
+           width="72.880554"
+           height="66.188408"
+           x="32.311623"
+           y="472.8092" />
+        <flowRoot
+           transform="matrix(0.9375,0,0,0.9375,-102.45536,309.607)"
+           style="font-style:normal;font-weight:normal;font-size:40px;line-height:62.1999979%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           id="flowRoot9919"
+           xml:space="preserve"><flowRegion
+             style="line-height:62.1999979%"
+             id="flowRegion9921"><rect
+               style="line-height:62.1999979%"
+               y="178.70079"
+               x="157.85715"
+               height="115.7143"
+               width="167.14284"
+               id="rect9923" /></flowRegion><flowPara
+             style="font-size:18.66666603px;line-height:62.1999979%"
+             id="flowPara9950">pre</flowPara><flowPara
+             id="flowPara9960"
+             style="font-size:18.66666603px;line-height:62.1999979%">CNN</flowPara><flowPara
+             id="flowPara9958"
+             style="font-size:18.66666603px;line-height:62.1999979%" /></flowRoot>      </g>
+      <g
+         transform="translate(503.558,10.701876)"
+         id="g9984-9">
+        <rect
+           style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.61465406;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           id="rect58646-4"
+           width="72.880554"
+           height="66.188408"
+           x="32.311623"
+           y="472.8092" />
+        <flowRoot
+           transform="matrix(0.9375,0,0,0.9375,-102.45536,309.607)"
+           style="font-style:normal;font-weight:normal;font-size:40px;line-height:62.1999979%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           id="flowRoot9919-7"
+           xml:space="preserve"><flowRegion
+             style="line-height:62.1999979%"
+             id="flowRegion9921-8"><rect
+               style="line-height:62.1999979%"
+               y="178.70079"
+               x="157.85715"
+               height="115.7143"
+               width="167.14284"
+               id="rect9923-4" /></flowRegion><flowPara
+             style="font-size:18.66666603px;line-height:62.1999979%"
+             id="flowPara9950-5">pre</flowPara><flowPara
+             id="flowPara9960-0"
+             style="font-size:18.66666603px;line-height:62.1999979%">CNN</flowPara><flowPara
+             id="flowPara9958-3"
+             style="font-size:18.66666603px;line-height:62.1999979%" /></flowRoot>      </g>
+      <g
+         transform="translate(293.52488,8.065942)"
+         id="g9984-6">
+        <rect
+           style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.61465406;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           id="rect58646-1"
+           width="72.880554"
+           height="66.188408"
+           x="32.311623"
+           y="472.8092" />
+        <flowRoot
+           transform="matrix(0.9375,0,0,0.9375,-102.45536,309.607)"
+           style="font-style:normal;font-weight:normal;font-size:40px;line-height:62.1999979%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+           id="flowRoot9919-0"
+           xml:space="preserve"><flowRegion
+             style="line-height:62.1999979%"
+             id="flowRegion9921-6"><rect
+               style="line-height:62.1999979%"
+               y="178.70079"
+               x="157.85715"
+               height="115.7143"
+               width="167.14284"
+               id="rect9923-3" /></flowRegion><flowPara
+             style="font-size:18.66666603px;line-height:62.1999979%"
+             id="flowPara9950-2">pre</flowPara><flowPara
+             id="flowPara9960-06"
+             style="font-size:18.66666603px;line-height:62.1999979%">CNN</flowPara><flowPara
+             id="flowPara9958-1"
+             style="font-size:18.66666603px;line-height:62.1999979%" /></flowRoot>      </g>
     </g>
-    <g
-       id="g59189-9"
-       transform="matrix(1.2846755,0,0,1.2846755,299.29791,-385.02268)">
-      <rect
-         y="668.13031"
-         x="18.308319"
-         height="51.5215"
-         width="56.730713"
-         id="rect58646-1"
-         style="fill:#ffffff;stroke:#1a1a1a;stroke-width:2.81367087;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         id="text58488-6-1-5"
-         y="690.39111"
-         x="23.161438"
-         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-size:15px;line-height:1.25"
-           y="690.39111"
-           x="23.161438"
-           id="tspan58490-0-7-4"
-           sodipodi:role="line">pre</tspan><tspan
-           id="tspan59187-9"
-           style="font-size:15px;line-height:1.25"
-           y="709.14111"
-           x="23.161438"
-           sodipodi:role="line">CNN</tspan><tspan
-           style="font-size:15px;line-height:1.25"
-           id="tspan58492-4-8-2"
-           y="727.89111"
-           x="23.161438"
-           sodipodi:role="line"> </tspan></text>
-    </g>
-    <g
-       id="g59189-5"
-       transform="matrix(1.2846755,0,0,1.2846755,513.7259,-382.81141)">
-      <rect
-         y="668.13031"
-         x="18.308319"
-         height="51.5215"
-         width="56.730713"
-         id="rect58646-7"
-         style="fill:#ffffff;stroke:#1a1a1a;stroke-width:2.81367087;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         id="text58488-6-1-4"
-         y="690.39111"
-         x="23.161438"
-         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-size:15px;line-height:1.25"
-           y="690.39111"
-           x="23.161438"
-           id="tspan58490-0-7-9"
-           sodipodi:role="line">pre</tspan><tspan
-           id="tspan59187-94"
-           style="font-size:15px;line-height:1.25"
-           y="709.14111"
-           x="23.161438"
-           sodipodi:role="line">CNN</tspan><tspan
-           style="font-size:15px;line-height:1.25"
-           id="tspan58492-4-8-5"
-           y="727.89111"
-           x="23.161438"
-           sodipodi:role="line"> </tspan></text>
-    </g>
-    <g
-       id="g59189-93"
-       transform="matrix(1.2846755,0,0,1.2846755,750.47325,-48.79578)">
-      <rect
-         y="668.13031"
-         x="18.308319"
-         height="51.5215"
-         width="56.730713"
-         id="rect58646-5"
-         style="fill:#ffffff;stroke:#1a1a1a;stroke-width:2.81367087;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         id="text58488-6-1-7"
-         y="690.39111"
-         x="23.161438"
-         style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-size:15px;line-height:1.25"
-           y="690.39111"
-           x="23.161438"
-           id="tspan58490-0-7-0"
-           sodipodi:role="line">final</tspan><tspan
-           id="tspan59187-8"
-           style="font-size:15px;line-height:1.25"
-           y="709.14111"
-           x="23.161438"
-           sodipodi:role="line">CNN</tspan><tspan
-           style="font-size:15px;line-height:1.25"
-           id="tspan58492-4-8-1"
-           y="727.89111"
-           x="23.161438"
-           sodipodi:role="line"> </tspan></text>
-    </g>
+    <rect
+       style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.61465406;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect58646-5"
+       width="72.880554"
+       height="66.188408"
+       x="773.99347"
+       y="809.53485" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:15.41610622px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.28467548px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="780.22821"
+       y="838.13275"
+       id="text58488-6-1-7"><tspan
+         sodipodi:role="line"
+         id="tspan58490-0-7-0"
+         x="780.22821"
+         y="838.13275"
+         style="font-size:19.27013206px;line-height:1.25;stroke-width:1.28467548px">final</tspan><tspan
+         sodipodi:role="line"
+         x="780.22821"
+         y="862.2204"
+         style="font-size:19.27013206px;line-height:1.25;stroke-width:1.28467548px"
+         id="tspan59187-8">Block</tspan><tspan
+         sodipodi:role="line"
+         x="780.22821"
+         y="886.30811"
+         id="tspan58492-4-8-1"
+         style="font-size:19.27013206px;line-height:1.25;stroke-width:1.28467548px"> </tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -3049,7 +2950,7 @@
          style="font-size:12.75500298px;line-height:1.25">n1</tspan></text>
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.28467548px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker63008)"
-       d="m 61.651481,626.06948 0,150.49056 95.144509,-0.71429"
+       d="M 61.651481,626.06948 V 776.56004 L 162.95161,776.31926"
        id="path63000"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="ccc" />
@@ -3251,36 +3152,36 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="853.49048"
-       y="418.49341"
+       x="898.00031"
+       y="393.87094"
        id="text70502"><tspan
          sodipodi:role="line"
          id="tspan70504"
-         x="853.49048"
-         y="418.49341"
-         style="font-size:15.47029686px;line-height:1.25">full image (level 0)</tspan></text>
+         x="898.00031"
+         y="393.87094"
+         style="font-size:15.47029686px;line-height:1.25">image N=128 (level 0)</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="787.84875"
-       y="448.58505"
+       x="820.99438"
+       y="423.01556"
        id="text70502-8"><tspan
          sodipodi:role="line"
          id="tspan70504-5"
-         x="787.84875"
-         y="448.58505"
-         style="font-size:15.47029686px;line-height:1.25">patch level 1</tspan></text>
+         x="820.99438"
+         y="423.01556"
+         style="font-size:15.47029686px;line-height:1.25">patch N=64 (level 1)</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="674.35974"
-       y="479.22202"
+       x="704.66437"
+       y="448.91742"
        id="text70502-8-8"><tspan
          sodipodi:role="line"
          id="tspan70504-5-2"
-         x="674.35974"
-         y="479.22202"
-         style="font-size:15.47029686px;line-height:1.25">patch level 2</tspan></text>
+         x="704.66437"
+         y="448.91742"
+         style="font-size:15.47029686px;line-height:1.25">patch N=32 (level 2)</tspan></text>
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.28467548px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#marker42262-6)"
        d="m 406.88897,726.89991 37.52232,-0.0237"
@@ -3463,5 +3364,71 @@
        d="m 687.77183,732.27012 v -8.52317 l -8.52316,10e-6"
        id="path9312"
        inkscape:connector-curvature="0" />
+    <rect
+       style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.00191426;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect6606-9-0-6"
+       width="82.865288"
+       height="107.52195"
+       x="678.30103"
+       y="574.81067" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="683.10217"
+       y="608.5625"
+       id="text58488-1-5"><tspan
+         sodipodi:role="line"
+         id="tspan58490-04-6"
+         x="683.10217"
+         y="608.5625"
+         style="font-size:15px;line-height:1.25;stroke-width:1px">CNNblock</tspan><tspan
+         sodipodi:role="line"
+         x="683.10217"
+         y="625.40741"
+         id="tspan58492-8-9"
+         style="font-size:12.84675598px;line-height:1.25;stroke-width:1px">segmenter</tspan><tspan
+         sodipodi:role="line"
+         x="683.10217"
+         y="641.46582"
+         style="font-size:12.84675598px;line-height:1.25;stroke-width:1px"
+         id="tspan70640-3">level 2</tspan></text>
+    <rect
+       style="fill:#f2f2f2;stroke:#1a1a1a;stroke-width:3.00191426;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect6606-9-0-7"
+       width="82.865288"
+       height="107.52195"
+       x="163.12325"
+       y="571.9696" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:12px;line-height:0%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="168.661"
+       y="605.72144"
+       id="text58488-1-4"><tspan
+         sodipodi:role="line"
+         id="tspan58490-04-5"
+         x="168.661"
+         y="605.72144"
+         style="font-size:15px;line-height:1.25;stroke-width:1px">CNNblock</tspan><tspan
+         sodipodi:role="line"
+         x="168.661"
+         y="614.31714"
+         style="font-size:15px;line-height:1.25;stroke-width:1px"
+         id="tspan10725" /><tspan
+         sodipodi:role="line"
+         x="168.661"
+         y="614.31714"
+         style="font-size:15px;line-height:1.25;stroke-width:1px"
+         id="tspan10727" /><tspan
+         sodipodi:role="line"
+         x="168.661"
+         y="622.56635"
+         id="tspan58492-8-2"
+         style="font-size:12.84675598px;line-height:1.25;stroke-width:1px">segmenter</tspan><tspan
+         sodipodi:role="line"
+         x="168.661"
+         y="638.62476"
+         style="font-size:12.84675598px;line-height:1.25;stroke-width:1px"
+         id="tspan70640-5">level 0</tspan></text>
   </g>
 </svg>
