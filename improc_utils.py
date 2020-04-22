@@ -277,14 +277,14 @@ def resizeNDlinear_old(image,dest_shape,batch_dim=False,nD=2,edge_center=False):
 def rep_rans(rans,sizes,nD):
     if nD == 2:
       qwq = tf.concat( [       
-                        tf.expand_dims(tf.tile(tf.expand_dims(rans[0],1),[1, sizes[1]]),2) ,
-                        tf.expand_dims(tf.tile(tf.expand_dims(rans[1],0),[sizes[0], 1]),2) 
+                        tf.expand_dims(tf.tile(tf.expand_dims(rans[0],1),tf.cast([1, sizes[1]],dtype=tf.int32)),2) ,
+                        tf.expand_dims(tf.tile(tf.expand_dims(rans[1],0),tf.cast([sizes[0], 1],dtype=tf.int32)),2) 
                         ] , 2) 
     elif nD == 3:        
       qwq = tf.concat( [       
-                        tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[0],1),2),[1, sizes[1], sizes[2]]),3) ,
-                        tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[1],0),2),[sizes[0], 1, sizes[2]]),3) ,
-                        tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[2],0),1),[sizes[0], sizes[1], 1]),3) 
+                        tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[0],1),2),tf.cast([1, sizes[1], sizes[2]],dtype=tf.int32)),3) ,
+                        tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[1],0),2),tf.cast([sizes[0], 1, sizes[2]],dtype=tf.int32)),3) ,
+                        tf.expand_dims(tf.tile(tf.expand_dims(tf.expand_dims(rans[2],0),1),tf.cast([sizes[0], sizes[1], 1],dtype=tf.int32)),3) 
                       ] , 3) 
     else: 
       assert "other than 2D/3D not implemented"
