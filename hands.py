@@ -152,7 +152,7 @@ def createClassifier(name=None,depth=4,outK=2):
 cgen = patchwork.CropGenerator(patch_size = (16,16), 
                   scale_fac = 0.5, 
                   init_scale = '50mm,50mm',
-                  depth=1)
+                  depth=2)
 
 
 model = patchwork.PatchWorkModel(cgen,
@@ -161,7 +161,7 @@ model = patchwork.PatchWorkModel(cgen,
                       preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
-                      intermediate_loss=False,
+                      intermediate_loss=True,
                       intermediate_out=4,
                       #cls_intermediate_out=2,
                       #classifier_train=True,

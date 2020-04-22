@@ -268,10 +268,6 @@ class PatchWorkModel(Model):
       coords = inputs['cropcoords' + str(k)]
       
       
-      if k < len(self.preprocessor) :
-          inp = self.preprocessor[k](inp)
-      
-      
       if len(output) > 0: # is it's not the initial scale
           
          # get result from last scale
@@ -289,6 +285,13 @@ class PatchWorkModel(Model):
          # crop the relevant rgion
          last_cropped = tf.gather_nd(last,coords,batch_dims=1)
          
+         # last_cropped
+         # coords
+         # inp
+         
+         if k < len(self.preprocessor) :
+             inp = self.preprocessor[k](inp)
+         
          # cat with total input
          if self.forward_type == 'simple':
              # for testing: inp = last_cropped
@@ -300,6 +303,11 @@ class PatchWorkModel(Model):
             inp = tf.concat([inp,inp_,last_cropped],nD+1)
          else: 
             assert 0,"unknown forward type"
+
+      else:
+         if k < len(self.preprocessor) :
+             inp = self.preprocessor[k](inp)
+          
 
       ## now, apply the network at the current scale 
       
