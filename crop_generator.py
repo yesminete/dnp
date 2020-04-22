@@ -33,14 +33,40 @@ class CropInstance:
   # get target training data 
   def getTargetData(self):
     out = []
-    if self.intermediate_loss:
-      for x in self.scales:
-        out.append(x['labels_cropped'])
-    else:
-        if self.cropper.model.classifier_train:
-            out.append(self.scales[-1]['class_labels'])
-        if self.cropper.model.spatial_train:
-            out.append(self.scales[-1]['labels_cropped'])
+    
+    create_indicator_classlabels = self.cropper.create_indicator_classlabels
+    classifier_train = self.cropper.model.classifier_train
+    spatial_train = self.cropper.model.spatial_train
+    intermediate_loss = self.cropper.model.intermediate_loss
+    cls_intermediate_loss= self.cropper.model.cls_intermediate_loss
+    depth = len(self.scales)
+    for i in range(depth-1):
+        x = self.scales[i]
+        if cls_intermediate_loss and classifier_train:
+            out.append(x['class_labels'])            
+        if intermediate_loss and spatial_train:
+            out.append(x['labels_cropped'])
+        
+    if classifier_train and not create_indicator_classlabels:
+        out.append(self.scales[-1]['class_labels'])
+    if spatial_train:
+        out.append(self.scales[-1]['labels_cropped'])
+    
+
+    # if self.intermediate_loss:
+    #   for x in self.scales:
+    #     if self.cropper.model.classifier_train:
+    #         out.append(x['class_labels'])
+    #     if self.cropper.model.spatial_train:          
+    #         out.append(x['labels_cropped'])
+    # else:
+    #     if self.cropper.model.classifier_train:
+    #         out.append(self.scales[-1]['class_labels'])
+    #     if self.cropper.model.spatial_train:
+    #         out.append(self.scales[-1]['labels_cropped'])
+    
+    
+    
     return out
 
 
@@ -67,6 +93,7 @@ class CropGenerator():
                     keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     smoothfac_data = 0.5,  # 
                     smoothfac_label = 1.0, #
+                    create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
                     ndim=2,
                     ):
@@ -77,6 +104,7 @@ class CropGenerator():
     self.smoothfac_label = smoothfac_label
     self.init_scale = init_scale
     self.keepAspect = keepAspect
+    self.create_indicator_classlabels = create_indicator_classlabels
     self.depth = depth
     self.ndim = ndim
 
@@ -134,7 +162,7 @@ class CropGenerator():
       labels_ = None
       class_labels_ = None
       if labelset[j] is not None:
-          if self.model.classifier_train and self.model.spatial_train:
+          if (self.model.classifier_train and not self.create_indicator_classlabels) and self.model.spatial_train:
               class_labels_ = labelset[j][0]
               labels_ = labelset[j][1]
           elif self.model.spatial_train:
@@ -153,11 +181,18 @@ class CropGenerator():
           print("augmenting done. ")
 
       x = self.createCropsLocal(trainset_,labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
-      x['class_labels'] = class_labels_
+      if self.create_indicator_classlabels and x['labels_cropped'] is not None:
+          x['class_labels'] = tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
+      else:
+          x['class_labels'] = class_labels_
+      
       scales = [x]
       for k in range(self.depth-1):
         x = self.createCropsLocal(trainset_,labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
-        x['class_labels'] = class_labels_
+        if self.create_indicator_classlabels and x['labels_cropped'] is not None:
+            x['class_labels'] = tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
+        else:
+            x['class_labels'] = class_labels_
         scales.append(x)
 
       if reptree:
@@ -325,7 +360,7 @@ class CropGenerator():
       totnum = 1
       for k in range(nD):
         delta = bbox_sz[nD+k]-bbox_sz[k]
-        nums[k] = tf.floor(1/delta)+1+overlap
+        nums[k] = np.floor(1/delta)+1+overlap
         delta_small= (1-delta)/(nums[k]-1) -0.000001
         frac = nums[k]*delta-1
         centers[k] = tf.cast(tf.range(nums[k]),dtype=tf.float32)*delta_small + delta*0.5
@@ -359,7 +394,7 @@ class CropGenerator():
           rands = np.concatenate(rands,nD)
           centers = centers + rands
 
-      qwq = tf.tile(tf.reshape(centers,[totnum,nD]),[1,2]) + bbox_sz
+      qwq = tf.tile(tf.reshape(centers,tf.cast([totnum,nD],dtype=tf.int32)),[1,2]) + bbox_sz
       return qwq, qwq.shape[0];
 
 

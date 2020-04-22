@@ -226,7 +226,7 @@ class PatchWorkModel(Model):
     if classifierCreator is not None:
        for k in range(self.cropper.depth-1): 
          self.classifiers.append(classifierCreator(level=k,outK=num_classes+cls_intermediate_out))
-       if self.classifier_train:
+       if self.classifier_train and not self.cropper.create_indicator_classlabels:
          self.classifiers.append(classifierCreator(level=cropper.depth-1,outK=num_classes))
         
         
@@ -306,9 +306,9 @@ class PatchWorkModel(Model):
       # the classifier part
       current_output = []
       if len(self.classifiers) > 0:
-         if self.classifier_train or k < self.cropper.depth-1:
+         if k < len(self.classifiers):
              res_nonspatial = self.classifiers[k](inp,inp_nonspatial) 
-         if self.classifier_train:
+         if k < len(self.classifiers) and self.classifier_train:
              current_output.append(res_nonspatial[:,0:self.num_classes])
       
       # the spatial/segmentation part
@@ -336,6 +336,7 @@ class PatchWorkModel(Model):
                  overlap=0,
                  jitter=0.05,
                  repetitions=5,
+                 num_chunks=1,
                  scalevalue=None):
       nD = self.cropper.ndim
       if not isinstance(fname,list):
@@ -343,7 +344,7 @@ class PatchWorkModel(Model):
       ims = []
       for f in fname:          
           img1 = nib.load(f)        
-          resolution = nib.header['pixdim'][1:4]
+          resolution = img1.header['pixdim'][1:4]
           a = np.expand_dims(np.squeeze(img1.get_fdata()),0)
           if len(a.shape) < nD+2:
               a = np.expand_dims(a,nD+1)
@@ -357,7 +358,9 @@ class PatchWorkModel(Model):
                             jitter=jitter,
                             overlap=overlap,                            
                             repetitions=repetitions,
+                            num_chunks=num_chunks,
                             resolution = resolution,
+                            verbose=True,
                             scale_to_original=True)
 
       res = res.numpy()
@@ -385,7 +388,7 @@ class PatchWorkModel(Model):
                  repetitions=5,                 
                  scale_to_original=False,
                  verbose=False,
-                 maxtries=1
+                 num_chunks=1
                  ):
 
      nD = self.cropper.ndim
@@ -406,15 +409,16 @@ class PatchWorkModel(Model):
          repetitions = 1         
          
      
-     for w in range(maxtries):
+     for w in range(num_chunks):
          if w > 0:
-             print('gathering more to get full coverage: ' + str(w) + "/" +  str(maxtries))
+             print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
          for i in range(repetitions):
             x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
                                     resolutions=resolution,
                                     jitter = jitter,
                                     overlap=overlap,
-                                     num_patches=reps,verbose=verbose)
+                                    num_patches=reps,
+                                    verbose=verbose)
             data_ = x.getInputData()
             if generate_type == 'random' or generate_type == 'tree_full':
                 r = self.predict(data_)
