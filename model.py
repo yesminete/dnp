@@ -255,23 +255,74 @@ class PatchWorkModel(Model):
                'trained_epochs':self.trained_epochs
             }
 
+
+
+
   def call(self, inputs, training=False):
+
+    def subsel(inp,idx,w):
+      sz = inp.shape
+      nsz = [sz[0]/w,w]
+      for k in range(len(sz)-1):
+          nsz.append(sz[k+1])          
+      inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
+      inp = tf.gather(inp,tf.squeeze(idx),axis=1)
+      sz = inp.shape
+      nsz = [sz[0]*sz[1]]
+      for k in range(len(sz)-2):
+          nsz.append(sz[k+2])                
+      inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
+      return inp
+
+    # def subsel(inp,idx,w):
+    #   sz = inp.shape
+    #   nsz = [w,sz[0]/w]
+    #   for k in range(len(sz)-1):
+    #       nsz.append(sz[k+1])          
+    #   inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
+    #   inp = tf.gather_nd(inp,idx)
+    #   sz = inp.shape
+    #   nsz = [sz[0]*sz[1]]
+    #   for k in range(len(sz)-2):
+    #       nsz.append(sz[k+2])                
+    #   inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
+    #   return inp
+  
+    totnumpatches = inputs['input' + str(self.cropper.depth-1)].shape[0]
+    self.subselection = tf.range(0,totnumpatches)
+      
     nD = self.cropper.ndim
     output = []
     res = None
     res_nonspatial = None
     for k in range(self.cropper.depth):
-      
+
+        
+
+      if res_nonspatial is not None:        
+           idx = tf.argsort(res_nonspatial,0,'DESCENDING')
+           idx = idx[0:2]
+           for j in range(k,self.cropper.depth):
+               inputs['input' + str(j)] = subsel(inputs['input' + str(j)],idx,res.shape[0])
+               inputs['cropcoords' + str(j)] = subsel(inputs['cropcoords' + str(j)],idx,res.shape[0])
+           self.subselection = subsel(self.subselection,idx,res.shape[0])
+           res = tf.gather_nd(res,idx)
+           res_nonspatial = tf.gather_nd(res_nonspatial,idx)
+
+      last = res
+
+
       ## get data and cropcoords at currnet scale
       inp = inputs['input' + str(k)]
-      inp_nonspatial = res_nonspatial
       coords = inputs['cropcoords' + str(k)]
+
+      inp_nonspatial = res_nonspatial
       
+           
       
-      if len(output) > 0: # is it's not the initial scale
+      if len(output) > 0: # it's not the initial scale
           
          # get result from last scale
-         last = res
          if last.shape[0] is not None and coords.shape[0] != last.shape[0]:         
             mtimes = coords.shape[0]//last.shape[0]
             multiples = [1]*(nD+2)

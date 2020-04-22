@@ -129,7 +129,7 @@ def createClassifier(name=None,depth=4,outK=2):
     id_d = str(1000 + z+1)
     theLayers[id_d+"conv"] = conv_down()
     theLayers[id_d+"relu"] = BNrelu() + [layers.MaxPooling2D(pool_size=(2,2)) ]
-  theLayers["3001"] =  layers.Reshape((40,))
+  theLayers["3001"] =  layers.Flatten()
   theLayers["3002"] =  layers.Dense(outK)
   theLayers["3003"] = layers.Activation('sigmoid')
     
@@ -150,16 +150,16 @@ def createClassifier(name=None,depth=4,outK=2):
 #model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
 
 cgen = patchwork.CropGenerator(patch_size = (16,16), 
-                  scale_fac = 0.5, 
+                  scale_fac = 0.7, 
                   init_scale = '50mm,50mm',
-                  depth=2)
+                  depth=3)
 
 
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : createBlock(outK=outK),
                       preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                    #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                      classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                       spatial_train=True,
                       intermediate_loss=True,
                       intermediate_out=4,
@@ -170,9 +170,9 @@ model = patchwork.PatchWorkModel(cgen,
                       num_labels = labelset[0].shape[3],
 #                      num_classes = 1                      
                       )
-
+#%%
 x = model.apply_full(trainset[0][0:1,:,:,:],resolution=resolutions[0],
-                     jitter=0.05, generate_type='random', repetitions=5,verbose=True,scale_to_original=False)
+                     jitter=0.0, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False)
 
 plt.imshow(x[:,:,2])
 #model.summary()
