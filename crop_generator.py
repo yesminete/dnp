@@ -143,6 +143,18 @@ class CropGenerator():
              test=False,
              verbose=False):
 
+    def get_patchsize(level):
+      if isinstance(self.patch_size,list):
+          return self.patch_size[level]
+      else:
+          return self.patch_size
+
+    def extend_classlabels(x,class_labels_):
+      if self.create_indicator_classlabels and x['labels_cropped'] is not None:
+          return tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
+      else:
+          return class_labels_
+
 
     reptree = False
     if generate_type == 'tree_full':
@@ -162,6 +174,8 @@ class CropGenerator():
 
     for j in range(N):
         
+        
+      # grep and prep the labels
       labels_ = None
       class_labels_ = None
       if labelset[j] is not None:
@@ -173,43 +187,39 @@ class CropGenerator():
           else:
               class_labels_ = labelset[j]
 
+      # get the data 
       trainset_ = trainset[j]
+      
+      # if resolutions are also passed
       resolution_ = None
       if resolutions is not None:
           resolution_ = resolutions[j]
       
+      # if we use data augmentation during training
       if augment is not None:
           print("augmenting ...")
           trainset_,labels_ = augment(trainset_,labels_)
           print("augmenting done. ")
 
-      if isinstance(self.patch_size,list):
-          psize = self.patch_size[0]
-      else:
-          psize = self.patch_size
+      # get the patchsize at the current scale
+      psize = get_patchsize(0)
 
+      # do the crop in the initial level
       x = self.createCropsLocal(trainset_,labels_,None,psize,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
-      if self.create_indicator_classlabels and x['labels_cropped'] is not None:
-          x['class_labels'] = tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
-      else:
-          x['class_labels'] = class_labels_
+      x['class_labels'] = extend_classlabels(x,class_labels_)
       
       scales = [x]
       for k in range(self.depth-1):
-        if isinstance(self.patch_size,list):
-          psize = self.patch_size[k+1]
-        else:
-          psize = self.patch_size
+        psize = get_patchsize(k+1)
         x = self.createCropsLocal(trainset_,labels_,x,psize,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
-        if self.create_indicator_classlabels and x['labels_cropped'] is not None:
-            x['class_labels'] = tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
-        else:
-            x['class_labels'] = class_labels_
+        x['class_labels'] = extend_classlabels(x,class_labels_)
         scales.append(x)
 
+      # if we want to train in tree mode we have to complete the tree
       if reptree:
         scales = self.tree_complete(scales)
 
+      # for repmatting the classlabels
       if self.model.classifier_train and scales[k]['class_labels'] is not None:
           for k in range(len(scales)):
               m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
