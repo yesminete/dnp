@@ -14,6 +14,28 @@ from . improc_utils import *
 ########## Cropmodel ##########################################
 
 
+class CropInstanceLazy:
+  def __init__(self,localcrop):
+      self.localcrop = localcrop
+      self.lastscale = None
+      self.level = 0
+
+  # get input training data 
+  def getInputData(self):
+      def getNext(idx):
+          if self.lastscale is not None:
+              idx
+          self.lastscale = localcrop(self.lastscale,self.level)
+          self.level = self.level + 1
+          return self.lastscale['data_cropped'],self.lastscale['local_box_index']
+      return getNext
+            
+  def stitchResult(self,r,level, subselections = None):
+      return None
+
+
+
+
 class CropInstance:
   def __init__(self,scales,cropper,intermediate_loss):
     self.scales = scales
@@ -22,6 +44,7 @@ class CropInstance:
 
   # get input training data 
   def getInputData(self):
+            
     cnt = 0
     inp = {}
     for x in self.scales:
@@ -51,20 +74,6 @@ class CropInstance:
         out.append(self.scales[-1]['class_labels'])
     if spatial_train:
         out.append(self.scales[-1]['labels_cropped'])
-    
-
-    # if self.intermediate_loss:
-    #   for x in self.scales:
-    #     if self.cropper.model.classifier_train:
-    #         out.append(x['class_labels'])
-    #     if self.cropper.model.spatial_train:          
-    #         out.append(x['labels_cropped'])
-    # else:
-    #     if self.cropper.model.classifier_train:
-    #         out.append(self.scales[-1]['class_labels'])
-    #     if self.cropper.model.spatial_train:
-    #         out.append(self.scales[-1]['labels_cropped'])
-    
     
     
     return out
@@ -162,7 +171,6 @@ class CropGenerator():
       reptree = True
 
 
-
     if not isinstance(trainset,list):
       trainset = [trainset]
       labelset = [labelset]
@@ -201,17 +209,22 @@ class CropGenerator():
           trainset_,labels_ = augment(trainset_,labels_)
           print("augmenting done. ")
 
-      # get the patchsize at the current scale
-      psize = get_patchsize(0)
 
+      localCrop = lambda x,level : self.createCropsLocal(trainset_,labels_,x,get_patchsize(level),generate_type,test,
+                                                   num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+            
+     # return CropInstanceLazy(localCrop)
+      
+      
+      
+      
       # do the crop in the initial level
-      x = self.createCropsLocal(trainset_,labels_,None,psize,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+      x = localCrop(None,0)
       x['class_labels'] = extend_classlabels(x,class_labels_)
       
       scales = [x]
       for k in range(self.depth-1):
-        psize = get_patchsize(k+1)
-        x = self.createCropsLocal(trainset_,labels_,x,psize,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+        x = localCrop(x,k+1)
         x['class_labels'] = extend_classlabels(x,class_labels_)
         scales.append(x)
 

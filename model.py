@@ -274,20 +274,6 @@ class PatchWorkModel(Model):
       inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
       return inp
 
-    # def subsel(inp,idx,w):
-    #   sz = inp.shape
-    #   nsz = [w,sz[0]/w]
-    #   for k in range(len(sz)-1):
-    #       nsz.append(sz[k+1])          
-    #   inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
-    #   inp = tf.gather(inp,idx,axis=0)
-    #   sz = inp.shape
-    #   nsz = [sz[0]*sz[1]]
-    #   for k in range(len(sz)-2):
-    #       nsz.append(sz[k+2])                
-    #   inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
-    #   return inp
-    
     
     self.subselections = None
 
@@ -350,9 +336,6 @@ class PatchWorkModel(Model):
          # crop the relevant rgion
          last_cropped = tf.gather_nd(last,coords,batch_dims=1)
          
-         # last_cropped
-         # coords
-         # inp
          
          if k < len(self.preprocessor) :
              inp = self.preprocessor[k](inp)
