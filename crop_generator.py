@@ -71,11 +71,14 @@ class CropInstance:
 
 
   # stitched results (output of network) back into full image
-  def stitchResult(self,r,level):
+  def stitchResult(self,r,level, subselections = None):
     qq = r[level]
     numlabels = qq.shape[-1]
     sc = self.scales[level]
     pbox_index = sc['parent_box_scatter_index']
+    if subselections is not None:
+        s = subselections[level]
+        pbox_index = tf.gather(pbox_index,s,axis=0)
     sha = list(sc['dest_full_size'])
     sha.append(numlabels)
     sha = sha[1:]
@@ -180,7 +183,12 @@ class CropGenerator():
           trainset_,labels_ = augment(trainset_,labels_)
           print("augmenting done. ")
 
-      x = self.createCropsLocal(trainset_,labels_,None,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+      if isinstance(self.patch_size,list):
+          psize = self.patch_size[0]
+      else:
+          psize = self.patch_size
+
+      x = self.createCropsLocal(trainset_,labels_,None,psize,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
           x['class_labels'] = tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
       else:
@@ -188,7 +196,11 @@ class CropGenerator():
       
       scales = [x]
       for k in range(self.depth-1):
-        x = self.createCropsLocal(trainset_,labels_,x,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+        if isinstance(self.patch_size,list):
+          psize = self.patch_size[k+1]
+        else:
+          psize = self.patch_size
+        x = self.createCropsLocal(trainset_,labels_,x,psize,generate_type,test,num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
         if self.create_indicator_classlabels and x['labels_cropped'] is not None:
             x['class_labels'] = tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
         else:
@@ -398,8 +410,7 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,generate_type,test,jitter=0,num_patches=1,overlap=0,resolution=None,verbose=True):
-      patch_size = self.patch_size
+  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,generate_type,test,jitter=0,num_patches=1,overlap=0,resolution=None,verbose=True):
       scale_fac = self.scale_fac
       init_scale = self.init_scale
       keepAspect = self.keepAspect
@@ -473,7 +484,7 @@ class CropGenerator():
                 sfac = sizes_mm[d]/resolution[d]/sz[d+1]
                 bbox_sz[d]    = -sfac*0.5
                 bbox_sz[d+nD] = sfac*0.5
-                forwarded_aspects[d] = sfac*sz[d+1]
+                forwarded_aspects[d] = 1 #sfac*sz[d+1]
             forwarded_aspects = forwarded_aspects / np.amax(forwarded_aspects)
             
             
@@ -481,7 +492,7 @@ class CropGenerator():
             asp = []
             for d in range(nD):
                 asp.append(sz[d+1]/patch_size[d]*scale_fac*0.5)
-            asp = min(asp)
+            asp = max(asp)
             bbox_sz = [0] * (nD*2)
             for d in range(nD):
                 bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]

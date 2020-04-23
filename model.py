@@ -258,7 +258,7 @@ class PatchWorkModel(Model):
 
 
 
-  def call(self, inputs, training=False):
+  def call(self, inputs, training=False, lazyEval=None):
 
     def subsel(inp,idx,w):
       sz = inp.shape
@@ -280,16 +280,24 @@ class PatchWorkModel(Model):
     #   for k in range(len(sz)-1):
     #       nsz.append(sz[k+1])          
     #   inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
-    #   inp = tf.gather_nd(inp,idx)
+    #   inp = tf.gather(inp,idx,axis=0)
     #   sz = inp.shape
     #   nsz = [sz[0]*sz[1]]
     #   for k in range(len(sz)-2):
     #       nsz.append(sz[k+2])                
     #   inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
     #   return inp
-  
-    totnumpatches = inputs['input' + str(self.cropper.depth-1)].shape[0]
-    self.subselection = tf.range(0,totnumpatches)
+    
+    
+    self.subselections = None
+
+    
+
+    if lazyEval is not None:        
+        self.subselections = [None] * self.cropper.depth
+        for k in range(0,self.cropper.depth):
+            self.subselections[k] = tf.range(0,inputs['input' + str(k)].shape[0])
+
       
     nD = self.cropper.ndim
     output = []
@@ -297,20 +305,26 @@ class PatchWorkModel(Model):
     res_nonspatial = None
     for k in range(self.cropper.depth):
 
-        
 
-      if res_nonspatial is not None:        
-           idx = tf.argsort(res_nonspatial,0,'DESCENDING')
-           idx = idx[0:2]
-           for j in range(k,self.cropper.depth):
-               inputs['input' + str(j)] = subsel(inputs['input' + str(j)],idx,res.shape[0])
-               inputs['cropcoords' + str(j)] = subsel(inputs['cropcoords' + str(j)],idx,res.shape[0])
-           self.subselection = subsel(self.subselection,idx,res.shape[0])
-           res = tf.gather_nd(res,idx)
+      if k>0 and lazyEval is not None:
+        
+        attention = lazyEval['reduceFun'](lazyEval['attentionFun'](res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+        if lazyEval['fraction'] is not None:
+            idx = tf.argsort(attention,0,'DESCENDING')
+            numps = tf.cast(tf.floor(idx.shape[0]*lazyEval['fraction'])+1,dtype=tf.int32)
+            idx = idx[0:numps]
+            
+        print('level ' + str(k-1) + ': only forwarding the ' + str(numps.numpy()) + ' most likely patches to next level')
+        for j in range(k,self.cropper.depth):
+            inputs['input' + str(j)] = subsel(inputs['input' + str(j)],idx,res.shape[0])
+            inputs['cropcoords' + str(j)] = subsel(inputs['cropcoords' + str(j)],idx,res.shape[0])
+            self.subselections[k] = subsel(self.subselections[k],idx,res.shape[0])
+        res = tf.gather(res,idx,axis=0)
+        if res_nonspatial is not None:
            res_nonspatial = tf.gather_nd(res_nonspatial,idx)
 
-      last = res
 
+      last = res
 
       ## get data and cropcoords at currnet scale
       inp = inputs['input' + str(k)]
@@ -320,7 +334,7 @@ class PatchWorkModel(Model):
       
            
       
-      if len(output) > 0: # it's not the initial scale
+      if k > 0: # it's not the initial scale
           
          # get result from last scale
          if last.shape[0] is not None and coords.shape[0] != last.shape[0]:         
@@ -389,6 +403,108 @@ class PatchWorkModel(Model):
     else:
       return output
   
+
+  def apply_full(self, data,
+                 resolution=None,
+                 level=-1,
+                 generate_type='tree',
+                 jitter=0.05,
+                 overlap=0,
+                 repetitions=5,                 
+                 scale_to_original=False,
+                 verbose=False,
+                 num_chunks=1,
+                 lazyEval = None
+                 ):
+
+
+     start_total = timer()
+
+     nD = self.cropper.ndim
+
+     zipper = lambda a,b,f : list(map(lambda pair: f(pair[0],pair[1]) , list(zip(a, b))))
+
+     single = False
+     if not isinstance(level,list):
+       level = [level]
+       single = True
+     
+     pred = [0] * len(level)
+     sumpred = [0] * len(level)
+     
+     reps = 1
+     if generate_type == 'random':
+         reps = repetitions
+         repetitions = 1         
+         
+     if lazyEval is not None:
+         if isinstance(lazyEval,float) or isinstance(lazyEval,int):             
+             lazyEval = {
+                 'reduceFun' : tf.reduce_mean,
+                 'attentionFun': tf.math.sigmoid,
+                 'fraction' : lazyEval
+             }
+         
+     if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is not None:            
+         print("lazyEval only possible with tree patch mode")
+     
+     for w in range(num_chunks):
+         if w > 0:
+             print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
+         for i in range(repetitions):
+             
+            print(">>> sampling patches for testing")
+            start = timer()
+            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
+                                    resolutions=resolution,
+                                    jitter = jitter,
+                                    overlap=overlap,
+                                    num_patches=reps,
+                                    verbose=verbose)
+            data_ = x.getInputData()
+            end = timer()
+            print(">>> time elapsed, sampling: " + str(end - start) )
+
+            print(">>> applying network")
+            start = timer()
+            if generate_type == 'random' or generate_type == 'tree_full':
+                r = self.predict(data_)
+                if not isinstance(r,list):
+                    r = [r]
+            else:
+                r = self(data_,lazyEval=lazyEval)
+            end = timer()
+            print(">>> time elapsed, network application: " + str(end - start) )
+                
+            print(">>> stitching result")
+            start = timer()
+            if self.spatial_train:
+                for k in level:            
+                  a,b = x.stitchResult(r,k,subselections = self.subselections)
+                  pred[k] += a
+                  sumpred[k] += b                
+            end = timer()
+            print(">>> time elapsed, stitching: " + str(end - start) )
+                  
+         if (np.amin(sumpred[-1])) > 0:
+             break
+              
+     if self.spatial_train:
+         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
+         sz = data.shape
+         orig_shape = sz[1:(nD+1)]
+         if scale_to_original:
+             for k in level:
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+         if single:
+           res = res[0]
+     
+     end = timer()
+     print(">>> total time elapsed: " + str(end - start_total) )
+     
+     return res
+
+
   # for multi-contrast data fname is a list
   def apply_on_nifti(self,fname, ofname=None,
                  generate_type='tree',
@@ -396,7 +512,8 @@ class PatchWorkModel(Model):
                  jitter=0.05,
                  repetitions=5,
                  num_chunks=1,
-                 scalevalue=None):
+                 scalevalue=None,
+                 lazyEval = None):
       nD = self.cropper.ndim
       if not isinstance(fname,list):
           fname = [fname]
@@ -419,6 +536,7 @@ class PatchWorkModel(Model):
                             repetitions=repetitions,
                             num_chunks=num_chunks,
                             resolution = resolution,
+                            lazyEval = lazyEval,
                             verbose=True,
                             scale_to_original=True)
 
@@ -438,73 +556,6 @@ class PatchWorkModel(Model):
       return pred_nii,res;
 
 
-  def apply_full(self, data,
-                 resolution=None,
-                 level=-1,
-                 generate_type='tree',
-                 jitter=0.05,
-                 overlap=0,
-                 repetitions=5,                 
-                 scale_to_original=False,
-                 verbose=False,
-                 num_chunks=1
-                 ):
-
-     nD = self.cropper.ndim
-
-     zipper = lambda a,b,f : list(map(lambda pair: f(pair[0],pair[1]) , list(zip(a, b))))
-
-     single = False
-     if not isinstance(level,list):
-       level = [level]
-       single = True
-     
-     pred = [0] * len(level)
-     sumpred = [0] * len(level)
-     
-     reps = 1
-     if generate_type == 'random':
-         reps = repetitions
-         repetitions = 1         
-         
-     
-     for w in range(num_chunks):
-         if w > 0:
-             print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
-         for i in range(repetitions):
-            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
-                                    resolutions=resolution,
-                                    jitter = jitter,
-                                    overlap=overlap,
-                                    num_patches=reps,
-                                    verbose=verbose)
-            data_ = x.getInputData()
-            if generate_type == 'random' or generate_type == 'tree_full':
-                r = self.predict(data_)
-                if not isinstance(r,list):
-                    r = [r]
-            else:
-                r = self(data_)
-                
-            if self.spatial_train:
-                for k in level:            
-                  a,b = x.stitchResult(r,k)
-                  pred[k] += a
-                  sumpred[k] += b                
-         if (np.amin(sumpred[-1])) > 0:
-             break
-              
-     if self.spatial_train:
-         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
-         sz = data.shape
-         orig_shape = sz[1:(nD+1)]
-         if scale_to_original:
-             for k in level:
-                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
-         if single:
-           res = res[0]
-     
-     return res
 
   def save(self,fname):
      outname = fname + ".json"
