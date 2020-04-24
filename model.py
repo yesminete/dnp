@@ -442,10 +442,9 @@ class PatchWorkModel(Model):
                                     verbose=verbose)
             data_ = x.getInputData()
             if lazyEval is None:             
-                end = timer()
-                print(">>> time elapsed, sampling: " + str(end - start) )
+                print(">>> time elapsed, sampling: " + str(timer() - start) )
 
-            print(">>> applying network")
+            print(">>> applying network -------------------------------------------------")
             start = timer()
             if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None:
                 r = self.predict(data_)
@@ -453,8 +452,7 @@ class PatchWorkModel(Model):
                     r = [r]
             else:
                 r = self(data_,lazyEval=lazyEval)
-            end = timer()
-            print(">>> time elapsed, network application: " + str(end - start) )
+            print(">>> time elapsed, network application: " + str(timer() - start) )
                 
             print(">>> stitching result")
             start = timer()
@@ -463,8 +461,7 @@ class PatchWorkModel(Model):
                   a,b = x.stitchResult(r,k)
                   pred[k] += a
                   sumpred[k] += b                
-            end = timer()
-            print(">>> time elapsed, stitching: " + str(end - start) )
+            print(">>> time elapsed, stitching: " + str(timer() - start) )
                   
          if (np.amin(sumpred[-1])) > 0:
              break
