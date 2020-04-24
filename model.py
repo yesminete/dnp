@@ -600,9 +600,15 @@ class PatchWorkModel(Model):
     return model
     
   def show_train_stat(self):
-    x = [ i for i, j in self.trainloss_hist ]
-    y = [ j for i, j in self.trainloss_hist ]
-    plt.semilogy(x,y,'r',label="train loss")
+    l = len(self.trainloss_hist[0][1])
+    cols = 'rbymck'
+    for k  in range(l):        
+        x = [ i for i, j in self.trainloss_hist ]
+        y = [ j[k] for i, j in self.trainloss_hist ]
+        if k==0:
+            plt.semilogy(x,y,cols[k],label="total train loss ")
+        else:
+            plt.semilogy(x,y,cols[k],label="train loss " + str(k))
     if len(self.validloss_hist) > 0:
         x = [ i for i, j in self.validloss_hist ]
         y = [ j for i, j in self.validloss_hist ]
@@ -676,7 +682,19 @@ class PatchWorkModel(Model):
                   callbacks=[history])
         end = timer()
         
-        self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),history.history['loss']))
+        
+        
+        loss = [None]*len(history.history['loss'])
+        for k in range(len(history.history['loss'])):
+            loss[k] = []
+            loss[k].append(history.history['loss'][k])           
+            for j in range(5):
+                if ('output_'+str(j+1)+'_loss') not in history.history:
+                    break
+                loss[k].append(history.history['output_'+str(j+1)+'_loss'][k])
+
+        
+        self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),loss))
         self.trained_epochs += epochs
         print("time elapsed, fitting: " + str(end - start) )
         

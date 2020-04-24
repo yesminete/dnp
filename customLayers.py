@@ -130,9 +130,9 @@ class biConvolution(layers.Layer):
           shape_alpha = alphas.shape    
           self.num_alpha = shape_alpha[1]
           if self.nD == 2:
-              weight_shape = (self.num_alpha,self.ksize,self.ksize,self.M,self.N)                        
+              weight_shape = (self.num_alpha+1,self.ksize,self.ksize,self.M,self.N)                        
           else:
-              weight_shape = (self.num_alpha,self.ksize,self.ksize,self.ksize,self.M,self.N)
+              weight_shape = (self.num_alpha+1,self.ksize,self.ksize,self.ksize,self.M,self.N)
              
         else:
           if self.nD == 2:
@@ -173,8 +173,11 @@ class biConvolution(layers.Layer):
         x = conv(image, self.weight, strides=self.strides, padding=self.padding)
         
     else:
+
+        kernel = self.weight[0,...]
+        x = conv(image, kernel, strides=self.strides, padding=self.padding)
         for k in range(self.num_alpha):
-            kernel = self.weight[k,...]
+            kernel = self.weight[k+1,...]
             alpha = alphas[:,k:k+1]
             for j in range(self.nD):
                 alpha = tf.expand_dims(alpha,j+2)

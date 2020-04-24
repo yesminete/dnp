@@ -85,7 +85,7 @@ biConvolution = patchwork.biConvolution
 def BNrelu(name=None):
   return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
 
-n = 10
+n = 5
 
 def conv_down(name=None,dest=None):
   x = biConvolution(n,3,name=name)
@@ -152,19 +152,23 @@ def createClassifier(name=None,depth=4,outK=2):
 cgen = patchwork.CropGenerator(patch_size = (16,16), 
                   scale_fac = 0.7, 
                   init_scale = '50mm,50mm',
-                  depth=3)
+                  create_indicator_classlabels=True,
+                  depth=2)
 
 
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : createBlock(outK=outK),
-                      preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      #classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                     # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
                       spatial_train=True,
                       intermediate_loss=True,
                       intermediate_out=4,
-                      #cls_intermediate_out=2,
-                      #classifier_train=True,
+
+                      classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                      cls_intermediate_out=2,
+                      cls_intermediate_loss=True,
+                      classifier_train=True,
+                      
                       finalBlock=layers.Activation('sigmoid'),
                       forward_type='simple',
                       num_labels = labelset[0].shape[3],
@@ -193,7 +197,8 @@ model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 #l = lambda x,y: tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
 #l = tf.keras.losses.mean_squared_error
 l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
-loss = l
+l_logits = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True)
+loss = [l,l_logits,l]
 
 
 adam = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
@@ -216,9 +221,9 @@ augment = patchwork.Augmenter(    morph_width = 150
 model.train(trainset,labelset,
             resolutions=resolutions,
             valid_ids = [],
-            augment=augment,
-            num_patches=11,
-            epochs=100)
+            augment=None,
+            num_patches=10,
+            epochs=3)
 
 
 
