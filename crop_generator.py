@@ -19,19 +19,27 @@ class CropInstanceLazy:
       self.localcrop = localcrop
       self.lastscale = None
       self.level = 0
+      self.scales = []
 
   # get input training data 
   def getInputData(self):
-      def getNext(idx):
-          if self.lastscale is not None:
-              idx
-          self.lastscale = localcrop(self.lastscale,self.level)
+      def getNext(idx=None):
+          
+          if idx is not None:
+              self.lastscale['data_cropped'] = tf.gather(self.lastscale['data_cropped'],tf.squeeze(idx),axis=0)
+              self.lastscale['local_box_index'] = tf.gather(self.lastscale['local_box_index'],tf.squeeze(idx),axis=0)
+              self.lastscale['parent_box_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],tf.squeeze(idx),axis=0)
+              self.lastscale['parent_boxes'] = tf.gather(self.lastscale['parent_boxes'],tf.squeeze(idx),axis=0)
+              self.lastscale['parent_box_scatter_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],tf.squeeze(idx),axis=0)
+
+          self.lastscale = self.localcrop(self.lastscale,self.level)
+          self.scales.append(self.lastscale)
           self.level = self.level + 1
           return self.lastscale['data_cropped'],self.lastscale['local_box_index']
       return getNext
             
-  def stitchResult(self,r,level, subselections = None):
-      return None
+  def stitchResult(self,r,level):
+     return stitchResult(r,level,self.scales)
 
 
 
@@ -78,16 +86,15 @@ class CropInstance:
     
     return out
 
+  def stitchResult(self,r,level):
+     return stitchResult(r,level,self.scales)
 
-  # stitched results (output of network) back into full image
-  def stitchResult(self,r,level, subselections = None):
+# stitched results (output of network) back into full image
+def stitchResult(r,level, scales):
     qq = r[level]
     numlabels = qq.shape[-1]
-    sc = self.scales[level]
+    sc = scales[level]
     pbox_index = sc['parent_box_scatter_index']
-    if subselections is not None:
-        s = subselections[level]
-        pbox_index = tf.gather(pbox_index,s,axis=0)
     sha = list(sc['dest_full_size'])
     sha.append(numlabels)
     sha = sha[1:]
@@ -145,11 +152,13 @@ class CropGenerator():
   def sample(self,trainset,labelset,
              resolutions=None,             
              generate_type='random',  # 'random' or 'tree' or 'tree_full'
-             num_patches=1,           #  if 'random' this gives the number of draws, otherwise no function
+             num_patches=1,           #  if 'random' this gives the number of initial draws, otherwise no function
+             branch_factor=1,         #  if 'random' this gives the number of children for each random patch
              jitter=0,                #  if 'tree' this is the amount of random jitter
              overlap=0,
              augment=None,
              test=False,
+             lazyEval=None,
              verbose=False):
 
     def get_patchsize(level):
@@ -211,12 +220,13 @@ class CropGenerator():
 
 
       localCrop = lambda x,level : self.createCropsLocal(trainset_,labels_,x,get_patchsize(level),generate_type,test,
-                                                   num_patches=num_patches,jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+                                                   num_patches=num_patches,branch_factor=branch_factor,
+                                                   jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+
             
-     # return CropInstanceLazy(localCrop)
-      
-      
-      
+      if lazyEval is not None:
+          return CropInstanceLazy(localCrop)      
+          
       
       # do the crop in the initial level
       x = localCrop(None,0)
@@ -433,13 +443,15 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,generate_type,test,jitter=0,num_patches=1,overlap=0,resolution=None,verbose=True):
+  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,generate_type,test,jitter=0,
+      num_patches=1,
+      branch_factor=1,
+      overlap=0,resolution=None,verbose=True):
       scale_fac = self.scale_fac
       init_scale = self.init_scale
       keepAspect = self.keepAspect
       divisor = 8 # used for initital scale to get a nice image size
       nD = self.ndim
-      
       forwarded_aspects = np.ones(nD) #[1]*nD
       aspect_correction = np.ones(nD) #nD*[1]
       if keepAspect and crops is not None:
@@ -456,7 +468,7 @@ class CropGenerator():
       else:
         images = crops['data_cropped']
         if generate_type == 'random':     # this is used for training
-          replicate_patches = 1
+          replicate_patches = branch_factor
         elif generate_type == 'tree':     # this we need for apply
           replicate_patches = None
         else:
@@ -536,7 +548,8 @@ class CropGenerator():
       else: # preceding layers (crops have to recomputed according to grandparent)
         last_boxes = crops['parent_boxes']
         if generate_type == 'random':     
-          rans = [None] * (2*nD)
+          rans = [None] * (2*nD)          
+          last_boxes = tf.tile(last_boxes,[replicate_patches,1])                   
           for k in range(nD):
               delta = last_boxes[:,(k+nD):(k+nD+1)]-last_boxes[:,k:(k+1)] 
               rans[k] = local_boxes[:,k:(k+1)]*delta + last_boxes[:,k:(k+1)]

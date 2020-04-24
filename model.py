@@ -274,37 +274,28 @@ class PatchWorkModel(Model):
       inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
       return inp
 
-    
-    self.subselections = None
-
-    
-
-    if lazyEval is not None:        
-        self.subselections = [None] * self.cropper.depth
-        for k in range(0,self.cropper.depth):
-            self.subselections[k] = tf.range(0,inputs['input' + str(k)].shape[0])
 
       
     nD = self.cropper.ndim
     output = []
     res = None
     res_nonspatial = None
+    #################### main loop over depth
     for k in range(self.cropper.depth):
 
 
+
+      # lazy Evaluation
+      idx = None
       if k>0 and lazyEval is not None:
-        
-        attention = lazyEval['reduceFun'](lazyEval['attentionFun'](res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
-        if lazyEval['fraction'] is not None:
-            idx = tf.argsort(attention,0,'DESCENDING')
-            numps = tf.cast(tf.floor(idx.shape[0]*lazyEval['fraction'])+1,dtype=tf.int32)
-            idx = idx[0:numps]
-            
+        reduceFun= lazyEval['reduceFun']
+        attentionFun= lazyEval['attentionFun']
+        fraction= lazyEval['fraction']                 
+        attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+        idx = tf.argsort(attention,0,'DESCENDING')
+        numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
+        idx = idx[0:numps]            
         print('level ' + str(k-1) + ': only forwarding the ' + str(numps.numpy()) + ' most likely patches to next level')
-        for j in range(k,self.cropper.depth):
-            inputs['input' + str(j)] = subsel(inputs['input' + str(j)],idx,res.shape[0])
-            inputs['cropcoords' + str(j)] = subsel(inputs['cropcoords' + str(j)],idx,res.shape[0])
-            self.subselections[k] = subsel(self.subselections[k],idx,res.shape[0])
         res = tf.gather(res,idx,axis=0)
         if res_nonspatial is not None:
            res_nonspatial = tf.gather_nd(res_nonspatial,idx)
@@ -313,8 +304,12 @@ class PatchWorkModel(Model):
       last = res
 
       ## get data and cropcoords at currnet scale
-      inp = inputs['input' + str(k)]
-      coords = inputs['cropcoords' + str(k)]
+      if callable(inputs):
+          inp,coords = inputs(idx=idx)
+          
+      else:
+          inp = inputs['input' + str(k)]
+          coords = inputs['cropcoords' + str(k)]
 
       inp_nonspatial = res_nonspatial
       
@@ -393,7 +388,8 @@ class PatchWorkModel(Model):
                  generate_type='tree',
                  jitter=0.05,
                  overlap=0,
-                 repetitions=5,                 
+                 repetitions=5,           
+                 branch_factor=1,
                  scale_to_original=False,
                  verbose=False,
                  num_chunks=1,
@@ -427,10 +423,7 @@ class PatchWorkModel(Model):
                  'attentionFun': tf.math.sigmoid,
                  'fraction' : lazyEval
              }
-         
-     if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is not None:            
-         print("lazyEval only possible with tree patch mode")
-     
+              
      for w in range(num_chunks):
          if w > 0:
              print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
@@ -443,6 +436,8 @@ class PatchWorkModel(Model):
                                     jitter = jitter,
                                     overlap=overlap,
                                     num_patches=reps,
+                                    branch_factor=branch_factor,
+                                    lazyEval=lazyEval,
                                     verbose=verbose)
             data_ = x.getInputData()
             end = timer()
@@ -450,7 +445,7 @@ class PatchWorkModel(Model):
 
             print(">>> applying network")
             start = timer()
-            if generate_type == 'random' or generate_type == 'tree_full':
+            if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None:
                 r = self.predict(data_)
                 if not isinstance(r,list):
                     r = [r]
@@ -463,7 +458,7 @@ class PatchWorkModel(Model):
             start = timer()
             if self.spatial_train:
                 for k in level:            
-                  a,b = x.stitchResult(r,k,subselections = self.subselections)
+                  a,b = x.stitchResult(r,k)
                   pred[k] += a
                   sumpred[k] += b                
             end = timer()
@@ -494,6 +489,7 @@ class PatchWorkModel(Model):
                  overlap=0,
                  jitter=0.05,
                  repetitions=5,
+                 branch_factor=1,
                  num_chunks=1,
                  scalevalue=None,
                  lazyEval = None):
@@ -512,12 +508,13 @@ class PatchWorkModel(Model):
       a = tf.concat(ims,nD+1)
       if scalevalue is not None:
           a = a * scalevalue
-          
+
       res = self.apply_full(a,generate_type=generate_type,
                             jitter=jitter,
                             overlap=overlap,                            
                             repetitions=repetitions,
                             num_chunks=num_chunks,
+                            branch_factor=branch_factor,
                             resolution = resolution,
                             lazyEval = lazyEval,
                             verbose=True,
