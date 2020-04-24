@@ -568,7 +568,7 @@ class PatchWorkModel(Model):
         classi = x['classifiers']
         del x['classifiers']
         if classi is not None and len(classi) > 0:
-            clsCreator = lambda level,outK=0 : createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects)
+            clsCreator = lambda level,outK=0 : (createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects) if level < len(classi) else None)
 
     preprocCreator = None
     if 'preprocessor' in x:
