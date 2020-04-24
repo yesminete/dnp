@@ -739,6 +739,8 @@ class patchworkModelEncoder(json.JSONEncoder):
            return {'keras_layer':obj.get_config(), 'name': obj.__class__.__name__ }
         if isinstance(obj,dict):
            return dict(obj)
+        if hasattr(obj,'tolist'):
+           return obj.tolist()
         return json.dumps(obj,cls=patchworkModelEncoder)
         
 
