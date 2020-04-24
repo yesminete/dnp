@@ -111,8 +111,8 @@ class CropGenerator():
                                            # b) if init_scale = sfac, it's the scale factor which the full image is scaled to
                                            # c) if init_scale = [sx,sy], it's the shape the full image is scaled to
                     keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
-                    smoothfac_data = 0.5,  # 
-                    smoothfac_label = 1.0, #
+                    smoothfac_data = 0,  # 
+                    smoothfac_label = 0, #
                     create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
                     ndim=2,
