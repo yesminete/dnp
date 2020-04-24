@@ -9,6 +9,7 @@ Created on Mon Mar 23 15:37:03 2020
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from . improc_utils import *
+from timeit import default_timer as timer
 
 
 ########## Cropmodel ##########################################
@@ -479,6 +480,7 @@ class CropGenerator():
       if generate_type == 'tree' and crops is None:
         assert bsize == 1, "for generate_type=tree the batch_size has to be one!"
  
+      start = timer()
 
       ############### compute bbox coordinates
       if crops is None and isinstance(init_scale,list):      # in case init_scale = shape, we scale the full image
@@ -585,12 +587,12 @@ class CropGenerator():
                     
   
       if verbose:
-        print("------------------------")
+        print("--------- cropping ")
         print("shape of patch: ", *patch_size )
         print("voxsize (relative to original scale): ", *resolution)
         print("numpatches in level: %d" % (parent_box_index.shape[0] / data_parent.shape[0]))
         print("shape of full output: ",  *list(map(lambda x: x.numpy(), dest_full_size[1:])))
-   #     print("shape of full output: ",   dest_full_size[1:])
+        
 
 
 
@@ -611,6 +613,11 @@ class CropGenerator():
         test = tf.gather_nd(images,local_box_index,batch_dims=1)
       else:
         test = None
+
+  
+      if verbose:
+        end = timer()
+        print("time elapsed: " + str(end - start) )
 
 
       return {"data_cropped" : res_data, 

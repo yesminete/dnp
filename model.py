@@ -295,7 +295,7 @@ class PatchWorkModel(Model):
         idx = tf.argsort(attention,0,'DESCENDING')
         numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
         idx = idx[0:numps]            
-        print('level ' + str(k-1) + ': only forwarding the ' + str(numps.numpy()) + ' most likely patches to next level')
+        print('lazyEval, level ' + str(k-1) + ': only forwarding the ' + str(numps.numpy()) + ' most likely patches to next level')
         res = tf.gather(res,idx,axis=0)
         if res_nonspatial is not None:
            res_nonspatial = tf.gather_nd(res_nonspatial,idx)
@@ -429,8 +429,9 @@ class PatchWorkModel(Model):
              print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
          for i in range(repetitions):
              
-            print(">>> sampling patches for testing")
-            start = timer()
+            if lazyEval is None:             
+                print(">>> sampling patches for testing")
+                start = timer()
             x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
                                     resolutions=resolution,
                                     jitter = jitter,
@@ -440,8 +441,9 @@ class PatchWorkModel(Model):
                                     lazyEval=lazyEval,
                                     verbose=verbose)
             data_ = x.getInputData()
-            end = timer()
-            print(">>> time elapsed, sampling: " + str(end - start) )
+            if lazyEval is None:             
+                end = timer()
+                print(">>> time elapsed, sampling: " + str(end - start) )
 
             print(">>> applying network")
             start = timer()
