@@ -173,7 +173,7 @@ class PatchWorkModel(Model):
 
                classifierCreator=None,
                num_classes=1,
-               cls_intermediate_out=0,
+               cls_intermediate_out=2,
                cls_intermediate_loss=False,
                classifier_train=False,
 
