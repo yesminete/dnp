@@ -10,6 +10,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from . improc_utils import *
 from timeit import default_timer as timer
+from collections.abc import Iterable
 
 
 ########## Cropmodel ##########################################
@@ -107,6 +108,7 @@ class CropGenerator():
 
   def __init__(self,patch_size = (64,64),  # this is the size of our patches
                     scale_fac = 0.4,       # scale factor from one scale to another
+                    scale_fac_ref = 'max', # for inhomgenus matrixsizes scale_fac has to computed to certain axis (possible values 'max','min' or int refering to dimension)
                     init_scale = -1,       # a) if init_scale = -1, already first layer consists of patches, 
                                            # b) if init_scale = sfac, it's the scale factor which the full image is scaled to
                                            # c) if init_scale = [sx,sy], it's the shape the full image is scaled to
@@ -120,6 +122,7 @@ class CropGenerator():
     self.model = None
     self.patch_size = patch_size
     self.scale_fac = scale_fac
+    self.scale_fac_ref = scale_fac_ref
     self.smoothfac_data = smoothfac_data
     self.smoothfac_label = smoothfac_label
     self.init_scale = init_scale
@@ -128,7 +131,6 @@ class CropGenerator():
     self.depth = depth
     self.ndim = ndim
 
-    assert scale_fac < 1 and scale_fac > 0.01, "please choose scale_fac in the interval (0.01, 1)"
 
   def serialize_(self):
       return { 'patch_size':self.patch_size,
@@ -164,16 +166,22 @@ class CropGenerator():
              lazyEval=None,
              verbose=False):
 
-    def get_patchsize(level):
-      if isinstance(self.patch_size,list):
-          if isinstance(self.patch_size[level],list):
-              return self.patch_size[level]
-          else: 
-              return self.patch_size
+    def get_patchsize(level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
+        if isinstance(self.patch_size[level],Iterable):
+            return self.patch_size[level]
+        else: 
+            return self.patch_size
           
-          return self.patch_size[level]
-      else:
-          return self.patch_size
+
+    def get_scalefac(level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
+                              # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
+      if isinstance(self.scale_fac,float):
+          return [self.scale_fac]*self.ndim
+      elif isinstance(self.scale_fac,Iterable):
+          return [self.scale_fac[level]]*self.ndim
+      elif isinstance(self.scale_fac,dict):
+          return self.scale_fac['level' + str(level)]
+          
 
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
@@ -227,9 +235,11 @@ class CropGenerator():
           print("augmenting done. ")
 
 
-      localCrop = lambda x,level : self.createCropsLocal(trainset_,labels_,x,get_patchsize(level),generate_type,test,
-                                                   num_patches=num_patches,branch_factor=branch_factor,
-                                                   jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+      localCrop = lambda x,level : self.createCropsLocal(trainset_,labels_,x,
+                                                         get_patchsize(level), get_scalefac(level),
+                                                         generate_type,test,
+                                                           num_patches=num_patches,branch_factor=branch_factor,
+                                                           jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
 
             
       if lazyEval is not None:
@@ -451,7 +461,7 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,generate_type,test,jitter=0,
+  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,this_scale_fac,generate_type,test,jitter=0,
       num_patches=1,
       branch_factor=1,
       overlap=0,resolution=None,verbose=True):
@@ -535,8 +545,14 @@ class CropGenerator():
         else:
             asp = []
             for d in range(nD):
-                asp.append(sz[d+1]/patch_size[d]*scale_fac*0.5)
-            asp = max(asp)
+                asp.append(sz[d+1]/patch_size[d]*this_scale_fac[d]*0.5)
+            if self.scale_fac_ref == 'max':
+                asp = max(asp)
+            elif self.scale_fac_ref == 'min':
+                asp = min(asp)
+            else:
+                asp = asp[self.scale_fac_ref]
+                
             bbox_sz = [0] * (nD*2)
             for d in range(nD):
                 bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]

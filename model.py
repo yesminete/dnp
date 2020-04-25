@@ -296,14 +296,18 @@ class PatchWorkModel(Model):
         reduceFun= lazyEval['reduceFun']
         attentionFun= lazyEval['attentionFun']
         fraction= lazyEval['fraction']                 
-        attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+        if reduceFun == 'classifier_output':
+            assert res_nonspatial is not None, "no classifier output for attention in lazyEval available!!"
+            attention = res_nonspatial[:,0]
+        else:
+            attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
         idx = tf.argsort(attention,0,'DESCENDING')
         numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
         idx = idx[0:numps]            
         print('lazyEval, level ' + str(k-1) + ': only forwarding the ' + str(numps.numpy()) + ' most likely patches to next level')
         res = tf.gather(res,idx,axis=0)
         if res_nonspatial is not None:
-           res_nonspatial = tf.gather_nd(res_nonspatial,idx)
+           res_nonspatial = tf.gather(res_nonspatial,idx,axis=0)
 
 
       last = res
@@ -424,10 +428,15 @@ class PatchWorkModel(Model):
      if lazyEval is not None:
          if isinstance(lazyEval,float) or isinstance(lazyEval,int):             
              lazyEval = {
-                 'reduceFun' : tf.reduce_mean,
-                 'attentionFun': tf.math.sigmoid,
                  'fraction' : lazyEval
              }
+         if 'reduceFun' not in lazyEval:
+             lazyEval['reduceFun'] =  tf.reduce_mean
+         if 'attentionFun' not in lazyEval:
+             lazyEval['attentionFun'] = tf.math.sigmoid
+         if 'fraction' not in lazyEval:
+             lazyEval['fraction'] = 0.2
+
               
      for w in range(num_chunks):
          if w > 0:
