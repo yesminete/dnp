@@ -136,6 +136,8 @@ class CropGenerator():
                'init_scale':self.init_scale,
                'smoothfac_data':self.smoothfac_data,
                'smoothfac_label':self.smoothfac_label,
+               'create_indicator_classlabels':self.create_indicator_classlabels,
+               'keepAspect':self.keepAspect,
                'depth':self.depth,
                'ndim':self.ndim
             }
@@ -164,6 +166,11 @@ class CropGenerator():
 
     def get_patchsize(level):
       if isinstance(self.patch_size,list):
+          if isinstance(self.patch_size[level],list):
+              return self.patch_size[level]
+          else: 
+              return self.patch_size
+          
           return self.patch_size[level]
       else:
           return self.patch_size

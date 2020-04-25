@@ -225,9 +225,14 @@ class PatchWorkModel(Model):
         
     if classifierCreator is not None:
        for k in range(self.cropper.depth-1): 
-         self.classifiers.append(classifierCreator(level=k,outK=num_classes+cls_intermediate_out))
+         clsfier = classifierCreator(level=k,outK=num_classes+cls_intermediate_out)
+         if clsfier is None:
+             break
+         self.classifiers.append(clsfier)
        if self.classifier_train and not self.cropper.create_indicator_classlabels:
-         self.classifiers.append(classifierCreator(level=cropper.depth-1,outK=num_classes))
+         clsfier = classifierCreator(level=cropper.depth-1,outK=num_classes)
+         if clsfier is not None:
+            self.classifiers.append(clsfier)
         
         
   
