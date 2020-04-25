@@ -28,11 +28,11 @@ class CropInstanceLazy:
       def getNext(idx=None):
           
           if idx is not None:
-              self.lastscale['data_cropped'] = tf.gather(self.lastscale['data_cropped'],tf.squeeze(idx),axis=0)
-              self.lastscale['local_box_index'] = tf.gather(self.lastscale['local_box_index'],tf.squeeze(idx),axis=0)
-              self.lastscale['parent_box_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],tf.squeeze(idx),axis=0)
-              self.lastscale['parent_boxes'] = tf.gather(self.lastscale['parent_boxes'],tf.squeeze(idx),axis=0)
-              self.lastscale['parent_box_scatter_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],tf.squeeze(idx),axis=0)
+              self.lastscale['data_cropped'] = tf.gather(self.lastscale['data_cropped'],(idx),axis=0)
+              self.lastscale['local_box_index'] = tf.gather(self.lastscale['local_box_index'],(idx),axis=0)
+              self.lastscale['parent_box_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],(idx),axis=0)
+              self.lastscale['parent_boxes'] = tf.gather(self.lastscale['parent_boxes'],(idx),axis=0)
+              self.lastscale['parent_box_scatter_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],(idx),axis=0)
 
           self.lastscale = self.localcrop(self.lastscale,self.level)
           self.scales.append(self.lastscale)
@@ -167,7 +167,7 @@ class CropGenerator():
              verbose=False):
 
     def get_patchsize(level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
-        if isinstance(self.patch_size[level],Iterable):
+        if isinstance(self.patch_size[0],Iterable):
             return self.patch_size[level]
         else: 
             return self.patch_size
@@ -562,7 +562,14 @@ class CropGenerator():
         if generate_type == 'random':     
           local_boxes = self.random_boxes(bbox_sz,replicate_patches*bsize)
         elif generate_type == 'tree':          
-          local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter)
+          local_boxes = []
+          for t in range(crops['parent_boxes'].shape[0]):
+            lb,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter)
+            local_boxes.append(tf.expand_dims(lb,1))
+          local_boxes = tf.concat(local_boxes,1)
+          #local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter)
+            
+          
 
 
 
@@ -583,7 +590,7 @@ class CropGenerator():
 
         elif generate_type == 'tree':          
           last_boxes = tf.expand_dims(last_boxes,0)
-          local_boxes = tf.expand_dims(local_boxes,1)
+    #      local_boxes = tf.expand_dims(local_boxes,1)
           rans = [None] * (2*nD)
           for k in range(nD):
               delta = (last_boxes[:,:,(k+nD):(k+nD+1)]-last_boxes[:,:,k:(k+1)]) 
@@ -591,7 +598,7 @@ class CropGenerator():
               rans[k+nD] = local_boxes[:,:,(k+nD):(k+nD+1)]*delta + last_boxes[:,:,k:(k+1)]
           parent_boxes = tf.concat(rans,2)
           parent_boxes = tf.reshape(parent_boxes,[parent_boxes.shape[0]*parent_boxes.shape[1], 2*nD])
-          local_boxes =  tf.tile(local_boxes,[1,last_boxes.shape[1],1])
+       #   local_boxes =  tf.tile(local_boxes,[1,last_boxes.shape[1],1])
           local_boxes = tf.reshape(local_boxes,[local_boxes.shape[0]*local_boxes.shape[1], 2*nD])
       
 

@@ -150,11 +150,11 @@ def createClassifier(name=None,depth=4,outK=2):
 #model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
 
 cgen = patchwork.CropGenerator(patch_size = (16,16), 
-                  scale_fac = 0.6, 
+                  scale_fac = 0.4, 
                   scale_fac_ref = 'min',
                   init_scale = 0.4,
                   create_indicator_classlabels=True,
-                  depth=2)
+                  depth=3)
 
 
 model = patchwork.PatchWorkModel(cgen,
@@ -177,12 +177,12 @@ model = patchwork.PatchWorkModel(cgen,
                       )
 #%
 x = model.apply_full(trainset[0][0:1,:,:,:],resolution=resolutions[0],
-                     jitter=0.0, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
-                     lazyEval=None #{'reduceFun':'classifier_output'}
+                     jitter=2, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
+                     lazyEval=0.3#{'reduceFun':'classifier_output'}
                      )
 
 
-plt.imshow(x[:,:,2])
+plt.imshow(x[:,:,2],vmin=0,vmax=0.0000000001)
 #model.summary()
 # model.save('xxx')
 # model = patchwork.PatchWorkModel.load('xxx')
