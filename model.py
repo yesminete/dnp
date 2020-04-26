@@ -396,6 +396,7 @@ class PatchWorkModel(Model):
                  level=-1,
                  generate_type='tree',
                  jitter=0.05,
+                 jitter_border_fix = False,
                  overlap=0,
                  repetitions=5,           
                  branch_factor=1,
@@ -449,6 +450,7 @@ class PatchWorkModel(Model):
             x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
                                     resolutions=resolution,
                                     jitter = jitter,
+                                    jitter_border_fix = jitter_border_fix,
                                     overlap=overlap,
                                     num_patches=reps,
                                     branch_factor=branch_factor,
@@ -501,6 +503,7 @@ class PatchWorkModel(Model):
                  generate_type='tree',
                  overlap=0,
                  jitter=0.05,
+                 jitter_border_fix=False,
                  repetitions=5,
                  branch_factor=1,
                  num_chunks=1,
@@ -524,6 +527,7 @@ class PatchWorkModel(Model):
 
       res = self.apply_full(a,generate_type=generate_type,
                             jitter=jitter,
+                            jitter_border_fix=jitter_border_fix,
                             overlap=overlap,                            
                             repetitions=repetitions,
                             num_chunks=num_chunks,
@@ -640,6 +644,7 @@ class PatchWorkModel(Model):
             num_patches=10,
             valid_ids = [],
             jitter=0,
+            jitter_border_fix=False,
             num_samples_per_epoch=-1,
             showplot=True,
             autosave=True,
@@ -656,7 +661,7 @@ class PatchWorkModel(Model):
         if traintype == 'random':
             c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random',  num_patches=num_patches,augment=augment)
         elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,augment=augment)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,jitter_border_fix=jitter_border_fix,augment=augment)
         return c
       
     history = History()

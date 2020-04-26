@@ -160,6 +160,7 @@ class CropGenerator():
              num_patches=1,           #  if 'random' this gives the number of initial draws, otherwise no function
              branch_factor=1,         #  if 'random' this gives the number of children for each random patch
              jitter=0,                #  if 'tree' this is the amount of random jitter
+             jitter_border_fix=False,
              overlap=0,
              augment=None,
              test=False,
@@ -239,7 +240,8 @@ class CropGenerator():
                                                          get_patchsize(level), get_scalefac(level),
                                                          generate_type,test,
                                                            num_patches=num_patches,branch_factor=branch_factor,
-                                                           jitter=jitter,overlap=overlap,resolution=resolution_,verbose=verbose)
+                                                           jitter=jitter,jitter_border_fix=jitter_border_fix,
+                                                           overlap=overlap,resolution=resolution_,verbose=verbose)
 
             
       if lazyEval is not None:
@@ -415,7 +417,7 @@ class CropGenerator():
   #  overlap - an integer giving the additoinal number of boxes per dimension
   #  jitter - to add random jitter 
   # return boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) 
-  def tree_boxes(self,bbox_sz,overlap,jitter=0):
+  def tree_boxes(self,bbox_sz,overlap,jitter=0,jitter_border_fix=False):
 
       nD = self.ndim
       centers = [None] * nD
@@ -436,23 +438,42 @@ class CropGenerator():
           for k in range(nD):
              delta = bbox_sz[nD+k]-bbox_sz[k]              
              rng = np.random.uniform(-delta/2*jitter,delta/2*jitter,sh[0:nD])
-             if nD ==2:
-                 if k == 0: 
-                     rng[0,:] = 0
-                     rng[-1,:] = 0
-                 elif k == 1:
-                     rng[:,0] = 0
-                     rng[:,-1] = 0
+             if jitter_border_fix:
+                if nD == 2:
+                    if k == 0: 
+                        rng[0,:] = 0
+                        rng[-1,:] = 0
+                    elif k == 1:
+                        rng[:,0] = 0
+                        rng[:,-1] = 0
+                else:
+                     if k == 0: 
+                         rng[0,:,:] = 0
+                         rng[-1,:,:] = 0
+                     elif k == 1:
+                         rng[:,0,:] = 0
+                         rng[:,-1,:] = 0
+                     else:
+                         rng[:,:,0] = 0
+                         rng[:,:,-1] = 0
              else:
-                  if k == 0: 
-                      rng[0,:,:] = 0
-                      rng[-1,:,:] = 0
-                  elif k == 1:
-                      rng[:,0,:] = 0
-                      rng[:,-1,:] = 0
-                  else:
-                      rng[:,:,0] = 0
-                      rng[:,:,-1] = 0
+                 if nD == 2:
+                     if k == 0: 
+                         rng[0,:] = tf.math.abs(rng[0,:])
+                         rng[-1,:] = -tf.math.abs(rng[-1,:])
+                     elif k == 1:
+                         rng[:,0] = tf.math.abs(rng[:,0])
+                         rng[:,-1] = -tf.math.abs(rng[:,-1])
+                 else:
+                      if k == 0: 
+                         rng[0,:,:] = tf.math.abs(rng[0,:,:])
+                         rng[-1,:,:] = -tf.math.abs(rng[-1,:,:])
+                      elif k == 1:
+                         rng[:,0,:] = tf.math.abs(rng[:,0,:])
+                         rng[:,-1,:] = -tf.math.abs(rng[:,-1,:])
+                      else:
+                         rng[:,:,0] = tf.math.abs(rng[:,:,0])
+                         rng[:,:,-1] = -tf.math.abs(rng[:,:,-1])
              rands.append(np.expand_dims(rng,nD))
           rands = np.concatenate(rands,nD)
           centers = centers + rands
@@ -461,10 +482,13 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,this_scale_fac,generate_type,test,jitter=0,
+  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,this_scale_fac,generate_type,test,
+      jitter=0,
+      jitter_border_fix=False,
       num_patches=1,
       branch_factor=1,
       overlap=0,resolution=None,verbose=True):
+      
       scale_fac = self.scale_fac
       init_scale = self.init_scale
       keepAspect = self.keepAspect
@@ -565,11 +589,11 @@ class CropGenerator():
           if crops is not None:
               local_boxes = []
               for t in range(crops['parent_boxes'].shape[0]):
-                lb,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter)
+                lb,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix)
                 local_boxes.append(tf.expand_dims(lb,1))
               local_boxes = tf.concat(local_boxes,1)
           else:
-              local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter)
+              local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix)
             
           
 

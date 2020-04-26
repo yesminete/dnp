@@ -7,6 +7,7 @@ Created on Tue Mar 17 16:08:44 2020
 """
 import sys 
 sys.path.append("/home/reisertm")
+sys.path.append("/home/reisertm/nora/src/python")
 
 
 import numpy as np
@@ -22,6 +23,30 @@ import matplotlib.pyplot as plt
 
 import patchwork.model as patchwork
 from patchwork.improc_utils import *
+
+from DPX_core import *
+from DPX_improc import *
+
+
+#%%
+
+trainset,labelset,resolutions,subjs = load_data_for_training(
+                                project = 'tschaga',    
+                                subjects = '#Tag:test',
+                               # subjects = '15341572', #'#Tag:MIDItrain',
+                                contrasts_selector = ['T1.nii.gz'],
+                                labels_selector = ['anno*/testset.ano.json'],
+                                annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ]       },
+                                exclude_incomplete_labels=True,
+                                
+                                )
+
+
+
+
+#%%
+
+
 
 
 trainset = []
@@ -177,7 +202,7 @@ model = patchwork.PatchWorkModel(cgen,
                       )
 #%
 x = model.apply_full(trainset[0][0:1,:,:,:],resolution=resolutions[0],
-                     jitter=2, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
+                     jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=10,verbose=True,scale_to_original=False,
                      lazyEval=0.3#{'reduceFun':'classifier_output'}
                      )
 
