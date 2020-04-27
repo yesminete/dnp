@@ -79,7 +79,7 @@ for k in range(2):
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-  labelset.append( tf.convert_to_tensor(a,dtype=tf.float32)   )
+  labelset.append( tf.convert_to_tensor(a[...,0:1],dtype=tf.float32)   )
   
   resolutions.append(img.header['pixdim'][1:4])
 #  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
@@ -175,9 +175,9 @@ def createClassifier(name=None,depth=4,outK=2):
 #model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
 
 cgen = patchwork.CropGenerator(patch_size = (16,16), 
-                  scale_fac = 0.4, 
+                  scale_fac =  0.4, 
                   scale_fac_ref = 'min',
-                  init_scale = 0.4,
+                  init_scale = [100,200],
                   create_indicator_classlabels=True,
                   depth=3)
 
@@ -202,12 +202,12 @@ model = patchwork.PatchWorkModel(cgen,
                       )
 #%
 x = model.apply_full(trainset[0][0:1,:,:,:],resolution=resolutions[0],
-                     jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=10,verbose=True,scale_to_original=False,
+                     jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
                      lazyEval=0.3#{'reduceFun':'classifier_output'}
                      )
 
 
-plt.imshow(x[:,:,2],vmin=0,vmax=0.0000000001)
+plt.imshow(x[:,:,0],vmin=0,vmax=0.0000000001)
 #model.summary()
 # model.save('xxx')
 # model = patchwork.PatchWorkModel.load('xxx')
@@ -251,7 +251,7 @@ model.train(trainset,labelset,
             resolutions=resolutions,
             valid_ids = [],
             augment=None,
-            num_patches=10,
+            num_patches=100,
             epochs=3)
 
 

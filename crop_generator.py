@@ -17,7 +17,8 @@ from collections.abc import Iterable
 
 
 class CropInstanceLazy:
-  def __init__(self,localcrop):
+  def __init__(self,localcrop,cropper):
+      self.cropper = cropper
       self.localcrop = localcrop
       self.lastscale = None
       self.level = 0
@@ -25,15 +26,14 @@ class CropInstanceLazy:
 
   # get input training data 
   def getInputData(self):
-      def getNext(idx=None):
-          
+      def getNext(idx=None):          
           if idx is not None:
-              self.lastscale['data_cropped'] = tf.gather(self.lastscale['data_cropped'],(idx),axis=0)
-              self.lastscale['local_box_index'] = tf.gather(self.lastscale['local_box_index'],(idx),axis=0)
-              self.lastscale['parent_box_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],(idx),axis=0)
-              self.lastscale['parent_boxes'] = tf.gather(self.lastscale['parent_boxes'],(idx),axis=0)
-              self.lastscale['parent_box_scatter_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],(idx),axis=0)
-
+              self.lastscale = self.cropper.take_subselection(self.lastscale,idx)
+              # self.lastscale['data_cropped'] = tf.gather(self.lastscale['data_cropped'],(idx),axis=0)
+              # self.lastscale['local_box_index'] = tf.gather(self.lastscale['local_box_index'],(idx),axis=0)
+              # self.lastscale['parent_box_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],(idx),axis=0)
+              # self.lastscale['parent_boxes'] = tf.gather(self.lastscale['parent_boxes'],(idx),axis=0)
+              # self.lastscale['parent_box_scatter_index'] = tf.gather(self.lastscale['parent_box_scatter_index'],(idx),axis=0)
           self.lastscale = self.localcrop(self.lastscale,self.level)
           self.scales.append(self.lastscale)
           self.level = self.level + 1
@@ -162,6 +162,7 @@ class CropGenerator():
              jitter=0,                #  if 'tree' this is the amount of random jitter
              jitter_border_fix=False,
              overlap=0,
+             balance=None,
              augment=None,
              test=False,
              lazyEval=None,
@@ -183,13 +184,40 @@ class CropGenerator():
       elif isinstance(self.scale_fac,dict):
           return self.scale_fac['level' + str(level)]
           
+    def make_selection(x):
+#         if balance is None:
+#             return x
+#         else:
+#             ratio = balance['ratio']
+# #            alpha = balance['alpha']
 
+#             indicator = tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2)))
+#             length = indicator.shape[0]
+#             cur_ratio = tf.math.reduce_mean(indicator)
+            
+#             direction = 'ASCENDING'
+#             if cur_ratio > ratio:
+#                 cur_ratio = 1-cur_ratio
+#                 direction = 'DESCENDING'
+            
+#             q_ = tf.cast(length*(1-cur_ratio/ratio),dtype=tf.int32)
+#             if q_ > 0:
+#                 idx = tf.argsort(indicator,0,direction)
+#                 idx = idx[q_:]
+                
+#                 rr = tf.reduce_mean(tf.gather(indicator,idx,axis=0))
+#                 print(rr)
+#                 rr
+            
+            return x
+            
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
           return tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
       else:
           return class_labels_
 
+    balance = {'ratio':0.95}
 
     reptree = False
     if generate_type == 'tree_full':
@@ -243,19 +271,26 @@ class CropGenerator():
                                                            jitter=jitter,jitter_border_fix=jitter_border_fix,
                                                            overlap=overlap,resolution=resolution_,verbose=verbose)
 
-            
+      # for lazy  prediction return just the function      
       if lazyEval is not None:
-          return CropInstanceLazy(localCrop)      
+          return CropInstanceLazy(localCrop,self)      
           
+      
+        
+      
+        
+      
       
       # do the crop in the initial level
       x = localCrop(None,0)
       x['class_labels'] = extend_classlabels(x,class_labels_)
+      x = make_selection(x)
       
       scales = [x]
       for k in range(self.depth-1):
         x = localCrop(x,k+1)
         x['class_labels'] = extend_classlabels(x,class_labels_)
+        x = make_selection(x)
         scales.append(x)
 
       # if we want to train in tree mode we have to complete the tree
@@ -269,6 +304,9 @@ class CropGenerator():
               tmp = scales[k]['class_labels']
               tmp = tf.reshape(tf.tile(tf.expand_dims(tmp,1),[1,m,1]),[m*tmp.shape[0],tmp.shape[1]])              
               scales[k]['class_labels'] = tmp
+
+      
+
 
         
 
@@ -289,6 +327,10 @@ class CropGenerator():
     intermediate_loss = True     # whether we save output of intermediate layers
     if self.model is not None:
       intermediate_loss = self.model.intermediate_loss
+
+
+
+
 
     return CropInstance(pool,self,intermediate_loss)
 
@@ -693,6 +735,15 @@ class CropGenerator():
               "aspect_correction":forwarded_aspects
               }
 
+
+
+  def take_subselection(self, x, idx):
+        x['data_cropped'] = tf.gather(x['data_cropped'],(idx),axis=0)
+        x['local_box_index'] = tf.gather(x['local_box_index'],(idx),axis=0)
+        x['parent_box_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
+        x['parent_boxes'] = tf.gather(x['parent_boxes'],(idx),axis=0)
+        x['parent_box_scatter_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
+        return x
 
 
   def scatter_valid(self, index, data, size):
