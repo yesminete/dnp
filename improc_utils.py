@@ -343,30 +343,33 @@ def interp2lin(image,X,Y):
         index=np.concatenate([np.expand_dims(X,nD),np.expand_dims(Y,nD)],nD)
         index = tf.convert_to_tensor(index,dtype=tf.int32)
         return index
+   
     
+    ftype = image.dtype
+   
     res = [0]*sz[0]
     
     index = getIndex(Xint,Yint,0,0)
     w = tf.expand_dims((1-Xfrc)*(1-Yfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,0,1)
     w = tf.expand_dims((1-Xfrc)*(Yfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
         res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
     
     index = getIndex(Xint,Yint,1,0)
     w = tf.expand_dims((Xfrc)*(1-Yfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
         res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
     
     index = getIndex(Xint,Yint,1,1)
     w = tf.expand_dims((Xfrc)*(Yfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
         res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
@@ -415,51 +418,53 @@ def interp3lin(image,X,Y,Z):
     
     res = [0]*sz[0]
     
+    ftype = image.dtype
+    
     index = getIndex(Xint,Yint,Zint,0,0,0)
     w = tf.expand_dims((1-Xfrc)*(1-Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,1,0,0)
     w = tf.expand_dims((Xfrc)*(1-Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,0,1,0)
     w = tf.expand_dims((1-Xfrc)*(Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,1,1,0)
     w = tf.expand_dims((Xfrc)*(Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,0,0,1)
     w = tf.expand_dims((1-Xfrc)*(1-Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,1,0,1)
     w = tf.expand_dims((Xfrc)*(1-Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,0,1,1)
     w = tf.expand_dims((1-Xfrc)*(Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
     index = getIndex(Xint,Yint,Zint,1,1,1)
     w = tf.expand_dims((Xfrc)*(Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,tf.float32)
+    w = tf.cast(w,ftype)
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 

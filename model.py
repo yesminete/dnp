@@ -519,7 +519,7 @@ class PatchWorkModel(Model):
           a = np.expand_dims(np.squeeze(img1.get_fdata()),0)
           if len(a.shape) < nD+2:
               a = np.expand_dims(a,nD+1)
-          a = tf.convert_to_tensor(a,dtype=tf.float32)
+          a = tf.convert_to_tensor(a,dtype=self.cropper.ftype)
           ims.append(a)
       a = tf.concat(ims,nD+1)
       if scalevalue is not None:

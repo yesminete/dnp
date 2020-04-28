@@ -118,6 +118,7 @@ class CropGenerator():
                     create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
                     ndim=2,
+                    ftype=tf.float32
                     ):
     self.model = None
     self.patch_size = patch_size
@@ -130,6 +131,7 @@ class CropGenerator():
     self.create_indicator_classlabels = create_indicator_classlabels
     self.depth = depth
     self.ndim = ndim
+    self.ftype=ftype
 
 
   def serialize_(self):
@@ -364,7 +366,7 @@ class CropGenerator():
           conv_gauss = conv_gauss3D
           
       if smoothfac is not None and smoothfac > 0.0:
-        data_smoothed =  conv_gauss(data_parent,tf.constant(smoothfac,dtype=tf.float32))
+        data_smoothed =  conv_gauss(data_parent,tf.constant(smoothfac,dtype=self.ftype))
       else:
         data_smoothed =  data_parent
       ds0 = data_smoothed.shape[0]
@@ -391,7 +393,7 @@ class CropGenerator():
       start_abs = [None] * nD
       for k in range(nD):
         scfac = (local_boxes[0,(k+nD):(k+nD+1)]-local_boxes[0,k:k+1])/patch_size[k]*sz[k+1]
-        rans[k] = tf.cast(tf.range(patch_size[k]),dtype=tf.float32)*scfac
+        rans[k] = tf.cast(tf.range(patch_size[k]),dtype=self.ftype)*scfac
         start_abs[k] = local_boxes[:,k:(k+1)] * sz[k+1]
 
       start_abs = tf.transpose(tf.math.floor(start_abs),[1,0,2]);
@@ -449,7 +451,7 @@ class CropGenerator():
           idx = local_boxes[:,k+nD]>1
           local_boxes[idx,k] = local_boxes[idx,k] - local_boxes[idx,k+nD] + 1
           local_boxes[idx,nD+k] = 1
-      local_boxes = tf.convert_to_tensor(local_boxes,dtype=tf.float32)
+      local_boxes = tf.convert_to_tensor(local_boxes,dtype=self.ftype)
             
       return local_boxes
 
@@ -470,7 +472,7 @@ class CropGenerator():
         nums[k] = np.floor(1/delta)+1+overlap
         delta_small= (1-delta)/(nums[k]-1) -0.000001
         frac = nums[k]*delta-1
-        centers[k] = tf.cast(tf.range(nums[k]),dtype=tf.float32)*delta_small + delta*0.5
+        centers[k] = tf.cast(tf.range(nums[k]),dtype=self.ftype)*delta_small + delta*0.5
         totnum *= nums[k]
       centers = rep_rans(centers,nums,nD)
       
