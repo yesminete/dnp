@@ -646,6 +646,7 @@ class PatchWorkModel(Model):
             valid_ids = [],
             jitter=0,
             jitter_border_fix=False,
+            balance=None,
             num_samples_per_epoch=-1,
             showplot=True,
             autosave=True,
@@ -660,9 +661,9 @@ class PatchWorkModel(Model):
             rset = [resolutions[i] for i in subset]      
             
         if traintype == 'random':
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random',  num_patches=num_patches,augment=augment)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random',  num_patches=num_patches,augment=augment,balance=balance)
         elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,jitter_border_fix=jitter_border_fix,augment=augment)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,jitter_border_fix=jitter_border_fix,augment=augment,balance=balance)
         return c
       
     history = History()
@@ -702,6 +703,10 @@ class PatchWorkModel(Model):
                   callbacks=[history])
         end = timer()
         
+        c.scales=None
+        c=None
+        inputdata=None
+        targetdata=None
         
         
         loss = [None]*len(history.history['loss'])

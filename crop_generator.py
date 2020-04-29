@@ -187,31 +187,47 @@ class CropGenerator():
           return self.scale_fac['level' + str(level)]
           
     def make_selection(x):
-#         if balance is None:
-#             return x
-#         else:
-#             ratio = balance['ratio']
-# #            alpha = balance['alpha']
+        if balance is None:
+            return None
+        else:
+            ratio = balance['ratio']
+            alpha = 0.5
+            if 'alpha'  in balance:                
+               alpha = balance['alpha']
 
-#             indicator = tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2)))
-#             length = indicator.shape[0]
-#             cur_ratio = tf.math.reduce_mean(indicator)
+            indicator = tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2)))
+            indicator_weighted = tf.math.reduce_mean(x['labels_cropped'],list(range(1,self.ndim+2)))
+
+            length = indicator.shape[0]
+            cur_ratio = tf.math.reduce_mean(indicator)
             
-#             direction = 'ASCENDING'
-#             if cur_ratio > ratio:
-#                 cur_ratio = 1-cur_ratio
-#                 direction = 'DESCENDING'
+            print('current sample balance:' + str(cur_ratio.numpy()) + " vs desired: " + str(ratio))
             
-#             q_ = tf.cast(length*(1-cur_ratio/ratio),dtype=tf.int32)
-#             if q_ > 0:
-#                 idx = tf.argsort(indicator,0,direction)
-#                 idx = idx[q_:]
+            if cur_ratio < 1.0 and cur_ratio > 0.0:
+                direction = 'ASCENDING'
+                if cur_ratio > ratio:
+                    cur_ratio = 1-cur_ratio
+                    direction = 'DESCENDING'
                 
-#                 rr = tf.reduce_mean(tf.gather(indicator,idx,axis=0))
-#                 print(rr)
-#                 rr
+                r_ = cur_ratio/ratio
+                if r_ < alpha:
+                    r_ = alpha
+                q_ = tf.cast(length*(1-r_),dtype=tf.int32)
+                
+                if q_ > 0:
+                    idx = tf.argsort(indicator,0,direction)
+                    idx = idx[q_:]                
+                    rr = tf.reduce_mean(tf.gather(indicator,idx,axis=0))
+                    print('throwing away ' + str(q_.numpy()) + " samples, giving ratio of " + str(rr.numpy()))
+                    return idx
+                else:
+                    print('bug in make_selection')
+                    
+            else:
+                print('not able to change balance')
+      
             
-            return x
+            return None
             
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
@@ -219,7 +235,6 @@ class CropGenerator():
       else:
           return class_labels_
 
-    balance = {'ratio':0.95}
 
     reptree = False
     if generate_type == 'tree_full':
@@ -286,14 +301,24 @@ class CropGenerator():
       # do the crop in the initial level
       x = localCrop(None,0)
       x['class_labels'] = extend_classlabels(x,class_labels_)
-      x = make_selection(x)
-      
+
+      idx = make_selection(x)
+      self.take_subselection(x,idx)
+        
       scales = [x]
       for k in range(self.depth-1):
-        x = localCrop(x,k+1)
-        x['class_labels'] = extend_classlabels(x,class_labels_)
-        x = make_selection(x)
+        x = localCrop(x,k+1)        
+        x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
+
+        idx = make_selection(x)
+        if idx is not None:
+            for s in scales:
+                self.take_subselection(s,idx)
+        
+
+
+
 
       # if we want to train in tree mode we have to complete the tree
       if reptree:
@@ -740,12 +765,34 @@ class CropGenerator():
 
 
   def take_subselection(self, x, idx):
-        x['data_cropped'] = tf.gather(x['data_cropped'],(idx),axis=0)
-        x['local_box_index'] = tf.gather(x['local_box_index'],(idx),axis=0)
-        x['parent_box_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
-        x['parent_boxes'] = tf.gather(x['parent_boxes'],(idx),axis=0)
-        x['parent_box_scatter_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
+        if idx is None:
+            return x
+        # x['data_cropped'] = tf.gather(x['data_cropped'],(idx),axis=0)
+        # x['local_box_index'] = tf.gather(x['local_box_index'],(idx),axis=0)
+        # x['parent_box_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
+        # x['parent_boxes'] = tf.gather(x['parent_boxes'],(idx),axis=0)
+        # x['parent_box_scatter_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
+        # if 'class_labels' in x:
+        #     if x['class_labels'] is not None:
+        #         x['class_labels'] = tf.gather(x['class_labels'],(idx),axis=0)
+        # if 'labels_cropped' in x:
+        #     if x['labels_cropped'] is not None:
+        #         x['labels_cropped'] = tf.gather(x['labels_cropped'],(idx),axis=0)        
+        props = ["data_cropped" , 
+                 'labels_cropped',
+                 "local_boxes",
+                 'local_box_index',
+                 'parent_boxes',
+                 'parent_box_index',
+                 'parent_box_scatter_index',
+                 'class_labels',
+                 'labels_cropped']
+        for p in props:
+            if p in x:
+                if x[p] is not None:
+                    x[p] = tf.gather(x[p],(idx),axis=0)                            
         return x
+                
 
 
   def scatter_valid(self, index, data, size):
