@@ -178,7 +178,7 @@ cgen = patchwork.CropGenerator(patch_size = (16,16),
                   scale_fac =  0.4, 
                   scale_fac_ref = 'min',
                   init_scale = [100,200],
-                  create_indicator_classlabels=True,
+                  #create_indicator_classlabels=True,
                   depth=3)
 
 
@@ -190,10 +190,10 @@ model = patchwork.PatchWorkModel(cgen,
                       intermediate_loss=True,
                       intermediate_out=4,
 
-                      classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
-                      cls_intermediate_out=2,
-                      cls_intermediate_loss=True,
-                      classifier_train=True,
+                    #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                    #  cls_intermediate_out=2,
+                    #  cls_intermediate_loss=True,
+                    #  classifier_train=True,
                       
                       finalBlock=layers.Activation('sigmoid'),
                       forward_type='simple',
@@ -251,7 +251,8 @@ model.train(trainset,labelset,
             resolutions=resolutions,
             valid_ids = [],
             augment=None,
-            num_patches=100,
+            balance={'ratio':0.5,'alpha':0.95},
+            num_patches=500,
             epochs=3)
 
 

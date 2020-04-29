@@ -785,8 +785,7 @@ class CropGenerator():
                  'parent_boxes',
                  'parent_box_index',
                  'parent_box_scatter_index',
-                 'class_labels',
-                 'labels_cropped']
+                 'class_labels']
         for p in props:
             if p in x:
                 if x[p] is not None:
