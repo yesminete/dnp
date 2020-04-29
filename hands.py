@@ -251,7 +251,7 @@ model.train(trainset,labelset,
             resolutions=resolutions,
             valid_ids = [],
             augment=None,
-            balance={'ratio':0.5,'alpha':0.95},
+            balance={'ratio':0.5,'alpha':0.05},
             num_patches=500,
             epochs=3)
 

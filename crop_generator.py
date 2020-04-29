@@ -201,7 +201,7 @@ class CropGenerator():
             length = indicator.shape[0]
             cur_ratio = tf.math.reduce_mean(indicator)
             
-            print('current sample balance:' + str(cur_ratio.numpy()) + " vs desired: " + str(ratio))
+            print(' found balance: ' + str(cur_ratio.numpy()) + " vs desired: " + str(ratio))
             
             if cur_ratio < 1.0 and cur_ratio > 0.0:
                 direction = 'ASCENDING'
@@ -214,17 +214,17 @@ class CropGenerator():
                     r_ = alpha
                 q_ = tf.cast(length*(1-r_),dtype=tf.int32)
                 
-                if q_ > 0:
+                if q_ >= 0:
                     idx = tf.argsort(indicator,0,direction)
                     idx = idx[q_:]                
                     rr = tf.reduce_mean(tf.gather(indicator,idx,axis=0))
-                    print('throwing away ' + str(q_.numpy()) + " samples, giving ratio of " + str(rr.numpy()))
+                    print('  throwing away ' + str(q_.numpy()) + " samples, giving ratio of " + str(rr.numpy()) + " / #samples:" + str(len(idx)))
                     return idx
                 else:
-                    print('bug in make_selection')
+                    print('  bug in make_selection')
                     
             else:
-                print('not able to change balance')
+                print('  not able to change balance')
       
             
             return None
