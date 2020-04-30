@@ -689,7 +689,6 @@ class PatchWorkModel(Model):
         end = timer()
         print("time elapsed, sampling: " + str(end - start) )
       
-        
       
         ### fitting
       

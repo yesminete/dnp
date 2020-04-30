@@ -196,7 +196,7 @@ class CropGenerator():
                alpha = balance['alpha']
 
             indicator = tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2)))
-            indicator_weighted = tf.math.reduce_mean(x['labels_cropped'],list(range(1,self.ndim+2)))
+            indicator = tf.cast(indicator>0.5,dtype=tf.float32)
 
             length = indicator.shape[0]
             cur_ratio = tf.math.reduce_mean(indicator)
@@ -205,16 +205,17 @@ class CropGenerator():
             
             if cur_ratio < 1.0 and cur_ratio > 0.0:
                 direction = 'ASCENDING'
+                the_ratio = ratio
                 if cur_ratio > ratio:
-                    cur_ratio = 1-cur_ratio
+                    the_ratio = 1-ratio
                     direction = 'DESCENDING'
                 
-                r_ = cur_ratio/ratio
+                r_ = cur_ratio/the_ratio
                 if r_ < alpha:
                     r_ = alpha
                 q_ = tf.cast(length*(1-r_),dtype=tf.int32)
                 
-                if q_ >= 0:
+                if q_ >= 0 and q_ < indicator.shape[0]-1:
                     idx = tf.argsort(indicator,0,direction)
                     idx = idx[q_:]                
                     rr = tf.reduce_mean(tf.gather(indicator,idx,axis=0))
@@ -294,16 +295,27 @@ class CropGenerator():
           
       
         
-      
-        
+      # def printshape(x,l):
+      #   props = ["data_cropped" , 
+      #            'labels_cropped',
+      #            "local_boxes",
+      #            'local_box_index',
+      #            'parent_boxes',
+      #            'parent_box_index',
+      #            'parent_box_scatter_index',
+      #            'class_labels']
+      #   st = ""
+      #   for p in props:
+      #       if p in x:
+      #           if x[p] is not None:        
+      #               st = st + p + ":" + str(x[p].shape[0]) + ", "
+      #   print( str(l) + " " + st)
+                    
       
       
       # do the crop in the initial level
       x = localCrop(None,0)
       x['class_labels'] = extend_classlabels(x,class_labels_)
-
-      idx = make_selection(x)
-      self.take_subselection(x,idx)
         
       scales = [x]
       for k in range(self.depth-1):
@@ -311,12 +323,14 @@ class CropGenerator():
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
 
-        idx = make_selection(x)
-        if idx is not None:
-            for s in scales:
-                self.take_subselection(s,idx)
+      idx = make_selection(x)
+      if idx is not None:
+          for s in scales:
+             self.take_subselection(s,idx)
+             
         
-
+   #   if scales[-1]['data_cropped'].shape[0] != scales[-1]['local_boxes'].shape[0]:
+   #       scales
 
 
 
@@ -726,13 +740,16 @@ class CropGenerator():
       else:
         res_labels = None
 
+  #    if res_data.shape[0] != local_boxes.shape[0]:
+  #        res_data
+
+
       # for testing
       if test:
         if crops is None:
           mult = (nD+2)*[1]
           mult[0] = num_patches
           images = tf.tile(images,mult)
-       # test = tf.image.crop_and_resize(images,local_boxes,box_indices,patch_size)
         test = tf.gather_nd(images,local_box_index,batch_dims=1)
       else:
         test = None
@@ -789,7 +806,7 @@ class CropGenerator():
         for p in props:
             if p in x:
                 if x[p] is not None:
-                    x[p] = tf.gather(x[p],(idx),axis=0)                            
+                    x[p] = tf.gather(x[p],(idx),axis=0)      
         return x
                 
 
