@@ -300,12 +300,12 @@ class CropGenerator():
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
 
-             
-      indicator = tf.math.reduce_max(scales[-1]['labels_cropped'],list(range(1,self.ndim+2)))
-      indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
-      length = indicator.shape[0]
-      cur_ratio = tf.math.reduce_mean(indicator)        
-      print(' #samples:'+ str(length) + ' balance: ' + str(cur_ratio.numpy()) )
+      if scales[-1]['labels_cropped'] is not None:
+          indicator = tf.math.reduce_max(scales[-1]['labels_cropped'],list(range(1,self.ndim+2)))
+          indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
+          length = indicator.shape[0]
+          cur_ratio = tf.math.reduce_mean(indicator)        
+          print(' #samples:'+ str(length) + ' balance: ' + str(cur_ratio.numpy()) )
 
         
       # if we want to train in tree mode we have to complete the tree
@@ -515,7 +515,7 @@ class CropGenerator():
           centers = np.concatenate(centers,1)
       else:
           centers = draw_rnd(labels,M=numboxes//labels.shape[0])
-          centers = tf.tile(centers,[1,nD]).numpy()
+          centers = tf.tile(centers,[1,2]).numpy()
       local_boxes = centers + bbox_sz
           
       
