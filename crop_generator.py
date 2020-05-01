@@ -300,12 +300,13 @@ class CropGenerator():
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
 
-      if scales[-1]['labels_cropped'] is not None:
-          indicator = tf.math.reduce_max(scales[-1]['labels_cropped'],list(range(1,self.ndim+2)))
-          indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
-          length = indicator.shape[0]
-          cur_ratio = tf.math.reduce_mean(indicator)        
-          print(' #samples:'+ str(length) + ' balance: ' + str(cur_ratio.numpy()) )
+      for k in range(self.depth):
+          if scales[k]['labels_cropped'] is not None:
+              indicator = tf.math.reduce_max(scales[k]['labels_cropped'],list(range(1,self.ndim+2)))
+              indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
+              length = indicator.shape[0]
+              cur_ratio = tf.math.reduce_mean(indicator)        
+              print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
 
         
       # if we want to train in tree mode we have to complete the tree
@@ -461,7 +462,7 @@ class CropGenerator():
       def draw_rnd(label,M):        
 
         ratio = balance['ratio']
-        N = 100
+        N = 10000
         numround = 100
         if 'N' in balance:
             N = balance['N']
@@ -482,7 +483,7 @@ class CropGenerator():
                 Q = tf.gather_nd(L,tf.convert_to_tensor(R,dtype=tf.int32))
                 pos = tf.reduce_sum(Q)
                 neg = N-pos
-                if pos-N*ratio > -0.01:
+                if  pos-N*ratio > -0.01:
                     print("warning: cannot achieve desired sample ratio, taking uniform")
                     P = Q*0+1
                 else:

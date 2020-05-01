@@ -36,7 +36,8 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                # subjects = '15341572', #'#Tag:MIDItrain',
                                 contrasts_selector = ['T1.nii.gz'],
                                 labels_selector = ['anno*/testset.ano.json'],
-                                annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ]       },
+                                annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
+                                                        ,'sizefac':0.5},
                                 exclude_incomplete_labels=True,
                                 
                                 )
@@ -110,19 +111,22 @@ biConvolution = patchwork.biConvolution
 def BNrelu(name=None):
   return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
 
-n = 5
+n = 2
+nD = 3
+s = (2,2,2)
+pooly = lambda: layers.MaxPooling3D(pool_size=s)
 
 def conv_down(name=None,dest=None):
-  x = biConvolution(n,3,name=name)
+  x = biConvolution(n,3,name=name,nD=nD)
   x.dest = dest
   #return layers.Conv2D(n,3,padding='SAME') 
   return x
 def conv_up(name=None):
   #return layers.Conv2DTranspose(n,3,padding='SAME',strides=(2,2)) 
-  return biConvolution(n,3,transpose=True,strides=(2,2),name=name)
+  return biConvolution(n,3,transpose=True,strides=s,name=name,nD=nD)
 def conv_out(outK,name=None):
   #return layers.Conv2D(outK,3,padding='SAME') 
-  return biConvolution(outK,3,name=name)
+  return biConvolution(outK,3,name=name,nD=nD)
 
 def createBlock_(name=None,depth=2,outK=1):
   block = patchwork.CNNblock(name=name)
@@ -130,7 +134,7 @@ def createBlock_(name=None,depth=2,outK=1):
     id_d = name+str(1000 + z+1)
     id_u = name+str(2000 + depth-z+1)
     block.add( conv_down(id_d+"1conv")) #  conv_down(name=id_d+"2conv",  dest=id_u+"relu" ) )
-    block.add( BNrelu(name=id_d+"2relu") + [layers.MaxPooling2D(pool_size=(2,2)) ] )    
+    block.add( BNrelu(name=id_d+"2relu") + [pooly() ] )    
     block.add( conv_up(name=id_u+"conv"))
     block.add( BNrelu(name=id_u+"relu"))
   block.add([layers.Dropout(name=name+"3001",rate=0.5) , conv_out(outK)] )
@@ -142,7 +146,7 @@ def createBlock(depth=2,outK=1):
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
     theLayers[id_d+"conv"] = [{'f': conv_down() } , {'f': conv_down(), 'dest':id_u+"relu" }  ]
-    theLayers[id_d+"relu"] = BNrelu() + [layers.MaxPooling2D(pool_size=(2,2)) ]
+    theLayers[id_d+"relu"] = BNrelu() + [pooly() ]
     theLayers[id_u+"conv"] =  [conv_up()]
     theLayers[id_u+"relu"] = BNrelu()
   theLayers["3000"] =  [layers.Dropout(rate=0.5), conv_out(outK)]
@@ -153,7 +157,7 @@ def createClassifier(name=None,depth=4,outK=2):
   for z in range(depth):
     id_d = str(1000 + z+1)
     theLayers[id_d+"conv"] = conv_down()
-    theLayers[id_d+"relu"] = BNrelu() + [layers.MaxPooling2D(pool_size=(2,2)) ]
+    theLayers[id_d+"relu"] = BNrelu() + [pooly() ]
   theLayers["3001"] =  layers.Flatten()
   theLayers["3002"] =  layers.Dense(outK)
   theLayers["3003"] = layers.Activation('sigmoid')
@@ -174,12 +178,13 @@ def createClassifier(name=None,depth=4,outK=2):
 # print(q.shape)
 #model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
 
-cgen = patchwork.CropGenerator(patch_size = (16,16), 
+cgen = patchwork.CropGenerator(patch_size = (16,16,16), 
                   scale_fac =  0.4, 
                   scale_fac_ref = 'min',
-                  init_scale = [100,200],
+                  init_scale = -1,
+                  ndim=nD,
                   #create_indicator_classlabels=True,
-                  depth=3)
+                  depth=2)
 
 
 model = patchwork.PatchWorkModel(cgen,
@@ -201,7 +206,7 @@ model = patchwork.PatchWorkModel(cgen,
 #                      num_classes = 1                      
                       )
 #%
-x = model.apply_full(trainset[0][0:1,:,:,:],resolution=resolutions[0],
+x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
                      jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
                      lazyEval=0.3#{'reduceFun':'classifier_output'}
                      )
@@ -218,10 +223,10 @@ plt.imshow(x[:,:,0],vmin=0,vmax=0.0000000001)
 
 #model = patchwork.PatchWorkModel.load('models/test')
 #%%
-model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
+model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=1)
 
 
-
+augment
 #%%
 #l = lambda x,y: tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
 #l = tf.keras.losses.mean_squared_error
@@ -250,8 +255,8 @@ augment = patchwork.Augmenter(    morph_width = 150
 model.train(trainset,labelset,
             resolutions=resolutions,
             valid_ids = [],
-            augment=augment,
-            balance={'ratio':0.2},
+            augment=None,
+            balance={'ratio':0.7},
             num_patches=100,
             epochs=3)
 
