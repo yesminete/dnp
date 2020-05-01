@@ -180,50 +180,6 @@ class CropGenerator():
           return [self.scale_fac[level]]*self.ndim
       elif isinstance(self.scale_fac,dict):
           return self.scale_fac['level' + str(level)]
-          
-    # def make_selection(x):
-    #     if balance is None:
-    #         return None
-    #     else:
-    #         ratio = balance['ratio']
-    #         alpha = 0.5
-    #         if 'alpha'  in balance:                
-    #            alpha = balance['alpha']
-
-    #         indicator = tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2)))
-    #         indicator = tf.cast(indicator>0.5,dtype=tf.float32)
-
-    #         length = indicator.shape[0]
-    #         cur_ratio = tf.math.reduce_mean(indicator)
-            
-    #         print(' found balance: ' + str(cur_ratio.numpy()) + " vs desired: " + str(ratio))
-            
-    #         if cur_ratio < 1.0 and cur_ratio > 0.0:
-    #             direction = 'ASCENDING'
-    #             the_ratio = ratio
-    #             if cur_ratio > ratio:
-    #                 the_ratio = 1-ratio
-    #                 direction = 'DESCENDING'
-                
-    #             r_ = cur_ratio/the_ratio
-    #             if r_ < alpha:
-    #                 r_ = alpha
-    #             q_ = tf.cast(length*(1-r_),dtype=tf.int32)
-                
-    #             if q_ >= 0 and q_ < indicator.shape[0]-1:
-    #                 idx = tf.argsort(indicator,0,direction)
-    #                 idx = idx[q_:]                
-    #                 rr = tf.reduce_mean(tf.gather(indicator,idx,axis=0))
-    #                 print('  throwing away ' + str(q_.numpy()) + " samples, giving ratio of " + str(rr.numpy()) + " / #samples:" + str(len(idx)))
-    #                 return idx
-    #             else:
-    #                 print('  bug in make_selection')
-                    
-    #         else:
-    #             print('  not able to change balance')
-      
-            
-    #         return None
             
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
@@ -344,23 +300,6 @@ class CropGenerator():
     return CropInstance(pool,self,intermediate_loss)
 
 
-      # def printshape(x,l):
-      #   props = ["data_cropped" , 
-      #            'labels_cropped',
-      #            "local_boxes",
-      #            'local_box_index',
-      #            'parent_boxes',
-      #            'parent_box_index',
-      #            'parent_box_scatter_index',
-      #            'class_labels']
-      #   st = ""
-      #   for p in props:
-      #       if p in x:
-      #           if x[p] is not None:        
-      #               st = st + p + ":" + str(x[p].shape[0]) + ", "
-      #   print( str(l) + " " + st)
-
-
 
   def tree_complete(self,scales):
     b = scales[-1]['data_cropped'].shape[0]
@@ -463,9 +402,11 @@ class CropGenerator():
 
         ratio = balance['ratio']
         N = 10000
-        numround = 100
+        numrounds = 1000
         if 'N' in balance:
             N = balance['N']
+        if 'numrounds' in balance:
+            numrounds = balance['numrounds']
           
         points_tot = []
         for k in range(label.shape[0]):
@@ -476,7 +417,7 @@ class CropGenerator():
             points = []
             if N < M:
                 N = M # num drawn samples per round
-            while True:
+            for j in range(numrounds):
                 R = np.random.uniform(low=0,high=1,size=(N,nD))
                 for i in range(nD):            
                     R[:,i] = np.floor(R[:,i]*sz[i])
@@ -498,25 +439,42 @@ class CropGenerator():
                 R = R/sz
                 points.append(R)
                 cnt = cnt + R.shape[0]
-                if cnt > M:
+                if cnt >= M:
                     break
+
+            if cnt < M:
+                print("warning: cannot achieve desired sample ratio, taking uniform (2)")
+               
+                return None
+                
             points = tf.concat(points,0)
             points = points[0:M,:]
             points_tot.append(points)
-        return tf.concat(points_tot,0)
-      
-      nD = self.ndim
-      
-      if labels is None or balance is None:
+        
+        centers = tf.concat(points_tot,0)            
+        centers = tf.tile(centers,[1,2]).numpy()
+            
+        return centers
+
+      def draw_uniform():
           centers = [None]*(nD*2)
           for k in range(nD):
             c = np.random.uniform(0,1,(numboxes, 1))
             centers[k] = c
             centers[k+nD] = c
           centers = np.concatenate(centers,1)
+          return centers
+        
+
+      nD = self.ndim
+      
+      if labels is None or balance is None:
+          centers = draw_uniform()
       else:
           centers = draw_rnd(labels,M=numboxes//labels.shape[0])
-          centers = tf.tile(centers,[1,2]).numpy()
+          if centers is None:
+              centers = draw_uniform()
+              
       local_boxes = centers + bbox_sz
           
       
@@ -826,17 +784,6 @@ class CropGenerator():
   def take_subselection(self, x, idx):
         if idx is None:
             return x
-        # x['data_cropped'] = tf.gather(x['data_cropped'],(idx),axis=0)
-        # x['local_box_index'] = tf.gather(x['local_box_index'],(idx),axis=0)
-        # x['parent_box_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
-        # x['parent_boxes'] = tf.gather(x['parent_boxes'],(idx),axis=0)
-        # x['parent_box_scatter_index'] = tf.gather(x['parent_box_scatter_index'],(idx),axis=0)
-        # if 'class_labels' in x:
-        #     if x['class_labels'] is not None:
-        #         x['class_labels'] = tf.gather(x['class_labels'],(idx),axis=0)
-        # if 'labels_cropped' in x:
-        #     if x['labels_cropped'] is not None:
-        #         x['labels_cropped'] = tf.gather(x['labels_cropped'],(idx),axis=0)        
         props = ["data_cropped" , 
                  'labels_cropped',
                  "local_boxes",

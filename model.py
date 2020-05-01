@@ -636,6 +636,41 @@ class PatchWorkModel(Model):
     plt.pause(0.001)
 
 
+  # Trains the model for a certain number of iterations. For each iteration 
+  # a new number of patches is sampled and fitted for a certain number of epochs.
+  # Potentially an augmentation scheme can be applied,
+  # input:
+  #   trainset - your dataset
+  #   labelset - your labelset     
+  #   trainset.shape = [batch_dim,w,h,(d),f0]
+  #   labelset.shape = [batch_dim,w,h,(d),f1]
+  #     trainset and label set may also be list of tensors, which is needed
+  #     when  dimensions of examples differ. But note that dimensions are 
+  #     only allowed to differ, if init_scale=-1 or init_scale is set to 
+  #     a certain fixed shape.
+  #   num_its - number of iterations trained
+  #   epochs - number of epochs trained in each iteration
+  #   train_type - type of patch sampling scheme, 'random' or 'tree'
+  #   num_patches - number of patch samples (random) or number of trees (tree).
+  #   jitter,jitter_border_fix - if train_type=tree, the amount of randomness of
+  #         tree branches (0<jitter<1). If jitter_border_fix=True, the border 
+  #         patches are aligned with the border
+  #   balance -  a dict {'ratio':r,'N':N,'numrounds':nr} , where r gives desired balance between
+  #         positive and negative examples, N the number of tries per chunk and nr
+  #         the number of chunks
+  #   num_samples_per_epoch - either -1 (all) or a the number of samples taken from 
+  #         trainset for patch generation (only possible if trainset is a list),
+  #         num_samples_per_epoch <= len(trainset)
+  #   valid_ids a list of indices in trainset, corresponding to vaidation examples
+  #         not used for training
+  #   showplot - show loss info during training
+  #   autosave - save model automatlicaly during training
+  #   augment  - a function for augmentation (data,labels) => (augdata,auglabels)
+  # output:
+  #   a list of levels (see createCropsLocal for content)
+
+
+
   def train(self,
             trainset,labelset, 
             resolutions=None,
@@ -767,9 +802,6 @@ class patchworkModelEncoder(json.JSONEncoder):
            return obj.tolist()
         return json.dumps(obj,cls=patchworkModelEncoder)
         
-
-
-
 
 
 def Augmenter( morph_width = 150,
