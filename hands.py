@@ -79,7 +79,7 @@ for k in range(2):
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-  labelset.append( tf.convert_to_tensor(a[...,0:1],dtype=tf.float32)   )
+  labelset.append( tf.convert_to_tensor(a[...,8:9],dtype=tf.float32)   )
   
   resolutions.append(img.header['pixdim'][1:4])
 #  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
@@ -250,9 +250,9 @@ augment = patchwork.Augmenter(    morph_width = 150
 model.train(trainset,labelset,
             resolutions=resolutions,
             valid_ids = [],
-            augment=None,
-            balance={'ratio':0.5,'alpha':0.05},
-            num_patches=500,
+            augment=augment,
+            balance={'ratio':0.2},
+            num_patches=100,
             epochs=3)
 
 
