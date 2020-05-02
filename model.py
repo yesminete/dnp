@@ -685,7 +685,9 @@ class PatchWorkModel(Model):
             num_samples_per_epoch=-1,
             showplot=True,
             autosave=True,
-            augment=None
+            augment=None,
+            loss=None,
+            optimizer=None
             ):
       
     def getSample(subset):
@@ -701,6 +703,13 @@ class PatchWorkModel(Model):
             c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,jitter_border_fix=jitter_border_fix,augment=augment,balance=balance)
         return c
       
+    if loss is not None:
+        if optimizer is None:
+            optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+        print("compiling ...")
+        self.compile(loss=loss, optimizer=optimizer)
+
+              
     history = History()
             
     for i in range(num_its):
@@ -724,7 +733,6 @@ class PatchWorkModel(Model):
         end = timer()
         print("time elapsed, sampling: " + str(end - start) )
       
-        break
         ### fitting
       
         inputdata = c.getInputData()

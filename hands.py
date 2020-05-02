@@ -202,7 +202,7 @@ model = patchwork.PatchWorkModel(cgen,
                       
                       finalBlock=layers.Activation('sigmoid'),
                       forward_type='simple',
-                      num_labels = labelset[0].shape[3],
+                      num_labels = labelset[0].shape[-1],
 #                      num_classes = 1                      
                       )
 #%
@@ -212,33 +212,26 @@ x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
                      )
 
 
-plt.imshow(x[:,:,0],vmin=0,vmax=0.0000000001)
-#model.summary()
+#plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
+
+model.summary()
 # model.save('xxx')
 # model = patchwork.PatchWorkModel.load('xxx')
 # model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
 #cgen.testtree(labelset[0][0:1,:,:,5:6])
 
-
 #model = patchwork.PatchWorkModel.load('models/test')
 #%%
 model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=1)
 
 
-augment
 #%%
 #l = lambda x,y: tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
 #l = tf.keras.losses.mean_squared_error
 l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
 l_logits = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True)
-loss = [l,l_logits,l]
-
-
-adam = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
-
-model.compile(loss=loss, optimizer=adam)
-cgen = model.cropper
+loss = [l_logits,l]
 
 
 augment = patchwork.Augmenter(    morph_width = 150
@@ -254,6 +247,7 @@ augment = patchwork.Augmenter(    morph_width = 150
 
 model.train(trainset,labelset,
             resolutions=resolutions,
+            loss=loss,
             valid_ids = [],
             augment=None,
             balance={'ratio':0.7},

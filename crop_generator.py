@@ -361,7 +361,8 @@ class CropGenerator():
         rans[k] = tf.cast(tf.range(patch_size[k]),dtype=self.ftype)*scfac
         start_abs[k] = local_boxes[:,k:(k+1)] * sz[k+1]
 
-      start_abs = tf.transpose(tf.math.floor(start_abs),[1,0,2]);
+#      start_abs = tf.transpose(tf.math.floor(start_abs),[1,0,2]);
+      start_abs = tf.transpose(start_abs,[1,0,2]);
       res_shape = [1] * (nD+2)
       res_shape[0] = local_boxes.shape[0]
       res_shape[nD+1] = nD
@@ -369,7 +370,8 @@ class CropGenerator():
 
       qwq = tf.expand_dims(rep_rans(rans,patch_size,nD),0)
 
-      local_box_index = tf.dtypes.cast(start_abs+qwq+0.5,dtype=tf.int32)
+#      local_box_index = tf.dtypes.cast(start_abs+qwq+0.5,dtype=tf.int32)
+      local_box_index = tf.dtypes.cast(tf.floor(start_abs+qwq),dtype=tf.int32)
 
 
       ## clip indices
@@ -709,13 +711,16 @@ class CropGenerator():
           local_boxes = tf.reshape(local_boxes,[local_boxes.shape[0]*local_boxes.shape[1], 2*nD])
       
 
+      dest_full_size = [None]*(nD+1)
+      for k in range(nD):
+          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=tf.float32)
+
       # compute the index suitable for gather_nd
       local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size)
       parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size)
-      parent_box_scatter_index, dest_full_size = self.convert_to_gatherND_index(parent_boxes,None,patch_size)
+      parent_box_scatter_index, dest_full_size = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size)
+#      parent_box_scatter_index, dest_full_size = self.convert_to_gatherND_index(parent_boxes,None,patch_size)
   
-      for k in range(nD):
-          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=tf.int32)
 
 
       resolution = []
