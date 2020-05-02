@@ -361,7 +361,6 @@ class CropGenerator():
         rans[k] = tf.cast(tf.range(patch_size[k]),dtype=self.ftype)*scfac
         start_abs[k] = local_boxes[:,k:(k+1)] * sz[k+1]
 
-#      start_abs = tf.transpose(tf.math.floor(start_abs),[1,0,2]);
       start_abs = tf.transpose(start_abs,[1,0,2]);
       res_shape = [1] * (nD+2)
       res_shape[0] = local_boxes.shape[0]
@@ -370,8 +369,7 @@ class CropGenerator():
 
       qwq = tf.expand_dims(rep_rans(rans,patch_size,nD),0)
 
-#      local_box_index = tf.dtypes.cast(start_abs+qwq+0.5,dtype=tf.int32)
-      local_box_index = tf.dtypes.cast(tf.floor(start_abs+qwq),dtype=tf.int32)
+      local_box_index = tf.dtypes.cast(tf.floor(start_abs+qwq+0.5),dtype=tf.int32)
 
 
       ## clip indices

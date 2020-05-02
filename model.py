@@ -380,7 +380,7 @@ class PatchWorkModel(Model):
       output = output + current_output
     
     if self.finalBlock is not None and self.spatial_train:
-       output[-1] = self.finalBlock(output[-1])
+      output[-1] = self.finalBlock(output[-1])
     
     if not self.intermediate_loss:
       if self.spatial_train and self.classifier_train:
@@ -400,7 +400,7 @@ class PatchWorkModel(Model):
                  overlap=0,
                  repetitions=5,           
                  branch_factor=1,
-                 scale_to_original=False,
+                 scale_to_original=True,
                  verbose=False,
                  num_chunks=1,
                  lazyEval = None
@@ -488,7 +488,7 @@ class PatchWorkModel(Model):
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
              for k in level:
-                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=True))                        
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD))                        
          if single:
            res = res[0]
      

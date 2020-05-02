@@ -177,14 +177,15 @@ def createClassifier(name=None,depth=4,outK=2):
 # q = x(tmp)
 # print(q.shape)
 #model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
-
-cgen = patchwork.CropGenerator(patch_size = (16,16,16), 
-                  scale_fac =  0.4, 
-                  scale_fac_ref = 'min',
+#patch_size = (16,16,16), 
+ #                 scale_fac =  0.7, 
+cgen = patchwork.CropGenerator(patch_size = (8,8,8), 
+                  scale_fac =  0.7, 
+                  scale_fac_ref = 'max',
                   init_scale = -1,
                   ndim=nD,
                   #create_indicator_classlabels=True,
-                  depth=2)
+                  depth=1)
 
 
 model = patchwork.PatchWorkModel(cgen,
@@ -205,16 +206,18 @@ model = patchwork.PatchWorkModel(cgen,
                       num_labels = labelset[0].shape[-1],
 #                      num_classes = 1                      
                       )
-#%
-x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
-                     jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
-                     lazyEval=0.3#{'reduceFun':'classifier_output'}
-                     )
+# #%
+# x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
+#                      jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
+#                      lazyEval=0.3#{'reduceFun':'classifier_output'}
+#                      )
 
+res = model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=4,verbose=True)
 
+print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 
-model.summary()
+#model.summary()
 # model.save('xxx')
 # model = patchwork.PatchWorkModel.load('xxx')
 # model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
@@ -223,7 +226,7 @@ model.summary()
 
 #model = patchwork.PatchWorkModel.load('models/test')
 #%%
-model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=1)
+res = model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=1,verbose=True)
 
 
 #%%
