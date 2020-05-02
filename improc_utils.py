@@ -302,6 +302,9 @@ def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
         X,Y = np.meshgrid(np.arange(0,dest_shape[0]),np.arange(0,dest_shape[1]),indexing='ij')
         X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
         Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
+        if edge_center:
+            X = X + 0.5
+            Y = Y + 0.5
         res = interp2lin(image,X,Y)
     if nD==3:
         sz = image.shape
@@ -309,6 +312,10 @@ def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
         X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
         Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
         Z = tf.cast(Z,dtype=tf.float32)/dest_shape[2]*sz[3]
+        if edge_center:
+            X = X + 0.5
+            Y = Y + 0.5
+            Z = Z + 0.5
         res = interp3lin(image,X,Y,Z)
         
     if not batch_dim:

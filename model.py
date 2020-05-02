@@ -488,7 +488,7 @@ class PatchWorkModel(Model):
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
              for k in level:
-                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=True))                        
          if single:
            res = res[0]
      
