@@ -12,7 +12,6 @@ from . improc_utils import *
 from timeit import default_timer as timer
 from collections.abc import Iterable
 
-
 ########## Cropmodel ##########################################
 
 
@@ -36,7 +35,7 @@ class CropInstanceLazy:
       return getNext
             
   def stitchResult(self,r,level):
-     return stitchResult(r,level,self.scales)
+     return stitchResult(r,level,self.scales,self.cropper.scatter_type)
 
 
 
@@ -84,10 +83,10 @@ class CropInstance:
     return out
 
   def stitchResult(self,r,level):
-     return stitchResult(r,level,self.scales)
+     return stitchResult(r,level,self.scales,self.cropper.scatter_type)
 
 # stitched results (output of network) back into full image
-def stitchResult(r,level, scales):
+def stitchResult(r,level, scales,scatter_type):
     qq = r[level]
     numlabels = qq.shape[-1]
     sc = scales[level]
@@ -95,8 +94,56 @@ def stitchResult(r,level, scales):
     sha = list(sc['dest_full_size'])
     sha.append(numlabels)
     sha = sha[1:]
-    return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
+    
+    if scatter_type=='NN':        
+        return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
+    else:
+        return scatter_interp(pbox_index,qq,sha)
 
+
+def scatter_interp(x,data,sz):
+    
+      nD = len(sz)-1
+      
+      ones = data*0+1
+      
+      def frac(a):
+          return a-tf.floor(a)
+      if nD == 3:
+          w = [frac(x[:,0:1,0:1,0:1, 0:1]),frac(x[:,0:1,0:1,0:1, 1:2]), frac(x[:,0:1,0:1,0:1, 2:3])]
+      else:
+          w = [frac(x[:,0:1,0:1, 0:1]),frac(x[:,0:1,0:1, 1:2]) ]
+
+      def stitch(d,idx,s):
+          q = tf.convert_to_tensor(s)
+          for k in range(nD+1):
+              q = tf.expand_dims(q,0)
+          idx = idx + q
+          weight = 1.0
+          for k in range(nD):
+              if s[k] == 1:
+                  weight = weight*w[k]
+              else:
+                  weight = weight*(1-w[k])
+          res_ = 0
+          sums_ = 0
+          for i in range(idx.shape[0]):
+               res_ = res_ + weight[i]*tf.scatter_nd(idx[i,...] , data[i,...], sz)
+               sums_ = sums_ + weight[i]*tf.scatter_nd(idx[i,...] , ones[i,...], sz)
+               
+          return res_,sums_
+      x = tf.cast(x,dtype=tf.int32)
+      if nD == 3:
+          ids = [[0,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
+      else:
+          ids = [[0,0],[0,1],[1,0],[1,1]]
+      res = 0
+      sums = 0
+      for k in ids:
+          r,s = stitch(data,x,k)
+          res = res + r
+          sums = sums + s
+      return res,sums
 
 
 class CropGenerator():
@@ -110,6 +157,8 @@ class CropGenerator():
                     keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
+                    interp_type = 'NN',
+                    scatter_type = 'NN',
                     create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
                     ndim=2,
@@ -121,6 +170,8 @@ class CropGenerator():
     self.scale_fac_ref = scale_fac_ref
     self.smoothfac_data = smoothfac_data
     self.smoothfac_label = smoothfac_label
+    self.interp_type = interp_type
+    self.scatter_type = scatter_type
     self.init_scale = init_scale
     self.keepAspect = keepAspect
     self.create_indicator_classlabels = create_indicator_classlabels
@@ -132,6 +183,9 @@ class CropGenerator():
   def serialize_(self):
       return { 'patch_size':self.patch_size,
                'scale_fac' :self.scale_fac,
+               'scale_fac_ref' :self.scale_fac_ref,
+               'interp_type' :self.interp_type,
+               'scatter_type' :self.scatter_type,
                'init_scale':self.init_scale,
                'smoothfac_data':self.smoothfac_data,
                'smoothfac_label':self.smoothfac_label,
@@ -322,7 +376,7 @@ class CropGenerator():
   #  batch_dim1/batch_dim0 has to be an integer such that the input can repeatedly cropped
   #  in blocks of size batch_dim0
   # output - a stack of shape [batch_dim1,w1,h1,(d1),nD]
-  def crop(self,data_parent,parent_box_index,smoothfac=None):
+  def crop(self,data_parent,parent_box_index,smoothfac=None,interp_type='NN'):
       repfac = parent_box_index.shape[0] // data_parent.shape[0]
       res_data = []
       if self.ndim == 2:
@@ -336,9 +390,47 @@ class CropGenerator():
         data_smoothed =  data_parent
       ds0 = data_smoothed.shape[0]
       for k in range(repfac):
-        res_data.append(tf.gather_nd(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...],batch_dims=1) )
+          
+          if interp_type == 'NN':
+              tmp = tf.gather_nd(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...],batch_dims=1) 
+          else:
+              
+              tmp = self.lin_interp(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...])
+          res_data.append(tmp)
+              
       res_data = tf.concat(res_data,0)
       return res_data
+
+  def lin_interp(self,data,x):
+
+      def frac(a):
+          return a-tf.floor(a)
+      if self.ndim == 3:
+          w = [frac(x[:,0:1,0:1,0:1, 0:1]),frac(x[:,0:1,0:1,0:1, 1:2]), frac(x[:,0:1,0:1,0:1, 2:3])]
+      else:
+          w = [frac(x[:,0:1,0:1, 0:1]),frac(x[:,0:1,0:1, 1:2]) ]
+
+      def gather(d,idx,s):
+          q = tf.convert_to_tensor(s)
+          for k in range(self.ndim+1):
+              q = tf.expand_dims(q,0)
+          idx = idx + q
+          weight = 1.0
+          for k in range(self.ndim):
+              if s[k] == 1:
+                  weight = weight*w[k]
+              else:
+                  weight = weight*(1-w[k])
+                  
+          return tf.gather_nd(d, idx ,batch_dims=1) * weight
+      x = tf.cast(x,dtype=tf.int32)
+      if self.ndim == 3:
+          res = gather(data,x,[0,0,0]) + gather(data,x,[1,0,0]) + gather(data,x,[0,1,0]) + gather(data,x,[0,0,1]) + gather(data,x,[0,1,1]) + gather(data,x,[1,0,1]) + gather(data,x,[1,1,0]) + gather(data,x,[1,1,1])
+      else:
+          res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1]) 
+      return res
+      
+      
 
 
   # Converts normalized coordinates (as used in tf.crop_and_resize) in local_boxes 
@@ -346,7 +438,7 @@ class CropGenerator():
   #  local_boxes - normalized coordinates of shape [N,4] (2D) or [N,6] (3D), 
   #  sz - abs. size of images from which crop is performed (list of size nD)
   #  patch_size - size of patches (list of size nD) 
-  def convert_to_gatherND_index(self,local_boxes,sz,patch_size):
+  def convert_to_gatherND_index(self,local_boxes,sz,patch_size,interp_type='NN'):
       nD = self.ndim
 
       if sz is None:             
@@ -369,18 +461,21 @@ class CropGenerator():
 
       qwq = tf.expand_dims(rep_rans(rans,patch_size,nD),0)
 
-      local_box_index = tf.dtypes.cast(tf.floor(start_abs+qwq+0.5),dtype=tf.int32)
+      local_box_index = start_abs+qwq
 
+      if interp_type == 'NN': # cast index to int
+          local_box_index = tf.dtypes.cast(tf.floor(local_box_index+0.5),dtype=tf.int32)
+    
+          ## clip indices
+          lind = []
+          for k in range(nD):
+            tmp = local_box_index[...,k:(k+1)]
+            tmp = tf.math.maximum(tmp,0)
+            tmp = tf.math.minimum(tmp,tf.cast(sz[k+1]-1,tf.int32))
+            lind.append(tmp)
+          local_box_index = tf.concat(lind,nD+1)
 
-      ## clip indices
-      lind = []
-      for k in range(nD):
-        tmp = local_box_index[...,k:(k+1)]
-        tmp = tf.math.maximum(tmp,0)
-        tmp = tf.math.minimum(tmp,tf.cast(sz[k+1]-1,tf.int32))
-        lind.append(tmp)
-      local_box_index = tf.concat(lind,nD+1)
-
+    
 
 
 
@@ -713,11 +808,11 @@ class CropGenerator():
       for k in range(nD):
           dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=tf.float32)
 
+
       # compute the index suitable for gather_nd
-      local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size)
-      parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size)
-      parent_box_scatter_index, dest_full_size = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size)
-#      parent_box_scatter_index, dest_full_size = self.convert_to_gatherND_index(parent_boxes,None,patch_size)
+      local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type)
+      parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size,interp_type=self.interp_type)
+      parent_box_scatter_index, _ = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size,interp_type=self.scatter_type)
   
 
 
@@ -737,9 +832,9 @@ class CropGenerator():
 
 
       ############## do the actual cropping
-      res_data = self.crop(data_parent,parent_box_index,resolution[0]*self.smoothfac_data)        
+      res_data = self.crop(data_parent,parent_box_index,resolution[0]*self.smoothfac_data,interp_type=self.interp_type)        
       if labels_parent is not None:      
-        res_labels = self.crop(labels_parent,parent_box_index,resolution[0]*self.smoothfac_label)
+        res_labels = self.crop(labels_parent,parent_box_index,resolution[0]*self.smoothfac_label,interp_type=self.interp_type)
       else:
         res_labels = None
 
@@ -802,10 +897,7 @@ class CropGenerator():
         return x
                 
 
-
-  def scatter_valid(self, index, data, size):
-      return tf.scatter_nd(index,data,size) 
-
+  ############## teststuff
 
   def testtree(self,im):
     print(im.shape)
@@ -815,7 +907,10 @@ class CropGenerator():
   def testrandom(self,im):
     c = self.sample(im[0:1,...],None,test=False,generate_type='random',verbose=True,num_patches=300)
     self.showtest(c)
- 
+
+  def scatter_valid(self, index, data, size):
+      return tf.scatter_nd(index,data,size) 
+
   def showtest(self,c):
     data_ = c.getInputData()
     f = plt.figure(figsize=(10,10))

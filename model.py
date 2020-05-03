@@ -280,6 +280,7 @@ class PatchWorkModel(Model):
       return inp
 
 
+    testIT=False
       
     nD = self.cropper.ndim
     output = []
@@ -346,8 +347,10 @@ class PatchWorkModel(Model):
          
          # cat with total input
          if self.forward_type == 'simple':
-             # for testing: inp = last_cropped
-             inp = tf.concat([inp,last_cropped],(nD+1))
+             if testIT:
+                inp = last_cropped
+             else:
+                inp = tf.concat([inp,last_cropped],(nD+1))
          elif self.forward_type == 'mult':
             multiples = [1]*(nD+2)
             multiples[nD+1] = last_cropped.shape[nD+1]
@@ -373,14 +376,18 @@ class PatchWorkModel(Model):
       
       # the spatial/segmentation part
       if self.spatial_train or  k < self.cropper.depth-1:
-          res = self.blocks[k](inp,inp_nonspatial)      # for testing: res = inp      
+          if testIT:
+              res=inp
+          else:
+              res = self.blocks[k](inp,inp_nonspatial)      
       if self.spatial_train:
           current_output.append(res[...,0:self.num_labels])
 
       output = output + current_output
     
-    if self.finalBlock is not None and self.spatial_train:
-      output[-1] = self.finalBlock(output[-1])
+    if not testIT:
+        if self.finalBlock is not None and self.spatial_train:
+            output[-1] = self.finalBlock(output[-1])
     
     if not self.intermediate_loss:
       if self.spatial_train and self.classifier_train:
