@@ -387,8 +387,12 @@ class PatchWorkModel(Model):
     
     if not testIT:
         if self.finalBlock is not None and self.spatial_train:
-            output[-1] = self.finalBlock(output[-1])
-    
+            finOut = self.finalBlock(output.pop())
+            if isinstance(finout,list):
+                output = output + finOut
+            else:
+                output.append(finOut)
+                
     if not self.intermediate_loss:
       if self.spatial_train and self.classifier_train:
          return [output[-2], output[-1]]
@@ -549,9 +553,12 @@ class PatchWorkModel(Model):
           res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
           img1.header.set_data_shape(res.shape)
           
-      img1.header.set_data_dtype('uint16')          
-      pred_nii = nib.Nifti1Image(res*64000, img1.affine, img1.header)
-      pred_nii.header.set_slope_inter(1/64000,0.0000000)
+      maxi = tf.reduce_max(res)
+      fac = 32000/maxi
+      
+      img1.header.set_data_dtype('int16')          
+      pred_nii = nib.Nifti1Image(res*fac, img1.affine, img1.header)
+      pred_nii.header.set_slope_inter(1/fac,0.0000000)
       pred_nii.header['cal_max'] = 1
       pred_nii.header['cal_min'] = 0
       pred_nii.header['glmax'] = 1
