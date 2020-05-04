@@ -155,6 +155,11 @@ def createCNNBlockFromObj(obj,custom_objects=None):
   theLayers = tolayer(obj)
   if isinstance(theLayers,layers.Layer):
       return theLayers
+  if isinstance(theLayers,list):
+      res = []
+      for l in theLayers:
+          res.append(createCNNBlockFromObj(l))
+      return res
   else:
       return CNNblock(theLayers)
       
@@ -387,11 +392,13 @@ class PatchWorkModel(Model):
     
     if not testIT:
         if self.finalBlock is not None and self.spatial_train:
-            finOut = self.finalBlock(output.pop())
-            if isinstance(finout,list):
-                output = output + finOut
-            else:
-                output.append(finOut)
+            lo = output.pop()
+            if isinstance(self.finalBlock,list):
+                for fb in self.finalBlock:
+                    output.append(fb(lo))
+            else:                    
+                output.append(self.finalBlock(lo))
+
                 
     if not self.intermediate_loss:
       if self.spatial_train and self.classifier_train:
@@ -820,6 +827,8 @@ class patchworkModelEncoder(json.JSONEncoder):
            return {'keras_layer':obj.get_config(), 'name': obj.__class__.__name__ }
         if isinstance(obj,dict):
            return dict(obj)
+        if isinstance(obj,list):
+           return list(obj)
         if hasattr(obj,'tolist'):
            return obj.tolist()
         return json.dumps(obj,cls=patchworkModelEncoder)
