@@ -39,9 +39,9 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                 contrasts_selector = ['T1.nii.gz'],
                                 labels_selector = ['anno*/testset.ano.json'],
                                 annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
-                                                        ,'sizefac':0.5},
+                                                        ,'sizefac':1},
                                 exclude_incomplete_labels=True,
-                                
+                                add_inverted_label=True
                                 )
 
 
@@ -182,14 +182,14 @@ def createClassifier(name=None,depth=4,outK=2):
 #patch_size = (16,16,16), 
  #                 scale_fac =  0.7, 
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
-                  scale_fac =  0.6, 
+                  scale_fac =  0.3, 
                   scale_fac_ref = 'max',
                   init_scale = -1,
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
-                  depth=1)
+                  depth=2)
 
 
 model = patchwork.PatchWorkModel(cgen,
@@ -216,7 +216,7 @@ model = patchwork.PatchWorkModel(cgen,
 #                      lazyEval=0.3#{'reduceFun':'classifier_output'}
 #                      )
 
-res = model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=4,verbose=True)
+res = model.apply_full(trainset[0][0:1,...],generate_type='random',jitter=0.05,   repetitions=1,verbose=True)
 
 #print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
@@ -248,7 +248,7 @@ def cc(x,y):
 l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
 l_logits = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True)
 loss = [l_logits,l]
-loss = cc
+loss = l
 
 augment = patchwork.Augmenter(    morph_width = 150
                 , morph_strength=0.25
@@ -266,9 +266,9 @@ model.train(trainset,labelset,
             loss=loss,
             valid_ids = [],
             augment=None,
-            balance={'ratio':0.7},
-            num_patches=100,
-            epochs=3)
+            balance={'ratio':0.3,'label_range':range(2)},
+            num_patches=10,
+            epochs=1)
 
 
 
