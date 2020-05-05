@@ -553,7 +553,7 @@ class PatchWorkModel(Model):
           res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
           img1.header.set_data_shape(res.shape)
           
-      maxi = tf.reduce_max(res)
+      maxi = tf.reduce_max(tf.abs(res))
       fac = 32000/maxi
       
       img1.header.set_data_dtype('int16')          
