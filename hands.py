@@ -16,6 +16,7 @@ import math
 from tensorflow.keras import Model
 from tensorflow.keras import layers
 
+
 from timeit import default_timer as timer
 
 import nibabel as nib
@@ -26,6 +27,7 @@ from patchwork.improc_utils import *
 
 from DPX_core import *
 from DPX_improc import *
+import customLayers
 
 
 #%%
@@ -195,7 +197,7 @@ model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : createBlock(outK=outK),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
                       spatial_train=True,
-                      intermediate_loss=True,
+                      intermediate_loss=False,
                       intermediate_out=4,
 
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
@@ -203,7 +205,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  cls_intermediate_loss=True,
                     #  classifier_train=True,
                       
-                      finalBlock=[layers.Activation('sigmoid'),layers.Activation('tanh')],
+                      finalBlock= customLayers.sigmoid_softmax(),
                       forward_type='simple',
                       num_labels = labelset[0].shape[-1],
 #                      num_classes = 1                      
@@ -234,10 +236,19 @@ res = model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=1,verbose
 #%%
 #l = lambda x,y: tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
 #l = tf.keras.losses.mean_squared_error
+
+def cc(x,y):
+    sx = tf.reduce_sum(x,axis=-1,keepdims=True)
+    sx = tf.concat([x,1-sx],len(sx.shape)-1)
+    sy = tf.reduce_sum(y,axis=-1,keepdims=True)
+    sy = tf.concat([y,1-sy],len(sx.shape)-1)
+    return tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
+    
+    
 l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
 l_logits = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True)
 loss = [l_logits,l]
-
+loss = cc
 
 augment = patchwork.Augmenter(    morph_width = 150
                 , morph_strength=0.25
