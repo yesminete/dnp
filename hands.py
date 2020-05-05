@@ -203,7 +203,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  cls_intermediate_loss=True,
                     #  classifier_train=True,
                       
-                      finalBlock=layers.Activation('sigmoid'),
+                      finalBlock=[layers.Activation('sigmoid'),layers.Activation('tanh')],
                       forward_type='simple',
                       num_labels = labelset[0].shape[-1],
 #                      num_classes = 1                      
@@ -216,7 +216,7 @@ model = patchwork.PatchWorkModel(cgen,
 
 res = model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=4,verbose=True)
 
-print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)
+#print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 
 #model.summary()
