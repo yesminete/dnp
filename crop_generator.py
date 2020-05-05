@@ -313,7 +313,7 @@ class CropGenerator():
       for k in range(self.depth):
           if scales[k]['labels_cropped'] is not None:
               indicator = tf.math.reduce_max(scales[k]['labels_cropped'],list(range(1,self.ndim+2)))
-              indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
+              indicator = tf.cast(indicator>0.1,dtype=tf.float32)    
               length = indicator.shape[0]
               cur_ratio = tf.math.reduce_mean(indicator)        
               print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
@@ -380,9 +380,9 @@ class CropGenerator():
       repfac = parent_box_index.shape[0] // data_parent.shape[0]
       res_data = []
       if self.ndim == 2:
-          conv_gauss = conv_gauss2D
+          conv_gauss = conv_gauss2D_fft
       elif self.ndim == 3:
-          conv_gauss = conv_gauss3D
+          conv_gauss = conv_gauss3D_fft
           
       if smoothfac is not None and smoothfac > 0.0:
         data_smoothed =  conv_gauss(data_parent,tf.constant(smoothfac,dtype=self.ftype))
