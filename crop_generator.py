@@ -310,6 +310,7 @@ class CropGenerator():
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
 
+      # print balance info
       for k in range(self.depth):
           if scales[k]['labels_cropped'] is not None:
               labs = scales[k]['labels_cropped']
@@ -317,10 +318,9 @@ class CropGenerator():
               if balance is not None and 'label_range' in balance:
                     label_range = tf.cast(balance['label_range'],dtype=tf.int32)
                     labs = tf.gather(labs,label_range,axis=self.ndim+1)                            
-              indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+2)))
+              indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
               indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
-              length = indicator.shape[0]
-              cur_ratio = tf.math.reduce_mean(indicator)        
+              cur_ratio = tf.math.reduce_mean(indicator,axis=0)        
               print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
 
         
@@ -508,14 +508,21 @@ class CropGenerator():
         if 'numrounds' in balance:
             numrounds = balance['numrounds']
         label_range = None
+        label_weight = None
         if 'label_range' in balance:
             label_range = tf.cast(balance['label_range'],dtype=tf.int32)
+        if 'label_weight' in balance:
+            label_weight = tf.cast(balance['label_weight'],dtype=self.ftype)
+            for k in range(nD):
+                label_weight = tf.expand_dims(label_weight,0)
           
         points_tot = []
         for k in range(label.shape[0]):
             L = label[k,...]
             if label_range is not None:
                 L = tf.gather(L,label_range,axis=nD)
+            if label_weight is not None:
+                L = L*label_weight
             L = np.amax(L,nD)
             sz = L.shape
             cnt=0

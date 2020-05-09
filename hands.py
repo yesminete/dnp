@@ -41,7 +41,8 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                 annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
                                                         ,'sizefac':1},
                                 exclude_incomplete_labels=True,
-                                add_inverted_label=True
+                                add_inverted_label=True,
+                                max_num_data=1
                                 )
 
 
@@ -266,7 +267,7 @@ model.train(trainset,labelset,
             loss=loss,
             valid_ids = [],
             augment=None,
-            balance={'ratio':0.3,'label_range':range(2)},
+            balance={'ratio':0.3,'label_range':range(2),'label_weight':[1,0.2]},
             num_patches=10,
             epochs=1)
 
