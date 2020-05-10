@@ -525,6 +525,7 @@ class PatchWorkModel(Model):
                  repetitions=5,
                  branch_factor=1,
                  num_chunks=1,
+                 scale_to_original=True,
                  scalevalue=None,
                  lazyEval = None):
       nD = self.cropper.ndim
@@ -553,7 +554,7 @@ class PatchWorkModel(Model):
                             resolution = resolution,
                             lazyEval = lazyEval,
                             verbose=True,
-                            scale_to_original=True)
+                            scale_to_original=scale_to_original)
 
       res = res.numpy()
       if nD == 2:
@@ -563,8 +564,17 @@ class PatchWorkModel(Model):
       maxi = tf.reduce_max(tf.abs(res))
       fac = 32000/maxi
       
+      newaffine = img1.affine
+      
+      if not scale_to_original:
+          sz = img1.header.get_data_shape()
+          facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],res.shape[2]/sz[2]]
+          img1.header.set_data_shape(res.shape)
+          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,0],[0,1/facs[1],0,0],[0,0,1/facs[2],0],[0,0,0,1]]))
+      
+      
       img1.header.set_data_dtype('int16')          
-      pred_nii = nib.Nifti1Image(res*fac, img1.affine, img1.header)
+      pred_nii = nib.Nifti1Image(res*fac, newaffine, img1.header)
       pred_nii.header.set_slope_inter(1/fac,0.0000000)
       pred_nii.header['cal_max'] = 1
       pred_nii.header['cal_min'] = 0

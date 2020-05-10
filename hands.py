@@ -183,7 +183,7 @@ def createClassifier(name=None,depth=4,outK=2):
 #patch_size = (16,16,16), 
  #                 scale_fac =  0.7, 
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
-                  scale_fac =  0.3, 
+                  scale_fac =  0.7, 
                   scale_fac_ref = 'max',
                   init_scale = -1,
                   ndim=nD,
