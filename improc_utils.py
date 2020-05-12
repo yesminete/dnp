@@ -7,7 +7,7 @@ Created on Mon Mar 23 15:29:09 2020
 """
 
 import tensorflow as tf
-
+import nibabel as nib
 import numpy as np
 
 ########## Cropmodel ##########################################
@@ -488,6 +488,48 @@ def interp3lin(image,X,Y,Z):
     
 
     return res 
+
+def align_to_physical_coords(im):
+    
+    aff = im.affine
+    idx = np.argmax(np.abs(aff[0:3,0:3]),axis=0)
+    sg = np.ones(3);
+    for i in range(3):
+        sg[i] = np.sign(aff[idx[i],i])
+        
+    perm = np.zeros((4,4))
+    perm[3,3] = 1;
+    for k in range(3):
+        perm[k,idx[k]] = 1 
+    
+    
+    d = im.get_fdata()
+    
+    idxinv = [0]*3
+    for k in range(3):
+        idxinv[idx[k]] = k
+    
+    d = np.transpose(d,idxinv)
+    
+    
+    flip = np.zeros((4,4))
+    flip[3,3] = 1;
+    for k in range(3):
+        flip[k,k] = sg[idxinv[k]]
+        if sg[idxinv[k]] < 0:
+            flip[k,3] = d.shape[k]-1
+    
+    for k in range(3):
+        if sg[idxinv[k]] < 0:
+          d = np.flip(d,axis=k)    
+    
+    newaff = np.matmul(np.matmul(aff,perm),flip)
+    
+    im.set_sform(newaff)
+        
+    return  nib.nifti1.Nifti1Image(d, newaff , header=im.header)
+
+
 
 
 

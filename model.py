@@ -527,6 +527,7 @@ class PatchWorkModel(Model):
                  num_chunks=1,
                  scale_to_original=True,
                  scalevalue=None,
+                 align_physical=True,
                  lazyEval = None):
       nD = self.cropper.ndim
       if not isinstance(fname,list):
@@ -534,6 +535,8 @@ class PatchWorkModel(Model):
       ims = []
       for f in fname:          
           img1 = nib.load(f)        
+          if align_physical:
+              img1 = align_to_physical_coords(img1)
           resolution = img1.header['pixdim'][1:4]
           a = np.expand_dims(np.squeeze(img1.get_fdata()),0)
           if len(a.shape) < nD+2:
@@ -741,7 +744,6 @@ class PatchWorkModel(Model):
         self.compile(loss=loss, optimizer=optimizer)
 
               
-    history = History()
             
     for i in range(num_its):
         print("======================================================================================")
@@ -765,6 +767,7 @@ class PatchWorkModel(Model):
         print("time elapsed, sampling: " + str(end - start) )
       
         ### fitting
+        history = History()
       
         inputdata = c.getInputData()
         targetdata = c.getTargetData()
