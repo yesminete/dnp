@@ -37,11 +37,12 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                 subjects = '#Tag:test',
                                # subjects = '15341572', #'#Tag:MIDItrain',
                                 contrasts_selector = ['T1.nii.gz'],
-                                labels_selector = ['anno*/testset.ano.json'],
-                                annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
-                                                        ,'sizefac':1},
+                                labels_selector = ['mask_untitled0.nii.gz','mask_untitled0.nii.gz'],
+#                                labels_selector = ['anno*/testset.ano.json'],
+                                #annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
+                                #                        ,'sizefac':1},
                                 exclude_incomplete_labels=True,
-                                add_inverted_label=True,
+                                add_inverted_label=False,
                                 max_num_data=1
                                 )
 
@@ -199,7 +200,7 @@ model = patchwork.PatchWorkModel(cgen,
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
                       spatial_train=True,
                       intermediate_loss=False,
-                      intermediate_out=4,
+                      block_out=[4,1],
 
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                     #  cls_intermediate_out=2,
@@ -208,7 +209,7 @@ model = patchwork.PatchWorkModel(cgen,
                       
                       finalBlock= customLayers.sigmoid_softmax(),
                       forward_type='simple',
-                      num_labels = labelset[0].shape[-1],
+                      num_labels = 1,
 #                      num_classes = 1                      
                       )
 # #%
@@ -219,6 +220,7 @@ model = patchwork.PatchWorkModel(cgen,
 
 res = model.apply_full(trainset[0][0:1,...],generate_type='random',jitter=0.05,   repetitions=1,verbose=True)
 
+print(res.shape)
 #print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 
@@ -267,9 +269,9 @@ model.train(trainset,labelset,
             loss=loss,
             valid_ids = [],
             augment=None,
-            balance={'ratio':0.3,'label_range':range(2),'label_weight':[1,0.2]},
+            #balance={'ratio':0.3,'label_range':range(2),'label_weight':[1,0.2]},
             num_patches=10,
-            epochs=1)
+            epochs=5)
 
 
 

@@ -173,6 +173,8 @@ class PatchWorkModel(Model):
                num_labels=1,
                intermediate_out=0,
                intermediate_loss=False,
+               block_out=None,
+               
                spatial_train=True,
                finalBlock=None,
 
@@ -203,6 +205,7 @@ class PatchWorkModel(Model):
     self.num_classes = num_classes
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+    self.block_out = block_out
     self.cls_intermediate_loss = cls_intermediate_loss
     self.cls_intermediate_out = cls_intermediate_out
     self.num_classes=num_classes
@@ -219,10 +222,18 @@ class PatchWorkModel(Model):
          warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
         
     
+    if self.block_out is None:
+        self.block_out = []
+        for k in range(self.cropper.depth-1): 
+          self.block_out.append(num_labels+intermediate_out)
+        if self.spatial_train:
+          self.block_out.append(num_labels)
+        
+    
     for k in range(self.cropper.depth-1): 
-      self.blocks.append(blockCreator(level=k, outK=num_labels+intermediate_out))
+      self.blocks.append(blockCreator(level=k, outK=self.block_out[k]))
     if self.spatial_train:
-      self.blocks.append(blockCreator(level=cropper.depth-1, outK=num_labels))
+      self.blocks.append(blockCreator(level=cropper.depth-1, outK=self.block_out[cropper.depth-1]))
 
     if preprocCreator is not None:
        for k in range(self.cropper.depth): 
@@ -247,6 +258,7 @@ class PatchWorkModel(Model):
                'blocks':self.blocks,
                'intermediate_out':self.intermediate_out,
                'intermediate_loss':self.intermediate_loss,   
+               'block_out':self.block_out,   
                'spatial_train':self.spatial_train,
                'num_labels':self.num_labels,
 

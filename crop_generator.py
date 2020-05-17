@@ -157,7 +157,7 @@ class CropGenerator():
                     keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
-                    interp_type = 'NN',
+                    interp_type = 'NN',    # nearest Neighbor (NN) or linear (lin)
                     scatter_type = 'NN',
                     create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
