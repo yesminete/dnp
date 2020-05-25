@@ -10,6 +10,8 @@ import tensorflow as tf
 import nibabel as nib
 import numpy as np
 
+import os
+
 ########## Cropmodel ##########################################
 
 def gaussian2D(std):  
@@ -477,18 +479,249 @@ def interp3lin(image,X,Y,Z):
     for i in range(sz[0]): 
        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
 
-
-
-
-
-
-
-
     res = tf.concat(res,0)
-    
 
     return res 
 
+
+# loads nifti data into tf.tensors
+#
+# contrasts = [ { 'subj1' :  '/path/to/subj1/T1.nii' ,
+#                 'subj2' :  '/path/to/subj2/T1.nii' },
+#               { 'subj1' :  '/path/to/subj1/T2.nii' ,
+#                 'subj2' :  '/path/to/subj2/T2.nii' } ]
+#              
+# labels =    [ { 'subj1' :  '/path/to/subj1/hippo.nii' ,
+#                 'subj2' :  '/path/to/subj2/thal.nii' },
+#               { 'subj1' :  '/path/to/subj1/hippo.nii' ,
+#                 'subj2' :  '/path/to/subj2/thal.nii' } ]
+
+
+def load_data_structured(  contrasts, labels, subjects=None,
+                           annotations_selector=None, exclude_incomplete_labels=True,
+                           add_inverted_label=False,max_num_data=None,align_physical=True,
+                           nD=3,ftype=tf.float32):
+
+    
+    def load_nifti(fname):
+        img = nib.load(fname)        
+        if align_physical:            
+            img = align_to_physical_coords(img)
+        return img
+    
+    
+    if subjects is None:
+        subjs = contrasts.keys()
+    else:
+        subjs = subjects
+    
+    
+    if max_num_data is not None:
+        if max_num_data < len(subjs):
+            p = np.random.uniform(size=(len(subjs)))
+            idx = np.argsort(p)
+            idx = idx[0:max_num_data]
+            subjs = [subjs[i] for i in idx] 
+                
+    
+    trainset = []
+    labelset = []    
+    resolutions = []
+    subjects_names = []
+    print("going to load " + str(len(subjs)) + " items")
+    for k in subjs:
+        print("loading: " + k)
+
+
+        if exclude_incomplete_labels:
+            incomplete = False
+            for j in range(len(labels)):
+                if not k in labels[j]:
+                    print("missing label " + str(j) + " for subject " + k + ", skipping")
+                    incomplete = True
+                    break
+            if incomplete:
+                continue
+
+        
+       
+        
+        imgs = []
+        template_nii = None
+        for j in range(len(contrasts)):
+            item = contrasts[j][k]
+            if isinstance(item,dict):  # this is for DPX_selectFiles compat.
+                item = item[next(iter(item))]
+                fname = item['FilePath']
+            else:
+                fname = item
+            img = load_nifti(fname)        
+            resolution = img.header['pixdim'][1:4]
+            header = img.header
+            if template_nii is None:
+                template_nii = img
+            img = np.squeeze(img.get_fdata())
+            img = np.expand_dims(np.expand_dims(np.squeeze(img),0),nD+1)
+            img = tf.convert_to_tensor(img,dtype=ftype)
+            imgs.append(img)
+            
+      
+        labs = []
+        for j in range(len(labels)):
+            if k in labels[j]:
+                item = labels[j][k]
+                if isinstance(item,dict):
+                    item = item[next(iter(item))]
+                    fname = item['FilePath']
+                else:
+                    fname = item
+                ext = os.path.splitext(fname)[1]
+                notfound = False
+                
+                if ext == '.json':
+                    annos = loadAnnotation(fname,asdict=True)
+                    sel = annotations_selector['labels']   
+                    
+                    delim='.'
+                    sizefac=1
+                    if 'delim' in annotations_selector:
+                        delim = annotations_selector['delim']
+                    if 'sizefac' in annotations_selector:
+                        sizefac = annotations_selector['sizefac']
+                    for spec in sel:
+                        points = []
+                        for i in spec:
+                            k = i.split(delim)
+                            if k[0] not in annos:
+                                notfound = True
+                                break
+                            if k[1] in annos[k[0]]:
+                                a = annos[k[0]][k[1]]
+                                p = a['coords'][0:nD]
+                                p.append(a['size']*sizefac)
+                                points.append(p)
+                            else:
+                                print(k[1] + ' not present for ' + fname)
+                        if notfound:
+                            break
+                        if len(points) == 0:
+                            notfound=True
+                            break
+                        img = renderpoints(points, header,ftype)
+                        img = np.expand_dims(img,0)
+                        img = np.expand_dims(img,nD+1)
+                        labs.append(img)
+                     
+
+                else:
+                    img = load_nifti(fname)   
+                    if nD == 3:
+                        sz1 = img.header.get_data_shape()
+                        sz2 = template_nii.header.get_data_shape()
+                        if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
+                            img= resample_from_to(img, template_nii,order=3)
+                    img = np.squeeze(img.get_fdata());
+                    img = (img>0.5)*1
+                    img = np.expand_dims(np.squeeze(img),0)
+                    if len(img.shape) == nD+1:
+                        img = np.expand_dims(img,nD+1)
+                    img = tf.convert_to_tensor(img,dtype=ftype)
+                    labs.append(img)
+            else:
+                print("missing label " + str(j) + " for subject " + k + ", extending with zeros")
+                img = tf.zeros(imgs[0].shape,dtype=ftype)
+                labs.append(img)
+        
+        if notfound:
+            continue
+                
+        if annotations_selector is not None:
+            if 'numberScheme' in annotations_selector:
+                nums = 0
+                indic = 0
+                for j in range(len(labs)):
+                    nums = nums + labs[j]*(j+1)
+                    #indic = indic + labs[j]
+                #indic = tf.cast(indic>0,dtype=ftype)
+                labs = [nums]
+                    
+        if add_inverted_label:
+            union = 0
+            for j in range(len(labs)):
+                union = union + labs[j]
+            union = tf.cast(union>0,dtype=ftype)
+            inv = 1-union
+            labs.append(inv)
+            
+                
+            
+                
+                
+        imgs = tf.concat(imgs,nD+1)
+        labs = tf.concat(labs,nD+1)
+        
+        trainset.append(imgs)
+        labelset.append(labs)
+        resolutions.append(resolution)
+        subjects_names.append(k)
+        
+    return trainset,labelset,resolutions,subjects_names;
+
+def renderpoints(points,header,ftype):
+    nD = len(points[0])-1
+
+    sz =header['dim'][1:nD+1]
+    A = header.get_best_affine()
+    
+    if nD==2:
+        X,Y = np.meshgrid(np.arange(0,sz[0]),np.arange(0,sz[1]),indexing='ij')
+        X = tf.cast(X,dtype=ftype)
+        Y = tf.cast(Y,dtype=ftype)
+        X_ = A[0][0]*X + A[0][1]*Y +  A[0][3]
+        Y_ = A[1][0]*X + A[1][1]*Y +  A[1][3]
+        img = tf.zeros(sz,dtype=tf.bool)
+        for p in points:
+            R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1]) 
+            img = tf.math.logical_or(img, R2 < p[2]*p[2])
+        return tf.cast(img,dtype=ftype)
+    if nD==3:
+        X,Y,Z = np.meshgrid(np.arange(0,sz[0]),np.arange(0,sz[1]),np.arange(0,sz[2]),indexing='ij')
+        X = tf.cast(X,dtype=ftype)
+        Y = tf.cast(Y,dtype=ftype)
+        Z = tf.cast(Z,dtype=ftype)
+        X_ = A[0][0]*X + A[0][1]*Y + A[0][2]*Z + A[0][3]
+        Y_ = A[1][0]*X + A[1][1]*Y + A[1][2]*Z + A[1][3]
+        Z_ = A[2][0]*X + A[2][1]*Y + A[2][2]*Z + A[2][3]
+        img = tf.zeros(sz,dtype=tf.bool)
+        for p in points:
+            R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1])  + (Z_-p[2])*(Z_-p[2]) 
+            img = tf.math.logical_or(img, R2 < p[3]*p[3])
+        return tf.cast(img,dtype=ftype)
+
+
+
+
+def loadAnnotation(fname,asdict=True):
+    with open(fname) as json_file:
+        annos = json.load(json_file)
+        annos = annos['annotations']
+        if not asdict:
+            return annos
+        else:
+            adict = {}
+            for aa in annos:
+                x = {}
+                for ss in aa['points']:
+                    key = ss['name']
+                    key = key.replace('<br>','')
+                    x[key] = ss
+                adict[aa['name']] = x
+            return adict
+                    
+                
+            
+            
+        
 
 
 def align_to_physical_coords(im):
