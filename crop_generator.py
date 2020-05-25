@@ -7,7 +7,6 @@ Created on Mon Mar 23 15:37:03 2020
 """
 
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from . improc_utils import *
 from timeit import default_timer as timer
 from collections.abc import Iterable
@@ -929,6 +928,9 @@ class CropGenerator():
       return tf.scatter_nd(index,data,size) 
 
   def showtest(self,c):
+    
+    import matplotlib.pyplot as plt
+      
     data_ = c.getInputData()
     f = plt.figure(figsize=(10,10))
     for level in range(self.depth):

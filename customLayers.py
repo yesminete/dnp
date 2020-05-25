@@ -70,7 +70,7 @@ custom_layers['normalizedConvolution'] = normalizedConvolution
 
 class biConvolution(layers.Layer):
 
-  def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=None,**kwargs):
+  def __init__(self, out_n=7, ksize=3, padding='SAME',transpose=False,nD=2,strides=None,bias=False,**kwargs):
       
       
     super().__init__(**kwargs)
@@ -82,6 +82,7 @@ class biConvolution(layers.Layer):
     self.initializer = tf.random_normal_initializer(0, 0.05)
     self.num_alpha = 0
     self.isBi=True
+    self.bias = bias
     
     if strides is None:
         if nD == 2:
@@ -170,11 +171,15 @@ class biConvolution(layers.Layer):
         
     else:
 
-        kernel = self.weight[0,...]
-        x = conv(image, kernel, strides=self.strides, padding=self.padding)
+        offs = 0
+        x = 0
+        if self.bias:
+            offs = 1
+            kernel = self.weight[0,...]
+            x = conv(image, kernel, strides=self.strides, padding=self.padding)
         for k in range(self.num_alpha):
-            kernel = self.weight[k+1,...]
-            alpha = alphas[:,k:k+1]
+            kernel = self.weight[k+offs,...]
+            alpha = alphas[:,k:k+offs]
             for j in range(self.nD):
                 alpha = tf.expand_dims(alpha,j+2)
             c = conv(image, kernel, strides=self.strides, padding=self.padding)

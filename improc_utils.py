@@ -489,6 +489,8 @@ def interp3lin(image,X,Y,Z):
 
     return res 
 
+
+
 def align_to_physical_coords(im):
     
     aff = im.affine
@@ -509,6 +511,10 @@ def align_to_physical_coords(im):
     for k in range(3):
         idxinv[idx[k]] = k
     
+    if len(im.shape) > 3:
+        for k in range(len(im.shape)-3):
+            idxinv.append(k+3)
+    
     d = np.transpose(d,idxinv)
     
     
@@ -528,12 +534,5 @@ def align_to_physical_coords(im):
     im.set_sform(newaff)
         
     return  nib.nifti1.Nifti1Image(d, newaff , header=im.header)
-
-
-
-
-
-
-
 
 

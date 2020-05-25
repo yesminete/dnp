@@ -12,7 +12,6 @@ This is a temporary script file.
 
 import numpy as np
 import math
-import matplotlib.pyplot as plt
 #from PIL import Image
 #import cv2
 
@@ -318,7 +317,10 @@ class PatchWorkModel(Model):
             assert res_nonspatial is not None, "no classifier output for attention in lazyEval available!!"
             attention = res_nonspatial[:,0]
         else:
-            attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+            if lazyEval['label'] is None:        
+                attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+            else:
+                attention = reduceFun(attentionFun(res[...,lazyEval['label']:lazyEval['label']+1]),axis=list(range(1,nD+2)))                  
         idx = tf.argsort(attention,0,'DESCENDING')
         numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
         idx = idx[0:numps]            
@@ -467,6 +469,8 @@ class PatchWorkModel(Model):
              lazyEval['attentionFun'] = tf.math.sigmoid
          if 'fraction' not in lazyEval:
              lazyEval['fraction'] = 0.2
+         if 'label' not in lazyEval:
+             lazyEval['label'] = None
 
               
      for w in range(num_chunks):
@@ -539,6 +543,7 @@ class PatchWorkModel(Model):
                  num_chunks=1,
                  scale_to_original=True,
                  scalevalue=None,
+                 along4dim=False,
                  align_physical=True,
                  lazyEval = None):
       nD = self.cropper.ndim
@@ -559,18 +564,29 @@ class PatchWorkModel(Model):
       if scalevalue is not None:
           a = a * scalevalue
 
-      res = self.apply_full(a,generate_type=generate_type,
-                            jitter=jitter,
-                            jitter_border_fix=jitter_border_fix,
-                            overlap=overlap,                            
-                            repetitions=repetitions,
-                            num_chunks=num_chunks,
-                            branch_factor=branch_factor,
-                            resolution = resolution,
-                            lazyEval = lazyEval,
-                            verbose=True,
-                            scale_to_original=scale_to_original)
 
+      do_app = lambda x: self.apply_full(x,generate_type=generate_type,
+                                jitter=jitter,
+                                jitter_border_fix=jitter_border_fix,
+                                overlap=overlap,                            
+                                repetitions=repetitions,
+                                num_chunks=num_chunks,
+                                branch_factor=branch_factor,
+                                resolution = resolution,
+                                lazyEval = lazyEval,
+                                verbose=True,
+                                scale_to_original=scale_to_original)
+
+
+      if along4dim:
+          res = []
+          for k in range(a.shape[nD+1]):
+              res.append(tf.expand_dims(do_app(a[...,k:k+1]),nD))
+          res = tf.concat(res,nD)             
+          
+      else:         
+          res = do_app(a)
+          
       res = res.numpy()
       if nD == 2:
           res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
@@ -665,6 +681,9 @@ class PatchWorkModel(Model):
     return model
     
   def show_train_stat(self):
+
+    import matplotlib.pyplot as plt
+      
     l = len(self.trainloss_hist[0][1])
     cols = 'rbymck'
     for k  in range(l):        
@@ -735,6 +754,8 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None
             ):
+      
+      
       
     def getSample(subset):
         tset = [trainset[i] for i in subset]
