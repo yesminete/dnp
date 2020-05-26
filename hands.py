@@ -186,14 +186,22 @@ def createClassifier(name=None,depth=4,outK=2):
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
                   scale_fac =  0.7, 
                   scale_fac_ref = 'max',
-                  init_scale = -1,
+                  init_scale = '50mm,50mm,50mm',
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
                   depth=2)
 
+#%%
 
+cgen.sample(tf.ones([1,100,100,100]),None,generate_type='tree',
+                                    resolutions=[1,1,1],
+                                    num_patches=1,
+                                    verbose=True)
+
+
+#%%
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : createBlock(outK=outK),

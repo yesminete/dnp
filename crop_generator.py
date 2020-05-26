@@ -328,7 +328,7 @@ class CropGenerator():
         scales = self.tree_complete(scales)
 
       # for repmatting the classlabels
-      if self.model.classifier_train and scales[k]['class_labels'] is not None:
+      if scales[k]['class_labels'] is not None and self.model.classifier_train:
           for k in range(len(scales)):
               m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
               tmp = scales[k]['class_labels']
