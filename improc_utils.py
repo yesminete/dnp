@@ -9,6 +9,7 @@ Created on Mon Mar 23 15:29:09 2020
 import tensorflow as tf
 import nibabel as nib
 import numpy as np
+from nibabel.processing import (resample_from_to, resample_to_output, smooth_image)
 
 import os
 
