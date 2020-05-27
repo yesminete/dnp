@@ -501,6 +501,7 @@ def interp3lin(image,X,Y,Z):
 def load_data_structured(  contrasts, labels, subjects=None,
                            annotations_selector=None, exclude_incomplete_labels=True,
                            add_inverted_label=False,max_num_data=None,align_physical=True,
+                           threshold=0.5,
                            nD=3,ftype=tf.float32):
 
     
@@ -622,7 +623,8 @@ def load_data_structured(  contrasts, labels, subjects=None,
                         if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
                             img= resample_from_to(img, template_nii,order=3)
                     img = np.squeeze(img.get_fdata());
-                    img = (img>0.5)*1
+                    if threshold is not None:
+                        img = (img>threshold)*1
                     img = np.expand_dims(np.squeeze(img),0)
                     if len(img.shape) == nD+1:
                         img = np.expand_dims(img,nD+1)
