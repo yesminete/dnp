@@ -9,8 +9,47 @@ Created on Mon Apr 13 11:37:27 2020
 from tensorflow.keras import layers
 import tensorflow as tf
 
+import patchwork
 
 custom_layers = {}
+
+
+
+
+
+
+def createUnet_v1(depth=4,outK=1,feature_dim=5):
+
+  
+  def BNrelu():
+      return [layers.BatchNormalization(), layers.LeakyReLU()]
+  def conv_down(fdim):
+       return layers.Conv3D(fdim,3,padding='VALID') 
+  def conv_up(fdim,even):
+       return layers.Conv3DTranspose(fdim,4+even,padding='VALID',strides=(2,2,2)) 
+  def conv(outK):
+       return layers.Conv3D(outK,4,padding='SAME') 
+      
+  theLayers = {}
+  offs = [0,1,0,0]
+  for z in range(depth):
+    fdim = feature_dim*(1+z)
+    id_d = str(1000 + z+1)
+    id_u = str(2000 + depth-z+1)
+    theLayers[id_d+"conv"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
+    theLayers[id_d+"relu"] = BNrelu() + [layers.MaxPooling3D(pool_size=(2,2,2)) ]
+    theLayers[id_u+"conv"] = conv_up(fdim,offs[z])
+    theLayers[id_u+"relu"] = BNrelu()
+  theLayers["3000"] =  [layers.Dropout(rate=0.5), conv(outK)]
+  return patchwork.CNNblock(theLayers)
+
+
+
+
+
+
+
+
 
 
 class sigmoid_softmax(layers.Layer):

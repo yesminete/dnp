@@ -35,10 +35,10 @@ from .customLayers import *
 ## A CNN wrapper to allow easy layer references and stacking
 
 class CNNblock(layers.Layer):
-  def __init__(self,theLayers=None,name=None):
+  def __init__(self,theLayers=None,name=None,verbose=False):
     super().__init__(name=name)
     
-    self.verbose = False
+    self.verbose = verbose
     if theLayers is None:
         self.theLayers = {}
     else:
@@ -496,10 +496,12 @@ class PatchWorkModel(Model):
 
             print(">>> applying network -------------------------------------------------")
             start = timer()
-            if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None:
+            # use predict only if batch_size is the same across patch levels
+            if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None and branch_factor==1:
                 r = self.predict(data_)
                 if not isinstance(r,list):
                     r = [r]
+            # otherwise use ordinary apply
             else:
                 r = self(data_,lazyEval=lazyEval)
             print(">>> time elapsed, network application: " + str(timer() - start) )
