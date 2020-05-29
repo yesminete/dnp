@@ -10,7 +10,7 @@ import tensorflow as tf
 import nibabel as nib
 import numpy as np
 from nibabel.processing import (resample_from_to, resample_to_output, smooth_image)
-
+import json
 import os
 
 ########## Cropmodel ##########################################
@@ -581,39 +581,76 @@ def load_data_structured(  contrasts, labels, subjects=None,
                 notfound = False
                 
                 if ext == '.json':
-                    annos = loadAnnotation(fname,asdict=True)
-                    sel = annotations_selector['labels']   
                     
-                    delim='.'
-                    sizefac=1
-                    if 'delim' in annotations_selector:
-                        delim = annotations_selector['delim']
-                    if 'sizefac' in annotations_selector:
-                        sizefac = annotations_selector['sizefac']
-                    for spec in sel:
-                        points = []
-                        for i in spec:
-                            k = i.split(delim)
-                            if k[0] not in annos:
-                                notfound = True
+                    with open(fname) as json_file:
+                        jsobj = json.load(json_file)
+
+                    if 'annotations' in jsobj:                    
+                        annos = loadAnnotation(jsobj['annotations'],asdict=True)
+                        sel = annotations_selector['labels']   
+                        
+                        delim='.'
+                        sizefac=1
+                        if 'delim' in annotations_selector:
+                            delim = annotations_selector['delim']
+                        if 'sizefac' in annotations_selector:
+                            sizefac = annotations_selector['sizefac']
+                        for spec in sel:
+                            points = []
+                            for i in spec:
+                                k = i.split(delim)
+                                if k[0] not in annos:
+                                    notfound = True
+                                    break
+                                if k[1] in annos[k[0]]:
+                                    a = annos[k[0]][k[1]]
+                                    p = a['coords'][0:nD]
+                                    p.append(a['size']*sizefac)
+                                    points.append(p)
+                                else:
+                                    print(k[1] + ' not present for ' + fname)
+                            if notfound:
                                 break
-                            if k[1] in annos[k[0]]:
-                                a = annos[k[0]][k[1]]
-                                p = a['coords'][0:nD]
-                                p.append(a['size']*sizefac)
-                                points.append(p)
-                            else:
-                                print(k[1] + ' not present for ' + fname)
-                        if notfound:
-                            break
-                        if len(points) == 0:
-                            notfound=True
-                            break
-                        img = renderpoints(points, header,ftype)
-                        img = np.expand_dims(img,0)
-                        img = np.expand_dims(img,nD+1)
-                        labs.append(img)
-                     
+                            if len(points) == 0:
+                                notfound=True
+                                break
+                            img = renderpoints(points, header,ftype)
+                            img = np.expand_dims(img,0)
+                            img = np.expand_dims(img,nD+1)
+                            labs.append(img)
+                    elif 'content' in jsobj:
+                        delim='.'
+                        if 'delim' in annotations_selector:
+                            delim = annotations_selector['delim']
+                        
+                        form = jsobj['content']
+                        form = form[next(iter(form))]
+                        sel = annotations_selector['classes']   
+                        classes = []
+                        for spec in sel:
+                            k = spec.split(delim)
+                            if len(k) == 1:                            
+                                if k[0] not in form:
+                                    notfound = True
+                                    break
+                                else:
+                                    classes.append(form[k[0]])
+                            elif len(k) == 2:
+                                    
+                                if k[0] not in form or k[1] not in form[k[0]]:
+                                    notfound = True
+                                    break
+                                else:
+                                    classes.append(form[k[0]][k[1]])
+                            if notfound:
+                                break
+                            if len(classes) == 0:
+                                notfound=True
+                                break
+                            labs.append(classes)
+                        
+                        form
+
 
                 else:
                     img = load_nifti(fname)   
@@ -704,10 +741,7 @@ def renderpoints(points,header,ftype):
 
 
 
-def loadAnnotation(fname,asdict=True):
-    with open(fname) as json_file:
-        annos = json.load(json_file)
-        annos = annos['annotations']
+def loadAnnotation(annos,asdict=True):
         if not asdict:
             return annos
         else:
