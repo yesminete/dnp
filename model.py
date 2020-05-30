@@ -67,7 +67,7 @@ class CNNblock(layers.Layer):
     
     def apply_fun(f,x):
         if self.verbose:
-            print(f.name , "input_shape: " ,  x.shape)
+            print("  " + f.name , "input_shape: " ,  x.shape)
         if hasattr(f,'isBi') and f.isBi:
             return f(x,alphas,training=training)
         else:
@@ -86,7 +86,9 @@ class CNNblock(layers.Layer):
             print("with alphas: " , alphas.shape)
 
     for l in sorted(self.theLayers):
-
+      
+      if self.verbose:
+          print("metalayer: " + l)
         
       # this gathers all inputs that might have been forwarded from other layers
       forwarded = cats[l]
@@ -116,6 +118,8 @@ class CNNblock(layers.Layer):
 
             if 'dest' in d:
               dest = d['dest']
+              if self.verbose:
+                  print("          dest:"+dest)
               cats[dest].append(res)  
             else:            
               y = res

@@ -18,7 +18,7 @@ custom_layers = {}
 
 
 
-def createUnet_v1(depth=4,outK=1,feature_dim=5):
+def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,verbose=False):
 
   
   def BNrelu():
@@ -36,12 +36,16 @@ def createUnet_v1(depth=4,outK=1,feature_dim=5):
     fdim = feature_dim*(1+z)
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
-    theLayers[id_d+"conv"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
+    theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
+    for k in range(multiplicity-1):
+        theLayers[id_d+"conv"+str(k+1)] = conv(fdim)            
     theLayers[id_d+"relu"] = BNrelu() + [layers.MaxPooling3D(pool_size=(2,2,2)) ]
-    theLayers[id_u+"conv"] = conv_up(fdim,offs[z])
+    theLayers[id_u+"conv0"] = conv_up(fdim,offs[z])
+    for k in range(multiplicity-1):
+        theLayers[id_u+"conv"+str(k+1)] = conv(fdim)
     theLayers[id_u+"relu"] = BNrelu()
   theLayers["3000"] =  [layers.Dropout(rate=0.5), conv(outK)]
-  return patchwork.CNNblock(theLayers)
+  return patchwork.CNNblock(theLayers,verbose=verbose)
 
 
 
