@@ -229,10 +229,14 @@ class CropGenerator():
                               # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
       if isinstance(self.scale_fac,float):
           return [self.scale_fac]*self.ndim
+      elif isinstance(self.scale_fac,dict):
+          tmp = self.scale_fac['level' + str(level)]
+          if isinstance(tmp,float):
+              return [tmp]*self.ndim
+          else:
+              return tmp
       elif isinstance(self.scale_fac,Iterable):
           return [self.scale_fac[level]]*self.ndim
-      elif isinstance(self.scale_fac,dict):
-          return self.scale_fac['level' + str(level)]
             
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
