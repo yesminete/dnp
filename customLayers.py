@@ -16,19 +16,25 @@ custom_layers = {}
 
 
 
+def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False):
 
-
-def createUnet3D_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,verbose=False):
-
+  if nD == 3:
+      _conv = layers.Conv3D
+      _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
+      _maxpool = layers.MaxPooling3D(pool_size=(2,2,2))
+  elif nD == 2:
+      _conv = layers.Conv2D
+      _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=(2,2))
+      _maxpool = layers.MaxPooling2D(pool_size=(2,2))
   
   def BNrelu():
       return [layers.BatchNormalization(), layers.LeakyReLU()]
   def conv_down(fdim):
-       return layers.Conv3D(fdim,3,padding='VALID') 
+       return _conv(fdim,3,padding='VALID') 
   def conv_up(fdim,even):
-       return layers.Conv3DTranspose(fdim,4+even,padding='VALID',strides=(2,2,2)) 
+       return _convT(fdim,4+even,padding='VALID' )
   def conv(outK):
-       return layers.Conv3D(outK,4,padding='SAME') 
+       return _conv(outK,4,padding='SAME') 
   
   if not isinstance(feature_dim,list):
       fdims=[]
@@ -46,7 +52,7 @@ def createUnet3D_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,verbose=False):
     theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
     for k in range(multiplicity-1):
         theLayers[id_d+"conv"+str(k+1)] = conv(fdim)            
-    theLayers[id_d+"relu"] = BNrelu() + [layers.MaxPooling3D(pool_size=(2,2,2)) ]
+    theLayers[id_d+"relu"] = BNrelu() + [_maxpool ]
     theLayers[id_u+"conv0"] = conv_up(fdim,offs[z])
     for k in range(multiplicity-1):
         theLayers[id_u+"conv"+str(k+1)] = conv(fdim)

@@ -104,7 +104,8 @@ for k in range(2):
 #for k in range(5):
 #  labelset[k] =  tf.convert_to_tensor( labelset[k] , dtype=tf.float32)
 
-
+#%%
+u = customLayers.createUnet3D_v1(feature_dim=[10,20,50],depth=3,verbose=True); r = u(tf.ones([1,32,32,32,1])); r.shape
 
 #%%
 
