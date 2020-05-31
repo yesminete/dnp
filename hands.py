@@ -198,10 +198,10 @@ cgen.sample(tf.ones([1,100,100,100]),None,generate_type='tree',
 
 #%% 2D
 cgen = patchwork.CropGenerator(patch_size = (32,32), 
-                  scale_fac =  0.7, 
+                  scale_fac =  0.5, 
                   scale_fac_ref = 'max',
-                  init_scale = '50mm,50mm',
-                  smoothfac_data='boxcar',
+                  init_scale = '70mm,70mm',
+                  smoothfac_data=['boxcar',0.5],
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',

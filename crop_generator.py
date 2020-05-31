@@ -218,25 +218,6 @@ class CropGenerator():
              lazyEval=None,
              verbose=False):
 
-    def get_patchsize(level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
-        if isinstance(self.patch_size[0],Iterable):
-            return self.patch_size[level]
-        else: 
-            return self.patch_size
-          
-
-    def get_scalefac(level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
-                              # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
-      if isinstance(self.scale_fac,float) or isinstance(self.scale_fac,int):
-          return [self.scale_fac]*self.ndim
-      elif isinstance(self.scale_fac,dict):
-          tmp = self.scale_fac['level' + str(level)]
-          if isinstance(tmp,float) or isinstance(tmp,int):
-              return [tmp]*self.ndim
-          else:
-              return tmp
-      elif isinstance(self.scale_fac,Iterable):
-          return [self.scale_fac[level]]*self.ndim
             
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
@@ -291,7 +272,7 @@ class CropGenerator():
 
 
       localCrop = lambda x,level : self.createCropsLocal(trainset_,labels_,x,
-                                                         get_patchsize(level), get_scalefac(level),
+                                                         level,
                                                          generate_type,test,
                                                            num_patches=num_patches,branch_factor=branch_factor,
                                                            jitter=jitter,jitter_border_fix=jitter_border_fix,
@@ -699,14 +680,52 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
-  def createCropsLocal(self,data_parent,labels_parent,crops,patch_size,this_scale_fac,generate_type,test,
+  def createCropsLocal(self,data_parent,labels_parent,crops,
+      level,
+      generate_type,test,
       jitter=0,
       jitter_border_fix=False,
       num_patches=1,
       branch_factor=1,
       overlap=0,resolution=None,balance=None,verbose=True):
       
-      scale_fac = self.scale_fac
+      
+      
+      def get_patchsize(level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
+            if isinstance(self.patch_size[0],Iterable):
+                return self.patch_size[level]
+            else: 
+                return self.patch_size
+              
+    
+      def get_scalefac(level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
+                                  # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
+          if isinstance(self.scale_fac,float) or isinstance(self.scale_fac,int):
+              return [self.scale_fac]*self.ndim
+          elif isinstance(self.scale_fac,dict):
+              tmp = self.scale_fac['level' + str(level)]
+              if isinstance(tmp,float) or isinstance(tmp,int):
+                  return [tmp]*self.ndim
+              else:
+                  return tmp
+          elif isinstance(self.scale_fac,Iterable):
+              return [self.scale_fac[level]]*self.ndim
+      
+      def get_smoothing(level,which):
+          if which == 'data':
+              sm = self.smoothfac_data
+          else:
+              sm = self.smoothfac_label
+          if isinstance(sm,list):
+              return sm[level]
+          else:
+              return sm
+        
+      
+      patch_size=get_patchsize(level)
+      this_scale_fac=get_scalefac(level)
+      
+      
       init_scale = self.init_scale
       keepAspect = self.keepAspect
       divisor = 8 # used for initital scale to get a nice image size
@@ -871,9 +890,9 @@ class CropGenerator():
 
 
       ############## do the actual cropping
-      res_data = self.crop(data_parent,parent_box_index,resolution,self.smoothfac_data,interp_type=self.interp_type,verbose=verbose)        
+      res_data = self.crop(data_parent,parent_box_index,resolution,get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)        
       if labels_parent is not None:      
-        res_labels = self.crop(labels_parent,parent_box_index,resolution,self.smoothfac_label,interp_type=self.interp_type,verbose=verbose)
+        res_labels = self.crop(labels_parent,parent_box_index,resolution,get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
       else:
         res_labels = None
 
