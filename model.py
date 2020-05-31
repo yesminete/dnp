@@ -200,9 +200,7 @@ class PatchWorkModel(Model):
     self.blocks = []
     self.classifiers = []
     self.finalBlock=finalBlock
-
-    self.cropper = cropper
-    cropper.model = self
+    self.set_cropgen(cropper)
     self.forward_type = forward_type
     self.num_labels = num_labels
     self.num_classes = num_classes
@@ -280,6 +278,10 @@ class PatchWorkModel(Model):
                'trained_epochs':self.trained_epochs
             }
 
+
+  def set_cropgen(self, cropper):
+      self.cropper = cropper
+      cropper.model = self
 
 
 

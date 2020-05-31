@@ -37,13 +37,13 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                 subjects = '#Tag:test',
                                # subjects = '15341572', #'#Tag:MIDItrain',
                                 contrasts_selector = ['T1.nii.gz'],
- #                               labels_selector = ['mask_untitled0.nii.gz','mask_untitled0.nii.gz'],
+                                labels_selector = ['mask_untitled0.nii.gz','mask_untitled0.nii.gz'],
 #                                labels_selector = ['anno*/testset.ano.json'],
-                                labels_selector = ['forms/untitledrrr.form.json'],
-                                annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
-                                                       ,'sizefac':1,
-                                                         'classes' : [ 'mycheck' , 'myrate.AF']                                                      
-                                                       },
+                              #  labels_selector = ['forms/untitledrrr.form.json'],
+                              #  annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
+                              #                         ,'sizefac':1,
+                              #                           'classes' : [ 'mycheck' , 'myrate.AF']                                                      
+                              #                         },
                                 exclude_incomplete_labels=True,
                                 add_inverted_label=False,
                                 max_num_data=1
@@ -178,11 +178,12 @@ def createClassifier(name=None,depth=4,outK=2):
 #y = createBlock(outK=3)
 #print(y(trainset[0][0:1,0:32,0:32,:]).shape)
 #%% 3D
+nD=3
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
                   scale_fac =  0.7, 
                   scale_fac_ref = 'max',
                   init_scale = -1,#'50mm,50mm,50mm',
-                  smoothfac_data=['boxcar',0],
+                  smoothfac_data=['boxcar',None],
                   ndim=3,
                   interp_type = 'NN',
                   scatter_type = 'NN',
@@ -218,16 +219,16 @@ cgen.sample(tf.ones([1,100,100]),None,generate_type='tree',
                                     verbose=True)
 
 
-#%%
+
 
 #%%
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
-                      blockCreator= lambda level,outK : createBlock(outK=outK),
+                      blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
                       spatial_train=True,
                       intermediate_loss=False,
-                      block_out=[4,1],
+                      #block_out=[4,1],
 
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                     #  cls_intermediate_out=2,
@@ -235,7 +236,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  classifier_train=True,
                       
                       finalBlock= customLayers.sigmoid_softmax(),
-                      forward_type='simple',
+                     # forward_type='simple',
                       num_labels = 1,
 #                      num_classes = 1                      
                       )
