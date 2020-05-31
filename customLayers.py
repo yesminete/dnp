@@ -18,7 +18,7 @@ custom_layers = {}
 
 
 
-def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,verbose=False):
+def createUnet3D_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,verbose=False):
 
   
   def BNrelu():
@@ -29,11 +29,18 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,verbose=False):
        return layers.Conv3DTranspose(fdim,4+even,padding='VALID',strides=(2,2,2)) 
   def conv(outK):
        return layers.Conv3D(outK,4,padding='SAME') 
-      
+  
+  if not isinstance(feature_dim,list):
+      fdims=[]
+      for z in range(depth):
+          fdims.append(feature_dim*(1+z))     
+  else:
+      fdims = feature_dim
+
   theLayers = {}
   offs = [0,1,0,0]
   for z in range(depth):
-    fdim = feature_dim*(1+z)
+    fdim = fdims[z]
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
     theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]

@@ -33,23 +33,40 @@ def conv_gauss2D(img,std):
   r = tf.concat(r,3)
   return r
 
+def conv_boxcar2D(img,std):
+  box = tf.ones(std,dtype=img.dtype) / tf.cast(np.prod(std),dtype=img.dtype)
+  box = tf.expand_dims(box,2)
+  box = tf.expand_dims(box,3)
+  if len(img.shape) < 4:
+      img = tf.expand_dims(img,3)  
+  r = []
+  for k in range(img.shape[3]):
+    r.append(tf.nn.conv2d(img[:,:,:,k:k+1],box,1,'SAME'))
+  r = tf.concat(r,3)
+  return r
+
 def conv_gauss2D_fft(img,std):
+    
   sz = img.shape
   pad = np.floor(std*2)
-  s0 = np.int32(sz[1]+pad)
-  s1 = np.int32(sz[2]+pad)
-  X,Y = tf.meshgrid(list(range(0,s1)),list(range(0,s0)))
+  s0 = np.int32(sz[1]+pad[0])
+  s1 = np.int32(sz[2]+pad[1])
+  X,Y = tf.meshgrid(list(range(0,s0)),list(range(0,s1)),indexing='ij')
   X = tf.cast(X,dtype=tf.float32)
   Y = tf.cast(Y,dtype=tf.float32)
-  X = X - 0.5*(sz[2]+pad)
-  Y = Y - 0.5*(sz[1]+pad)
-  gauss_kernel = tf.exp(-(X*X + Y*Y)/(2*std*std))
+  X = X - 0.5*(sz[1]+pad[0])
+  Y = Y - 0.5*(sz[2]+pad[1])
+  gauss_kernel = tf.exp(-(X*X/(2*std[0]*std[0]) + Y*Y/(2*std[1]*std[1])))
   gauss_kernel = gauss_kernel / tf.reduce_sum(gauss_kernel)
   gauss_kernel = tf.cast(gauss_kernel,dtype=tf.complex64)
   gauss_kernel = tf.signal.fftshift(gauss_kernel,[0,1])
   gfft = tf.signal.fft2d(gauss_kernel)  
   gfft = tf.expand_dims(gfft,0)
-  pads = tf.cast([[0,0],[0,pad],[0,pad]],tf.int32)
+  pads = tf.cast([[0,0],[0,pad[0]],[0,pad[1]]],tf.int32)
+
+
+  if len(img.shape) < 4:
+      img = tf.expand_dims(img,3)
 
   r = []
   for k in range(img.shape[3]):
@@ -71,23 +88,26 @@ def conv_gauss2D_fft(img,std):
 def conv_gauss3D_fft(img,std):
   sz = img.shape
   pad = np.floor(std*2)
-  s0 = np.int32(sz[1]+pad)
-  s1 = np.int32(sz[2]+pad)
-  s2 = np.int32(sz[3]+pad)
+  s0 = np.int32(sz[1]+pad[0])
+  s1 = np.int32(sz[2]+pad[1])
+  s2 = np.int32(sz[3]+pad[2])
   X,Y,Z = tf.meshgrid(list(range(0,s0)),list(range(0,s1)),list(range(0,s2)),indexing='ij')
   X = tf.cast(X,dtype=tf.float32)
   Y = tf.cast(Y,dtype=tf.float32)
   Z = tf.cast(Z,dtype=tf.float32)
-  X = X - 0.5*(sz[1]+pad)
-  Y = Y - 0.5*(sz[2]+pad)
-  Z = Z - 0.5*(sz[3]+pad)
-  gauss_kernel = tf.exp(-(X*X + Y*Y + Z*Z)/(2*std*std))
+  X = X - 0.5*(sz[1]+pad[0])
+  Y = Y - 0.5*(sz[2]+pad[1])
+  Z = Z - 0.5*(sz[3]+pad[2])
+  gauss_kernel = tf.exp(-(X*X/(2*std[0]*std[0]) + Y*Y/(2*std[1]*std[1]) + Z*Z/(2*std[2]*std[2])))
   gauss_kernel = gauss_kernel / tf.reduce_sum(gauss_kernel)
   gauss_kernel = tf.cast(gauss_kernel,dtype=tf.complex64)
   gauss_kernel = tf.signal.fftshift(gauss_kernel,[0,1,2])
   gfft = tf.signal.fft3d(gauss_kernel)  
   gfft = tf.expand_dims(gfft,0)
-  pads = tf.cast([[0,0],[0,pad],[0,pad],[0,pad]],tf.int32)
+  pads = tf.cast([[0,0],[0,pad[0]],[0,pad[1]],[0,pad[2]]],tf.int32)
+
+  if len(img.shape) < 5:
+      img = tf.expand_dims(img,4)
 
   r = []
   for k in range(img.shape[4]):
@@ -117,13 +137,16 @@ def gaussian3D(std):
   gauss_kernel = tf.exp(-(X*X + Y*Y + Z*Z)/(2*std*std))
   return gauss_kernel / tf.reduce_sum(gauss_kernel)
 
-def conv_gauss3D(img,std):
-  g = gaussian3D(std)
-  g = tf.expand_dims(g,3)
-  g = tf.expand_dims(g,4)
+
+def conv_boxcar3D(img,std):
+  box = tf.ones(std,dtype=img.dtype) / tf.cast(np.prod(std),dtype=img.dtype)
+  box = tf.expand_dims(box,3)
+  box = tf.expand_dims(box,4)
   r = []
+  if len(img.shape) < 5:
+      img = tf.expand_dims(img,4)
   for k in range(img.shape[4]):
-    r.append(tf.nn.conv3d(img[:,:,:,:,k:k+1],g,[1,1,1,1,1],'SAME'))
+    r.append(tf.nn.conv3d(img[:,:,:,:,k:k+1],box,(1,1,1,1,1),'SAME'))
   r = tf.concat(r,4)
   return r
 

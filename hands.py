@@ -119,8 +119,8 @@ def BNrelu(name=None):
   return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
 
 n = 2
-nD = 3
-s = (2,2,2)
+nD = 2
+s = (2,2)
 pooly = lambda: layers.MaxPooling3D(pool_size=s)
 
 def conv_down(name=None,dest=None):
@@ -176,33 +176,47 @@ def createClassifier(name=None,depth=4,outK=2):
 #print(x(trainset[0][0:1,0:32,0:32,:]).shappatchwork.CNNblock()e)
 #y = createBlock(outK=3)
 #print(y(trainset[0][0:1,0:32,0:32,:]).shape)
-#%%
-
-# x = createBlock()
-# tmp = tf.tile(trainset[0],[4,1,1,1])
-# tmp = tmp[:,0:64,0:64,:]
-# q = x(tmp)
-# print(q.shape)
-#model = patchwork.PatchWorkModel.load('yyy',custom_objects={'BNrelu':BNrelu})
-#patch_size = (16,16,16), 
- #                 scale_fac =  0.7, 
+#%% 3D
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
                   scale_fac =  0.7, 
                   scale_fac_ref = 'max',
                   init_scale = '50mm,50mm,50mm',
+                  smoothfac_data=1,
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
                   depth=2)
 
-#%%
+
 
 cgen.sample(tf.ones([1,100,100,100]),None,generate_type='tree',
                                     resolutions=[1,1,1],
                                     num_patches=1,
                                     verbose=True)
 
+
+#%% 2D
+cgen = patchwork.CropGenerator(patch_size = (32,32), 
+                  scale_fac =  0.7, 
+                  scale_fac_ref = 'max',
+                  init_scale = '50mm,50mm',
+                  smoothfac_data='boxcar',
+                  ndim=nD,
+                  interp_type = 'NN',
+                  scatter_type = 'NN',
+                  #create_indicator_classlabels=True,
+                  depth=2)
+
+
+
+cgen.sample(tf.ones([1,100,100]),None,generate_type='tree',
+                                    resolutions=[1,1],
+                                    num_patches=1,
+                                    verbose=True)
+
+
+#%%
 
 #%%
 model = patchwork.PatchWorkModel(cgen,

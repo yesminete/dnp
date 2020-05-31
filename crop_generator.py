@@ -227,11 +227,11 @@ class CropGenerator():
 
     def get_scalefac(level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
                               # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
-      if isinstance(self.scale_fac,float):
+      if isinstance(self.scale_fac,float) or isinstance(self.scale_fac,int):
           return [self.scale_fac]*self.ndim
       elif isinstance(self.scale_fac,dict):
           tmp = self.scale_fac['level' + str(level)]
-          if isinstance(tmp,float):
+          if isinstance(tmp,float) or isinstance(tmp,int):
               return [tmp]*self.ndim
           else:
               return tmp
@@ -384,16 +384,36 @@ class CropGenerator():
   #  batch_dim1/batch_dim0 has to be an integer such that the input can repeatedly cropped
   #  in blocks of size batch_dim0
   # output - a stack of shape [batch_dim1,w1,h1,(d1),nD]
-  def crop(self,data_parent,parent_box_index,smoothfac=None,interp_type='NN'):
+  def crop(self,data_parent,parent_box_index,resolution,smoothfac=None,interp_type='NN',verbose=False):
       repfac = parent_box_index.shape[0] // data_parent.shape[0]
+      resolution = np.array(resolution)
       res_data = []
-      if self.ndim == 2:
-          conv_gauss = conv_gauss2D_fft
-      elif self.ndim == 3:
-          conv_gauss = conv_gauss3D_fft
-          
-      if smoothfac is not None and smoothfac > 0.0:
-        data_smoothed =  conv_gauss(data_parent,tf.constant(smoothfac,dtype=self.ftype))
+      if smoothfac is not None:
+        if (isinstance(smoothfac,float) or isinstance(smoothfac,int)) and smoothfac > 0.0:              
+            if self.ndim == 2:
+                  conv_gauss = conv_gauss2D_fft
+            elif self.ndim == 3:
+                  conv_gauss = conv_gauss3D_fft          
+            sigmas = smoothfac*resolution
+            if verbose:
+                print(' Gaussian smooth: ', sigmas)
+            data_smoothed =  conv_gauss(data_parent,tf.constant(sigmas,dtype=self.ftype))
+        elif smoothfac == 'boxcar':
+            if self.ndim == 2:
+                  conv_box = conv_boxcar2D
+            elif self.ndim == 3:
+                  conv_box = conv_boxcar3D                            
+            sz = np.round(resolution)
+            sz[sz<1] = 1
+            if np.max(sz) > 1:        
+                if verbose:
+                    print(' Box smooth: ', sz)
+                data_smoothed =  conv_box(data_parent,sz)
+            else:
+                data_smoothed =  data_parent
+        else:
+            data_smoothed =  data_parent
+            
       else:
         data_smoothed =  data_parent
       ds0 = data_smoothed.shape[0]
@@ -401,8 +421,7 @@ class CropGenerator():
           
           if interp_type == 'NN':
               tmp = tf.gather_nd(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...],batch_dims=1) 
-          else:
-              
+          else:              
               tmp = self.lin_interp(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...])
           res_data.append(tmp)
               
@@ -852,9 +871,9 @@ class CropGenerator():
 
 
       ############## do the actual cropping
-      res_data = self.crop(data_parent,parent_box_index,resolution[0]*self.smoothfac_data,interp_type=self.interp_type)        
+      res_data = self.crop(data_parent,parent_box_index,resolution,self.smoothfac_data,interp_type=self.interp_type,verbose=verbose)        
       if labels_parent is not None:      
-        res_labels = self.crop(labels_parent,parent_box_index,resolution[0]*self.smoothfac_label,interp_type=self.interp_type)
+        res_labels = self.crop(labels_parent,parent_box_index,resolution,self.smoothfac_label,interp_type=self.interp_type,verbose=verbose)
       else:
         res_labels = None
 
