@@ -181,9 +181,9 @@ def createClassifier(name=None,depth=4,outK=2):
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
                   scale_fac =  0.7, 
                   scale_fac_ref = 'max',
-                  init_scale = '50mm,50mm,50mm',
-                  smoothfac_data=1,
-                  ndim=nD,
+                  init_scale = -1,#'50mm,50mm,50mm',
+                  smoothfac_data=['boxcar',0],
+                  ndim=3,
                   interp_type = 'NN',
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
@@ -191,17 +191,18 @@ cgen = patchwork.CropGenerator(patch_size = (32,32,32),
 
 
 
-cgen.sample(tf.ones([1,100,100,100]),None,generate_type='tree',
+cgen.sample(tf.ones([1,109,100,100]),None,generate_type='tree',
                                     resolutions=[1,1,1],
                                     num_patches=1,
                                     verbose=True)
 
 
 #%% 2D
+nD=2
 cgen = patchwork.CropGenerator(patch_size = (32,32), 
                   scale_fac =  0.5, 
                   scale_fac_ref = 'max',
-                  init_scale = '70mm,70mm',
+                  init_scale = -1,
                   smoothfac_data=['boxcar',0.5],
                   ndim=nD,
                   interp_type = 'NN',

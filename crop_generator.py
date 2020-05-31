@@ -874,15 +874,19 @@ class CropGenerator():
   
 
 
-      resolution = []
+      relres = []
+      
       for k in range(nD):
-        resolution.append(((parent_boxes[0,k+nD]-parent_boxes[0,k])*data_parent.shape[k+1]/patch_size[k]).numpy() ) 
+        relres.append(((parent_boxes[0,k+nD]-parent_boxes[0,k])*data_parent.shape[k+1]/patch_size[k]).numpy() ) 
                     
   
       if verbose:
-        print("--------- cropping ")
+        print("--------- cropping, level ",level)
         print("shape of patch: ", *patch_size )
-        print("voxsize (relative to original scale): ", *resolution)
+        print("voxsize (relative to original scale): ", *relres)
+        if resolution is not None:
+            abssz = resolution[0:nD] * np.array(relres) * patch_size[0:nD]
+            print("patchsize (mm): ", *abssz)
         print("numpatches in level: %d" % (parent_box_index.shape[0] / data_parent.shape[0]))
         print("shape of full output: ",  *list(map(lambda x: x.numpy(), dest_full_size[1:])))
         
@@ -890,9 +894,9 @@ class CropGenerator():
 
 
       ############## do the actual cropping
-      res_data = self.crop(data_parent,parent_box_index,resolution,get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)        
+      res_data = self.crop(data_parent,parent_box_index,relres,get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)        
       if labels_parent is not None:      
-        res_labels = self.crop(labels_parent,parent_box_index,resolution,get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
+        res_labels = self.crop(labels_parent,parent_box_index,relres,get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
       else:
         res_labels = None
 
