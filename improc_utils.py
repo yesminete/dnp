@@ -523,7 +523,7 @@ def interp3lin(image,X,Y,Z):
 
 def load_data_structured(  contrasts, labels, subjects=None,
                            annotations_selector=None, exclude_incomplete_labels=True,
-                           add_inverted_label=False,max_num_data=None,align_physical=True,
+                           add_inverted_label=False,one_hot_index_list=None,max_num_data=None,align_physical=True,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
 
@@ -533,6 +533,9 @@ def load_data_structured(  contrasts, labels, subjects=None,
         if align_physical:            
             img = align_to_physical_coords(img)
         return img
+    
+    if one_hot_index_list is not None:
+        threshold = None
     
     
     if subjects is None:
@@ -683,11 +686,24 @@ def load_data_structured(  contrasts, labels, subjects=None,
                         if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
                             img= resample_from_to(img, template_nii,order=3)
                     img = np.squeeze(img.get_fdata());
-                    if threshold is not None:
-                        img = (img>threshold)*1
+
                     img = np.expand_dims(np.squeeze(img),0)
                     if len(img.shape) == nD+1:
                         img = np.expand_dims(img,nD+1)
+
+                    if threshold is not None and one_hot_index_list is not None:
+                         assert 0,"not possible to use threshold and one_hot_index_list"
+                        
+                    if threshold is not None:
+                        img = (img>threshold)*1
+                        
+                    if one_hot_index_list is not None:
+                        r = []
+                        for j in one_hot_index_list:
+                            r.append( tf.cast(img==j,dtype=ftype) )
+                        img = tf.concat(r,nD+1)
+                                                
+                        
                     img = tf.convert_to_tensor(img,dtype=ftype)
                     labs.append(img)
             else:
@@ -707,6 +723,8 @@ def load_data_structured(  contrasts, labels, subjects=None,
                     #indic = indic + labs[j]
                 #indic = tf.cast(indic>0,dtype=ftype)
                 labs = [nums]
+                
+            
                     
         if add_inverted_label:
             union = 0
@@ -799,6 +817,7 @@ def align_to_physical_coords(im):
     
     
     d = im.get_fdata()
+    #d = im._dataobj.get_unscaled()
     
     idxinv = [0]*3
     for k in range(3):

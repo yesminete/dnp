@@ -38,6 +38,7 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                # subjects = '15341572', #'#Tag:MIDItrain',
                                 contrasts_selector = ['T1.nii.gz'],
                                 labels_selector = ['mask_untitled0.nii.gz','mask_untitled0.nii.gz'],
+                                one_hot_index_list=[0,1],
 #                                labels_selector = ['anno*/testset.ano.json'],
                               #  labels_selector = ['forms/untitledrrr.form.json'],
                               #  annotations_selector = { 'labels' : [ [ 'XYZ.A1', 'XYZ.A2' ] , ['WW.noname'] ] 
