@@ -172,7 +172,7 @@ def createCNNBlockFromObj(obj,custom_objects=None):
 class PatchWorkModel(Model):
   def __init__(self,cropper,
 
-               blockCreator,
+               blockCreator=None,
                num_labels=1,
                intermediate_out=0,
                intermediate_loss=False,
@@ -534,11 +534,12 @@ class PatchWorkModel(Model):
          if single:
            res = res[0]
      
-     end = timer()
-     print(">>> total time elapsed: " + str(end - start_total) )
+         end = timer()
+         print(">>> total time elapsed: " + str(end - start_total) )
+         
+         return res
      
-     return res
-
+     return r[0]
 
   # for multi-contrast data fname is a list
   def apply_on_nifti(self,fname, ofname=None,

@@ -722,7 +722,6 @@ class CropGenerator():
               return sm
         
       
-      patch_size=get_patchsize(level)
       this_scale_fac=get_scalefac(level)
       
       
@@ -803,6 +802,8 @@ class CropGenerator():
             
             
         else:
+            patch_size=get_patchsize(level)
+            
             asp = []
             for d in range(nD):
                 asp.append(sz[d+1]/patch_size[d]*this_scale_fac[d]*0.5)

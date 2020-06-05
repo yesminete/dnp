@@ -63,6 +63,38 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False
 
 
 
+# def BNrelu(name=None):
+#   return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
+
+# n = 10
+# s = (2,2)
+# pooly = lambda: layers.MaxPooling2D(pool_size=s)
+
+# def conv_down(name=None,dest=None):
+#   return layers.Conv2D(n,3,padding='SAME') 
+  
+# def conv_up(name=None):
+#   return layers.Conv2DTranspose(n,3,padding='SAME',strides=(2,2)) 
+  
+# def conv_out(outK,name=None):
+#   return layers.Conv2D(outK,3,padding='SAME') 
+  
+
+# def createClassifier(name=None,depth=6,outK=2,multiplicity=4):
+#   theLayers = {}
+#   for z in range(depth):
+#     id_d = str(1000 + z+1)
+#     for i in range(multiplicity):
+#         theLayers[id_d+"conv" + str(i)] = conv_down()
+#         theLayers[id_d+"relu" + str(i)] = BNrelu()
+#     theLayers[id_d+"spool"] = pooly() 
+#   theLayers["3001"] =  layers.Flatten()
+#   theLayers["3002"] =  layers.Dense(outK)
+#   theLayers["3003"] = layers.Activation('softmax')
+    
+#   return patchwork.CNNblock(theLayers,verbose=False)
+
+
 
 
 

@@ -47,6 +47,10 @@ def conv_boxcar2D(img,std):
 
 def conv_gauss2D_fft(img,std):
     
+    
+  if isinstance(std,float) or isinstance(std,int):
+      std = [std]*2
+    
   sz = img.shape
   pad = np.floor(std*2)
   s0 = np.int32(sz[1]+pad[0])
@@ -86,6 +90,11 @@ def conv_gauss2D_fft(img,std):
   return r
 
 def conv_gauss3D_fft(img,std):
+    
+  if isinstance(std,float) or isinstance(std,int):
+      std = [std]*3
+    
+    
   sz = img.shape
   pad = np.floor(std*2)
   s0 = np.int32(sz[1]+pad[0])
@@ -519,11 +528,19 @@ def interp3lin(image,X,Y,Z):
 #                 'subj2' :  '/path/to/subj2/thal.nii' },
 #               { 'subj1' :  '/path/to/subj1/hippo.nii' ,
 #                 'subj2' :  '/path/to/subj2/thal.nii' } ]
+#
+# class  =    { 'subj1' :  [0,1,0],
+#               'subj2' :  [0,0,1] }
+#
+# class  =    { 'subj1' :  1,
+#               'subj2' :  0 }
+#
 
 
-def load_data_structured(  contrasts, labels, subjects=None,
+def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            annotations_selector=None, exclude_incomplete_labels=True,
                            add_inverted_label=False,one_hot_index_list=None,max_num_data=None,align_physical=True,
+                           crop_fdim=None,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
 
@@ -554,6 +571,7 @@ def load_data_structured(  contrasts, labels, subjects=None,
     
     trainset = []
     labelset = []    
+    classset = []
     resolutions = []
     subjects_names = []
     print("going to load " + str(len(subjs)) + " items")
@@ -589,164 +607,179 @@ def load_data_structured(  contrasts, labels, subjects=None,
             if template_nii is None:
                 template_nii = img
             img = np.squeeze(img.get_fdata())
+            if crop_fdim is not None:
+                if len(img.shape) > nD:
+                    img = img[...,crop_fdim]
             img = np.expand_dims(np.expand_dims(np.squeeze(img),0),nD+1)
             img = tf.convert_to_tensor(img,dtype=ftype)
             imgs.append(img)
             
-      
-        labs = []
-        for j in range(len(labels)):
-            if k in labels[j]:
-                item = labels[j][k]
-                if isinstance(item,dict):
-                    item = item[next(iter(item))]
-                    fname = item['FilePath']
-                else:
-                    fname = item
-                ext = os.path.splitext(fname)[1]
-                notfound = False
-                
-                if ext == '.json':
+            
+        if labels is not None:
+            
+            labs = []
+            for j in range(len(labels)):
+                if k in labels[j]:
+                    item = labels[j][k]
+                    if isinstance(item,dict):
+                        item = item[next(iter(item))]
+                        fname = item['FilePath']
+                    else:
+                        fname = item
+                    ext = os.path.splitext(fname)[1]
+                    notfound = False
                     
-                    with open(fname) as json_file:
-                        jsobj = json.load(json_file)
-
-                    if 'annotations' in jsobj:                    
-                        annos = loadAnnotation(jsobj['annotations'],asdict=True)
-                        sel = annotations_selector['labels']   
+                    if ext == '.json':
                         
-                        delim='.'
-                        sizefac=1
-                        if 'delim' in annotations_selector:
-                            delim = annotations_selector['delim']
-                        if 'sizefac' in annotations_selector:
-                            sizefac = annotations_selector['sizefac']
-                        for spec in sel:
-                            points = []
-                            for i in spec:
-                                k = i.split(delim)
-                                if k[0] not in annos:
-                                    notfound = True
+                        with open(fname) as json_file:
+                            jsobj = json.load(json_file)
+    
+                        if 'annotations' in jsobj:                    
+                            annos = loadAnnotation(jsobj['annotations'],asdict=True)
+                            sel = annotations_selector['labels']   
+                            
+                            delim='.'
+                            sizefac=1
+                            if 'delim' in annotations_selector:
+                                delim = annotations_selector['delim']
+                            if 'sizefac' in annotations_selector:
+                                sizefac = annotations_selector['sizefac']
+                            for spec in sel:
+                                points = []
+                                for i in spec:
+                                    k = i.split(delim)
+                                    if k[0] not in annos:
+                                        notfound = True
+                                        break
+                                    if k[1] in annos[k[0]]:
+                                        a = annos[k[0]][k[1]]
+                                        p = a['coords'][0:nD]
+                                        p.append(a['size']*sizefac)
+                                        points.append(p)
+                                    else:
+                                        print(k[1] + ' not present for ' + fname)
+                                if notfound:
                                     break
-                                if k[1] in annos[k[0]]:
-                                    a = annos[k[0]][k[1]]
-                                    p = a['coords'][0:nD]
-                                    p.append(a['size']*sizefac)
-                                    points.append(p)
-                                else:
-                                    print(k[1] + ' not present for ' + fname)
-                            if notfound:
-                                break
-                            if len(points) == 0:
-                                notfound=True
-                                break
-                            img = renderpoints(points, header,ftype)
-                            img = np.expand_dims(img,0)
+                                if len(points) == 0:
+                                    notfound=True
+                                    break
+                                img = renderpoints(points, header,ftype)
+                                img = np.expand_dims(img,0)
+                                img = np.expand_dims(img,nD+1)
+                                labs.append(img)
+                        elif 'content' in jsobj:
+                            delim='.'
+                            if 'delim' in annotations_selector:
+                                delim = annotations_selector['delim']
+                            
+                            form = jsobj['content']
+                            form = form[next(iter(form))]
+                            sel = annotations_selector['classes']   
+                            classes = []
+                            for spec in sel:
+                                k = spec.split(delim)
+                                if len(k) == 1:                            
+                                    if k[0] not in form:
+                                        notfound = True
+                                        break
+                                    else:
+                                        classes.append(form[k[0]])
+                                elif len(k) == 2:
+                                        
+                                    if k[0] not in form or k[1] not in form[k[0]]:
+                                        notfound = True
+                                        break
+                                    else:
+                                        classes.append(form[k[0]][k[1]])
+                                if notfound:
+                                    break
+                                if len(classes) == 0:
+                                    notfound=True
+                                    break
+                                labs.append(classes)
+                            
+                            form
+    
+    
+                    else:
+                        img = load_nifti(fname)   
+                        if nD == 3:
+                            sz1 = img.header.get_data_shape()
+                            sz2 = template_nii.header.get_data_shape()
+                            if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
+                                img= resample_from_to(img, template_nii,order=3)
+                        img = np.squeeze(img.get_fdata());
+    
+                        img = np.expand_dims(np.squeeze(img),0)
+                        if len(img.shape) == nD+1:
                             img = np.expand_dims(img,nD+1)
-                            labs.append(img)
-                    elif 'content' in jsobj:
-                        delim='.'
-                        if 'delim' in annotations_selector:
-                            delim = annotations_selector['delim']
-                        
-                        form = jsobj['content']
-                        form = form[next(iter(form))]
-                        sel = annotations_selector['classes']   
-                        classes = []
-                        for spec in sel:
-                            k = spec.split(delim)
-                            if len(k) == 1:                            
-                                if k[0] not in form:
-                                    notfound = True
-                                    break
-                                else:
-                                    classes.append(form[k[0]])
-                            elif len(k) == 2:
-                                    
-                                if k[0] not in form or k[1] not in form[k[0]]:
-                                    notfound = True
-                                    break
-                                else:
-                                    classes.append(form[k[0]][k[1]])
-                            if notfound:
-                                break
-                            if len(classes) == 0:
-                                notfound=True
-                                break
-                            labs.append(classes)
-                        
-                        form
-
-
+    
+                        if threshold is not None and one_hot_index_list is not None:
+                             assert 0,"not possible to use threshold and one_hot_index_list"
+                            
+                        if threshold is not None:
+                            img = (img>threshold)*1
+                            
+                        if one_hot_index_list is not None:
+                            r = []
+                            for j in one_hot_index_list:
+                                r.append( tf.cast(img==j,dtype=ftype) )
+                            img = tf.concat(r,nD+1)
+                                                    
+                            
+                        img = tf.convert_to_tensor(img,dtype=ftype)
+                        labs.append(img)
                 else:
-                    img = load_nifti(fname)   
-                    if nD == 3:
-                        sz1 = img.header.get_data_shape()
-                        sz2 = template_nii.header.get_data_shape()
-                        if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
-                            img= resample_from_to(img, template_nii,order=3)
-                    img = np.squeeze(img.get_fdata());
-
-                    img = np.expand_dims(np.squeeze(img),0)
-                    if len(img.shape) == nD+1:
-                        img = np.expand_dims(img,nD+1)
-
-                    if threshold is not None and one_hot_index_list is not None:
-                         assert 0,"not possible to use threshold and one_hot_index_list"
-                        
-                    if threshold is not None:
-                        img = (img>threshold)*1
-                        
-                    if one_hot_index_list is not None:
-                        r = []
-                        for j in one_hot_index_list:
-                            r.append( tf.cast(img==j,dtype=ftype) )
-                        img = tf.concat(r,nD+1)
-                                                
-                        
-                    img = tf.convert_to_tensor(img,dtype=ftype)
+                    print("missing label " + str(j) + " for subject " + k + ", extending with zeros")
+                    img = tf.zeros(imgs[0].shape,dtype=ftype)
                     labs.append(img)
-            else:
-                print("missing label " + str(j) + " for subject " + k + ", extending with zeros")
-                img = tf.zeros(imgs[0].shape,dtype=ftype)
-                labs.append(img)
-        
-        if notfound:
-            continue
-                
-        if annotations_selector is not None:
-            if 'numberScheme' in annotations_selector:
-                nums = 0
-                indic = 0
-                for j in range(len(labs)):
-                    nums = nums + labs[j]*(j+1)
-                    #indic = indic + labs[j]
-                #indic = tf.cast(indic>0,dtype=ftype)
-                labs = [nums]
-                
             
+            if notfound:
+                continue
                     
-        if add_inverted_label:
-            union = 0
-            for j in range(len(labs)):
-                union = union + labs[j]
-            union = tf.cast(union>0,dtype=ftype)
-            inv = 1-union
-            labs.append(inv)
-            
+            if annotations_selector is not None:
+                if 'numberScheme' in annotations_selector:
+                    nums = 0
+                    indic = 0
+                    for j in range(len(labs)):
+                        nums = nums + labs[j]*(j+1)
+                        #indic = indic + labs[j]
+                    #indic = tf.cast(indic>0,dtype=ftype)
+                    labs = [nums]
+                                    
+            if add_inverted_label:
+                union = 0
+                for j in range(len(labs)):
+                    union = union + labs[j]
+                union = tf.cast(union>0,dtype=ftype)
+                inv = 1-union
+                labs.append(inv)
                 
-            
+                    
                 
                 
-        imgs = tf.concat(imgs,nD+1)
-        labs = tf.concat(labs,nD+1)
-        
+                
+        imgs = tf.concat(imgs,nD+1)        
         trainset.append(imgs)
-        labelset.append(labs)
+        
+        if classes is not None:
+            tmp = tf.convert_to_tensor(classes[k],dtype=ftype)
+            tmp = tf.expand_dims(tmp,0)
+            classset.append(tmp)
+        if labels is not None:                    
+            labs = tf.concat(labs,nD+1)
+            labelset.append(labs)
+
         resolutions.append(resolution)
         subjects_names.append(k)
         
-    return trainset,labelset,resolutions,subjects_names;
+    if classes is not None and labels is not None:
+        return trainset,labelset,classes,resolutions,subjects_names;
+        
+    if classes is not None:
+        return trainset,classset,resolutions,subjects_names;
+    if labels is not None:
+        return trainset,labelset,resolutions,subjects_names;
 
 def renderpoints(points,header,ftype):
     nD = len(points[0])-1
