@@ -801,17 +801,28 @@ class CropGenerator():
         patch_size=get_patchsize(level)
 
         if crops is None and isinstance(init_scale,str):
-            assert (resolution is not None), "for absolute init_scale you have to pass resolution"
-            sizes_mm = init_scale.replace("mm","").split(",")
-            sizes_mm = list(map(int, sizes_mm))
+            forwarded_aspects = [1]*nD
             bbox_sz = [0] * (nD*2)            
-            for d in range(nD):
-                sfac = sizes_mm[d]/resolution[d]/sz[d+1]
-                bbox_sz[d]    = -sfac*0.5
-                bbox_sz[d+nD] = sfac*0.5
-                forwarded_aspects[d] = 1 #sfac*sz[d+1]
-            forwarded_aspects = forwarded_aspects / np.amax(forwarded_aspects)
-            
+            if init_scale.find('mm') != -1 or init_scale.find('cm') != -1:
+                assert (resolution is not None), "for absolute init_scale you have to pass resolution"
+                if init_scale.find('cm') != -1:
+                    sizes_mm = init_scale.replace("cm","").split(",")
+                    sizes_mm = list(map(lambda x: int(x)*10, sizes_mm))
+                else:
+                    sizes_mm = init_scale.replace("mm","").split(",")
+                    sizes_mm = list(map(int, sizes_mm))
+                for d in range(nD):
+                    sfac = sizes_mm[d]/resolution[d]/sz[d+1]
+                    bbox_sz[d]    = -sfac*0.5
+                    bbox_sz[d+nD] = sfac*0.5
+            if init_scale.find('vx') != -1:
+                sizes_vx = init_scale.replace("vx","").split(",")
+                sizes_vx = list(map(int, sizes_vx))
+                for d in range(nD):
+                    sfac = sizes_vx[d]/sz[d+1]
+                    bbox_sz[d]    = -sfac*0.5
+                    bbox_sz[d+nD] = sfac*0.5
+                            
             
         else:
             

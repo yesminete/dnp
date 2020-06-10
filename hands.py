@@ -204,7 +204,7 @@ nD=2
 cgen = patchwork.CropGenerator(patch_size = (32,32), 
                   scale_fac =  0.5, 
                   scale_fac_ref = 'max',
-                  init_scale = -1,
+                  init_scale = '64vx,64vx',
                   smoothfac_data=['boxcar',0.5],
                   ndim=nD,
                   interp_type = 'NN',
