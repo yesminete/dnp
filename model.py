@@ -246,7 +246,7 @@ class PatchWorkModel(Model):
          if clsfier is None:
              break
          self.classifiers.append(clsfier)
-       if self.classifier_train and not self.cropper.create_indicator_classlabels:
+       if self.classifier_train:
          clsfier = classifierCreator(level=cropper.depth-1,outK=num_classes)
          if clsfier is not None:
             self.classifiers.append(clsfier)
@@ -368,7 +368,7 @@ class PatchWorkModel(Model):
          
          
          if k < len(self.preprocessor) :
-             inp = self.preprocessor[k](inp)
+             inp = self.preprocessor[k](inp,training=training)
          
          # cat with total input
          if self.forward_type == 'simple':
@@ -386,7 +386,7 @@ class PatchWorkModel(Model):
 
       else:
          if k < len(self.preprocessor) :
-             inp = self.preprocessor[k](inp)
+             inp = self.preprocessor[k](inp,training=training)
           
 
       ## now, apply the network at the current scale 
@@ -395,7 +395,7 @@ class PatchWorkModel(Model):
       current_output = []
       if len(self.classifiers) > 0:
          if k < len(self.classifiers):
-             res_nonspatial = self.classifiers[k](inp,inp_nonspatial) 
+             res_nonspatial = self.classifiers[k](inp,inp_nonspatial,training=training) 
          if k < len(self.classifiers) and self.classifier_train:
              current_output.append(res_nonspatial[:,0:self.num_classes])
       
@@ -404,7 +404,7 @@ class PatchWorkModel(Model):
           if testIT:
               res=inp
           else:
-              res = self.blocks[k](inp,inp_nonspatial)      
+              res = self.blocks[k](inp,inp_nonspatial,training=training)      
       if self.spatial_train:
           current_output.append(res[...,0:self.num_labels])
 
@@ -417,7 +417,7 @@ class PatchWorkModel(Model):
                 for fb in self.finalBlock:
                     output.append(fb(lo))
             else:                    
-                output.append(self.finalBlock(lo))
+                output.append(self.finalBlock(lo,training=training))
 
                 
     if not self.intermediate_loss:

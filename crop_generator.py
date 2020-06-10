@@ -73,7 +73,7 @@ class CropInstance:
         if intermediate_loss and spatial_train:
             out.append(x['labels_cropped'])
         
-    if classifier_train and not create_indicator_classlabels:
+    if classifier_train:
         out.append(self.scales[-1]['class_labels'])
     if spatial_train:
         out.append(self.scales[-1]['labels_cropped'])
@@ -221,7 +221,9 @@ class CropGenerator():
             
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
-          return tf.expand_dims(tf.math.reduce_max(x['labels_cropped'],list(range(1,self.ndim+2))),1)
+          tmp = tf.math.reduce_mean(x['labels_cropped'],list(range(1,self.ndim+1)))
+          tmp = tf.cast(tmp>0.5,dtype=self.ftype)
+          return tmp
       else:
           return class_labels_
 
@@ -788,6 +790,8 @@ class CropGenerator():
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
       else:                                  # the first layer is already patched                
 
+        patch_size=get_patchsize(level)
+
         if crops is None and isinstance(init_scale,str):
             assert (resolution is not None), "for absolute init_scale you have to pass resolution"
             sizes_mm = init_scale.replace("mm","").split(",")
@@ -802,7 +806,6 @@ class CropGenerator():
             
             
         else:
-            patch_size=get_patchsize(level)
             
             asp = []
             for d in range(nD):

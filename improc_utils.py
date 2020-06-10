@@ -560,6 +560,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     else:
         subjs = subjects
     
+    subjs.sort()
+    
     
     if max_num_data is not None:
         if max_num_data < len(subjs):
@@ -610,7 +612,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if crop_fdim is not None:
                 if len(img.shape) > nD:
                     img = img[...,crop_fdim]
-            img = np.expand_dims(np.expand_dims(np.squeeze(img),0),nD+1)
+            img = np.expand_dims(np.squeeze(img),0)
+            if len(img.shape) < nD+2:
+                img = np.expand_dims(img,nD+1)
             img = tf.convert_to_tensor(img,dtype=ftype)
             imgs.append(img)
             

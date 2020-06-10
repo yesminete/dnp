@@ -265,9 +265,9 @@ class biConvolution(layers.Layer):
             offs = 1
             kernel = self.weight[0,...]
             x = conv(image, kernel, strides=self.strides, padding=self.padding)
-        for k in range(self.num_alpha):
+        for k in range(self.num_alpha-offs):
             kernel = self.weight[k+offs,...]
-            alpha = alphas[:,k:k+offs]
+            alpha = alphas[:,k+offs:k+offs+1]
             for j in range(self.nD):
                 alpha = tf.expand_dims(alpha,j+2)
             c = conv(image, kernel, strides=self.strides, padding=self.padding)
