@@ -541,7 +541,6 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            annotations_selector=None, exclude_incomplete_labels=True,
                            add_inverted_label=False,one_hot_index_list=None,max_num_data=None,
                            align_physical=True,
-                           normalize=None,
                            crop_fdim=None,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
@@ -618,10 +617,6 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if len(img.shape) < nD+2:
                 img = np.expand_dims(img,nD+1)                
             img = tf.convert_to_tensor(img,dtype=ftype)
-            if normalize == 'max':
-                img = img / tf.reduce_max(img)
-            elif normalize == 'mean':
-                img = img / tf.reduce_mean(img)
             imgs.append(img)
             
             
