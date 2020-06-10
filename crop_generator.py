@@ -158,6 +158,7 @@ class CropGenerator():
                     smoothfac_label = 0, #
                     interp_type = 'NN',    # nearest Neighbor (NN) or linear (lin)
                     scatter_type = 'NN',
+                    normalize_input = None,
                     create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
                     ndim=2,
@@ -172,6 +173,7 @@ class CropGenerator():
     self.interp_type = interp_type
     self.scatter_type = scatter_type
     self.init_scale = init_scale
+    self.normalize_input = normalize_input
     self.keepAspect = keepAspect
     self.create_indicator_classlabels = create_indicator_classlabels
     self.depth = depth
@@ -260,6 +262,11 @@ class CropGenerator():
 
       # get the data 
       trainset_ = trainset[j]
+      
+      if self.normalize_input == 'max':
+         trainset_ = trainset_/tf.reduce_max(trainset_,axis=range(1,len(trainset_.shape)))   
+      if self.normalize_input == 'mean':
+         trainset_ = trainset_/tf.reduce_mean(trainset_,axis=range(1,len(trainset_.shape)))   
       
       # if resolutions are also passed
       resolution_ = None
