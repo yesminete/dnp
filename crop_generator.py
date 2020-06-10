@@ -190,6 +190,7 @@ class CropGenerator():
                'init_scale':self.init_scale,
                'smoothfac_data':self.smoothfac_data,
                'smoothfac_label':self.smoothfac_label,
+               'normalize_input':self.normalize_input,
                'create_indicator_classlabels':self.create_indicator_classlabels,
                'keepAspect':self.keepAspect,
                'depth':self.depth,
