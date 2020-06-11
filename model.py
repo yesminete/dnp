@@ -482,7 +482,7 @@ class PatchWorkModel(Model):
               
      for w in range(num_chunks):
          if w > 0:
-             print('gathering more to get full coverage: ' + str(w) + maximum "/" +  str(num_chunks))
+             print('gathering more to get full coverage: ' + str(w) + maximum +"/" +  str(num_chunks))
          for i in range(repetitions):
              
             if lazyEval is None:             
@@ -517,7 +517,7 @@ class PatchWorkModel(Model):
                 for k in level:
                     sz = r[k].shape
                     tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz))),keepdims=True)
-                    r[k] = tf.tile(tmp,[1] + sz[1:])
+                    r[k] = tf.tile(tmp,[1] + list(sz[1:]))
                     
             print(">>> stitching result")
             start = timer()
