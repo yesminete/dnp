@@ -21,11 +21,11 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
   if nD == 3:
       _conv = layers.Conv3D
       _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
-      _maxpool = layers.MaxPooling3D(pool_size=(2,2,2))
+      _maxpool = lambda: layers.MaxPooling3D(pool_size=(2,2,2))
   elif nD == 2:
       _conv = layers.Conv2D
       _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=(2,2))
-      _maxpool = layers.MaxPooling2D(pool_size=(2,2))
+      _maxpool = lambda: layers.MaxPooling2D(pool_size=(2,2))
   
   def BNrelu():
       return [layers.BatchNormalization(), layers.LeakyReLU()]
@@ -61,11 +61,15 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
     id_u = str(2000 + depth-z+1)
     theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
     for k in range(multiplicity-1):
-        theLayers[id_d+"conv"+str(k+1)] = conv(fdim)            
-    theLayers[id_d+"relu"] = BNrelu() + [_maxpool ]
+        theLayers[id_d+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
+    theLayers[id_d+"relu"] = _maxpool()
     theLayers[id_u+"conv0"] = conv_up(fdim,offs[z])
     for k in range(multiplicity-1):
-        theLayers[id_u+"conv"+str(k+1)] = conv(fdim)
+        if k == multiplicity-1:
+            theLayers[id_u+"conv"+str(k+1)] = [conv(fdim)] 
+        else:
+            theLayers[id_u+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
+            
     theLayers[id_u+"relu"] = BNrelu()
   theLayers["3000"] =  [layers.Dropout(rate=0.5), conv(outK)]
   return patchwork.CNNblock(theLayers,verbose=verbose)
