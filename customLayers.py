@@ -16,7 +16,7 @@ custom_layers = {}
 
 
 
-def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False):
+def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALID',verbose=False):
 
   if nD == 3:
       _conv = layers.Conv3D
@@ -29,13 +29,24 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False
   
   def BNrelu():
       return [layers.BatchNormalization(), layers.LeakyReLU()]
-  def conv_down(fdim):
-       return _conv(fdim,3,padding='VALID') 
-  def conv_up(fdim,even):
-       return _convT(fdim,4+even,padding='VALID' )
-  def conv(outK):
-       return _conv(outK,4,padding='SAME') 
   
+  if padding == 'VALID':
+      def conv_down(fdim):
+           return _conv(fdim,3,padding='VALID') 
+      def conv_up(fdim,even):
+           return _convT(fdim,4+even,padding='VALID' )
+      def conv(outK):
+           return _conv(outK,4,padding='SAME') 
+      offs = [0,1,0,0]
+  else:
+      def conv_down(fdim):
+           return _conv(fdim,3,padding='SAME') 
+      def conv_up(fdim,even):
+           return _convT(fdim,3,padding='SAME' )
+      def conv(outK):
+           return _conv(outK,3,padding='SAME') 
+      offs = [0,0,0,0]
+      
   if not isinstance(feature_dim,list):
       fdims=[]
       for z in range(depth):
@@ -44,7 +55,6 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False
       fdims = feature_dim
 
   theLayers = {}
-  offs = [0,1,0,0]
   for z in range(depth):
     fdim = fdims[z]
     id_d = str(1000 + z+1)
