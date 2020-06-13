@@ -442,7 +442,8 @@ class PatchWorkModel(Model):
                  verbose=False,
                  num_chunks=1,
                  lazyEval = None,
-                 max_patching=False
+                 max_patching=False,
+                 patch_stats= False
                  ):
 
 
@@ -480,6 +481,8 @@ class PatchWorkModel(Model):
              lazyEval['label'] = None
 
               
+     pstats = [None]*len(level)
+
      for w in range(num_chunks):
          if w > 0:
              print('gathering more to get full coverage: ' + str(w) + maximum +"/" +  str(num_chunks))
@@ -516,8 +519,23 @@ class PatchWorkModel(Model):
             if max_patching:
                 for k in level:
                     sz = r[k].shape
-                    tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz))),keepdims=True)
-                    r[k] = tf.tile(tmp,[1] + list(sz[1:]))
+                    tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)),keepdims=True)
+                    r[k] = tf.tile(tmp,[1] + list(sz[1:-1]) + [1]).shape
+
+            if patch_stats:
+                for k in level:
+                    sz = r[k].shape
+                    tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)))
+                    stat = {'max': tf.reduce_max(r[k],axis=list(range(1,len(sz)-1))),
+                                   'mean': tf.reduce_mean(r[k],axis=list(range(1,len(sz)-1))),
+                                   'mean2': tf.reduce_mean(tf.math.pow(r[k],2),axis=list(range(1,len(sz)-1))),
+                                   }
+                    if pstats[k] is None:
+                        pstats[k] = stat
+                    else:
+                        for t in pstats[k]:
+                            pstats[k][t] = tf.concat([pstats[k][t],stat[t]],0)
+                    
                     
             print(">>> stitching result")
             start = timer()
@@ -544,7 +562,12 @@ class PatchWorkModel(Model):
          end = timer()
          print(">>> total time elapsed: " + str(end - start_total) )
          
-         return res
+         if patch_stats:
+             if single:
+                 pstats = pstats[0]
+             return res,pstats
+         else:
+             return res
      
      return r[0]
 
