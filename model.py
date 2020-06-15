@@ -485,7 +485,7 @@ class PatchWorkModel(Model):
 
      for w in range(num_chunks):
          if w > 0:
-             print('gathering more to get full coverage: ' + str(w) + maximum +"/" +  str(num_chunks))
+             print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
          for i in range(repetitions):
              
             if lazyEval is None:             
@@ -520,7 +520,7 @@ class PatchWorkModel(Model):
                 for k in level:
                     sz = r[k].shape
                     tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)),keepdims=True)
-                    r[k] = tf.tile(tmp,[1] + list(sz[1:-1]) + [1]).shape
+                    r[k] = tf.tile(tmp,[1] + list(sz[1:-1]) + [1])
 
             if patch_stats:
                 for k in level:
@@ -584,6 +584,7 @@ class PatchWorkModel(Model):
                  scalevalue=None,
                  along4dim=False,
                  align_physical=True,
+                 crop_fdim=None,
                  lazyEval = None):
       nD = self.cropper.ndim
       if not isinstance(fname,list):
@@ -594,12 +595,21 @@ class PatchWorkModel(Model):
           if align_physical:
               img1 = align_to_physical_coords(img1)
           resolution = img1.header['pixdim'][1:4]
-          a = np.expand_dims(np.squeeze(img1.get_fdata()),0)
+          
+          a = img1.get_fdata()
+          
+          if crop_fdim is not None:
+             if len(a.shape) > nD:
+                a = a[...,crop_fdim]
+      
+          a = np.expand_dims(np.squeeze(a),0)
           if len(a.shape) < nD+2:
               a = np.expand_dims(a,nD+1)
           a = tf.convert_to_tensor(a,dtype=self.cropper.ftype)
           ims.append(a)
       a = tf.concat(ims,nD+1)
+      
+      
       if scalevalue is not None:
           a = a * scalevalue
 

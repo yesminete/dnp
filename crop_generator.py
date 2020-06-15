@@ -798,7 +798,12 @@ class CropGenerator():
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
       else:                                  # the first layer is already patched                
 
-        patch_size=get_patchsize(level)
+        patch_size_=get_patchsize(level)
+        
+        patch_size = [0]*nD
+        app_factor = 1
+        for k in range(len(patch_size)):
+            patch_size[k] = patch_size_[k]*app_factor
 
         if crops is None and isinstance(init_scale,str):
             forwarded_aspects = [1]*nD
@@ -812,7 +817,7 @@ class CropGenerator():
                     sizes_mm = init_scale.replace("mm","").split(",")
                     sizes_mm = list(map(int, sizes_mm))
                 for d in range(nD):
-                    sfac = sizes_mm[d]/resolution[d]/sz[d+1]
+                    sfac = app_factor*sizes_mm[d]/resolution[d]/sz[d+1]
                     bbox_sz[d]    = -sfac*0.5
                     bbox_sz[d+nD] = sfac*0.5
             if init_scale.find('vx') != -1:
@@ -887,7 +892,7 @@ class CropGenerator():
 
       dest_full_size = [None]*(nD+1)
       for k in range(nD):
-          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
+          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(1/app_factor*patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
 
 
       # compute the index suitable for gather_nd
