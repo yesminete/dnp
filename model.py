@@ -441,6 +441,7 @@ class PatchWorkModel(Model):
                  scale_to_original=True,
                  verbose=False,
                  num_chunks=1,
+                 patch_size_factor=1,
                  lazyEval = None,
                  max_patching=False,
                  patch_stats= False
@@ -498,6 +499,7 @@ class PatchWorkModel(Model):
                                     overlap=overlap,
                                     num_patches=reps,
                                     branch_factor=branch_factor,
+                                    patch_size_factor=patch_size_factor,
                                     lazyEval=lazyEval,
                                     verbose=verbose)
             data_ = x.getInputData()
@@ -584,6 +586,7 @@ class PatchWorkModel(Model):
                  scalevalue=None,
                  along4dim=False,
                  align_physical=True,
+                 patch_size_factor=1,
                  crop_fdim=None,
                  lazyEval = None):
       nD = self.cropper.ndim
@@ -623,6 +626,7 @@ class PatchWorkModel(Model):
                                 branch_factor=branch_factor,
                                 resolution = resolution,
                                 lazyEval = lazyEval,
+                                patch_size_factor=patch_size_factor,
                                 verbose=True,
                                 scale_to_original=scale_to_original)
 

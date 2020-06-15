@@ -214,6 +214,7 @@ class CropGenerator():
              branch_factor=1,         #  if 'random' this gives the number of children for each random patch
              jitter=0,                #  if 'tree' this is the amount of random jitter
              jitter_border_fix=False,
+             patch_size_factor=1,
              overlap=0,
              balance=None,
              augment=None,
@@ -286,6 +287,7 @@ class CropGenerator():
                                                          generate_type,test,
                                                            num_patches=num_patches,branch_factor=branch_factor,
                                                            jitter=jitter,jitter_border_fix=jitter_border_fix,
+                                                           patch_size_factor=patch_size_factor,
                                                            overlap=overlap,resolution=resolution_,balance=balance,verbose=verbose)
 
       # for lazy  prediction return just the function      
@@ -697,6 +699,7 @@ class CropGenerator():
       jitter_border_fix=False,
       num_patches=1,
       branch_factor=1,
+      patch_size_factor=1,
       overlap=0,resolution=None,balance=None,verbose=True):
       
       
@@ -801,9 +804,8 @@ class CropGenerator():
         patch_size_=get_patchsize(level)
         
         patch_size = [0]*nD
-        app_factor = 1
         for k in range(len(patch_size)):
-            patch_size[k] = patch_size_[k]*app_factor
+            patch_size[k] = patch_size_[k]*patch_size_factor
 
         if crops is None and isinstance(init_scale,str):
             forwarded_aspects = [1]*nD
@@ -817,14 +819,14 @@ class CropGenerator():
                     sizes_mm = init_scale.replace("mm","").split(",")
                     sizes_mm = list(map(int, sizes_mm))
                 for d in range(nD):
-                    sfac = app_factor*sizes_mm[d]/resolution[d]/sz[d+1]
+                    sfac = patch_size_factor*sizes_mm[d]/resolution[d]/sz[d+1]
                     bbox_sz[d]    = -sfac*0.5
                     bbox_sz[d+nD] = sfac*0.5
             if init_scale.find('vx') != -1:
                 sizes_vx = init_scale.replace("vx","").split(",")
                 sizes_vx = list(map(int, sizes_vx))
                 for d in range(nD):
-                    sfac = sizes_vx[d]/sz[d+1]
+                    sfac = patch_size_factor*sizes_vx[d]/sz[d+1]
                     bbox_sz[d]    = -sfac*0.5
                     bbox_sz[d+nD] = sfac*0.5
                             
@@ -892,7 +894,7 @@ class CropGenerator():
 
       dest_full_size = [None]*(nD+1)
       for k in range(nD):
-          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(1/app_factor*patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
+          dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(1/patch_size_factor*patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
 
 
       # compute the index suitable for gather_nd
