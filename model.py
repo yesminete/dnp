@@ -69,6 +69,9 @@ class CNNblock(layers.Layer):
         if self.verbose:
             print("  " + f.name , "input_shape: " ,  x.shape)
         if hasattr(f,'isBi') and f.isBi:
+            if self.verbose:
+                if alphas is not None:
+                    print("  " + f.name , "(bi) input_shape: " ,  alphas.shape)
             return f(x,alphas,training=training)
         else:
             return f(x,training=training)
@@ -241,15 +244,11 @@ class PatchWorkModel(Model):
            self.preprocessor.append(preprocCreator(level=k))
         
     if classifierCreator is not None:
-       for k in range(self.cropper.depth-1): 
+       for k in range(self.cropper.depth): 
          clsfier = classifierCreator(level=k,outK=num_classes+cls_intermediate_out)
          if clsfier is None:
              break
          self.classifiers.append(clsfier)
-       if self.classifier_train:
-         clsfier = classifierCreator(level=cropper.depth-1,outK=num_classes)
-         if clsfier is not None:
-            self.classifiers.append(clsfier)
         
         
   
@@ -395,7 +394,7 @@ class PatchWorkModel(Model):
       current_output = []
       if len(self.classifiers) > 0:
          if k < len(self.classifiers):
-             res_nonspatial = self.classifiers[k](inp,inp_nonspatial,training=training) 
+             res_nonspatial = self.classifiers[k](inp,res_nonspatial,training=training) 
          if k < len(self.classifiers) and self.classifier_train:
              current_output.append(res_nonspatial[:,0:self.num_classes])
       
@@ -404,7 +403,7 @@ class PatchWorkModel(Model):
           if testIT:
               res=inp
           else:
-              res = self.blocks[k](inp,inp_nonspatial,training=training)      
+              res = self.blocks[k](inp,res_nonspatial,training=training)      
       if self.spatial_train:
           current_output.append(res[...,0:self.num_labels])
 
@@ -509,7 +508,7 @@ class PatchWorkModel(Model):
             print(">>> applying network -------------------------------------------------")
             start = timer()
             # use predict only if batch_size is the same across patch levels
-            if (generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None and branch_factor==1:
+            if False: #(generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None and branch_factor==1:
                 r = self.predict(data_)
                 if not isinstance(r,list):
                     r = [r]
@@ -588,7 +587,19 @@ class PatchWorkModel(Model):
                  align_physical=True,
                  patch_size_factor=1,
                  crop_fdim=None,
+                 crop_sdim=None,
                  lazyEval = None):
+
+      def crop_spatial(img):
+         if crop_sdim is not None:
+            if nD == 2:
+                img = img[crop_sdim[0],...]
+                img = img[:,crop_sdim[1],...]
+            if nD == 3:
+                img = img[crop_sdim[0],...]
+                img = img[:,crop_sdim[1],...]
+                img = img[:,:,crop_sdim[2],...]
+         return img
       nD = self.cropper.ndim
       if not isinstance(fname,list):
           fname = [fname]
@@ -604,6 +615,9 @@ class PatchWorkModel(Model):
           if crop_fdim is not None:
              if len(a.shape) > nD:
                 a = a[...,crop_fdim]
+
+        
+          a = crop_spatial(a)
       
           a = np.expand_dims(np.squeeze(a),0)
           if len(a.shape) < nD+2:
@@ -642,7 +656,10 @@ class PatchWorkModel(Model):
           
       res = res.numpy()
       if nD == 2:
-          res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
+          if len(res.shape) == 3:         
+              res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
+          if along4dim:
+              res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2],res.shape[3]])
           img1.header.set_data_shape(res.shape)
           
       maxi = tf.reduce_max(tf.abs(res))
@@ -658,14 +675,37 @@ class PatchWorkModel(Model):
       
       
       img1.header.set_data_dtype('int16')          
-      pred_nii = nib.Nifti1Image(res*fac, newaffine, img1.header)
-      pred_nii.header.set_slope_inter(1/fac,0.0000000)
-      pred_nii.header['cal_max'] = 1
-      pred_nii.header['cal_min'] = 0
-      pred_nii.header['glmax'] = 1
-      pred_nii.header['glmin'] = 0
+
       if ofname is not None:
-          nib.save(pred_nii,ofname)
+    
+          if isinstance(ofname,list):
+             if len(res.shape) == 5:
+                  for s in range(len(ofname)):
+                      res_ = res[:,:,:,:,s]
+                      img1.header.set_data_shape(res_.shape)
+                      pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
+                      pred_nii.header.set_slope_inter(1/fac,0.0000000)
+                      pred_nii.header['cal_max'] = 1
+                      pred_nii.header['cal_min'] = 0
+                      pred_nii.header['glmax'] = 1
+                      pred_nii.header['glmin'] = 0
+                      if ofname is not None:
+                          nib.save(pred_nii,ofname[s])
+     
+          else:
+             pred_nii = nib.Nifti1Image(res*fac, newaffine, img1.header)
+             pred_nii.header.set_slope_inter(1/fac,0.0000000)
+             pred_nii.header['cal_max'] = 1
+             pred_nii.header['cal_min'] = 0
+             pred_nii.header['glmax'] = 1
+             pred_nii.header['glmin'] = 0
+             if ofname is not None:
+                  nib.save(pred_nii,ofname)
+              
+
+            
+          
+          
       return pred_nii,res;
 
 
@@ -751,6 +791,8 @@ class PatchWorkModel(Model):
         y = [ j for i, j in self.validloss_hist ]
         plt.semilogy(x,y,'g',label="valid loss")
     plt.legend()
+    plt.grid()
+    plt.title(self.modelname)
     plt.pause(0.001)
 
 
@@ -938,6 +980,7 @@ def Augmenter( morph_width = 150,
                 morph_strength=0.25,
                 rotation_dphi=0.1,
                 flip = None ,
+                scaling = None,
                 normal_noise=0,
                 repetitions=1,
                 include_original=True):
@@ -953,20 +996,24 @@ def Augmenter( morph_width = 150,
     
             if not include_original:
                 data_res = []
-                labels_res = []
+                if labels is not None:
+                    labels_res = []
             else:
                 data_res = [data]
-                labels_res = [labels]
+                if labels is not None:
+                    labels_res = [labels]
     
             for k in range(repetitions):            
                 if nD == 2:
                     X,Y = sampleDefField_2D(sz)                    
                     data_ = interp2lin(data,Y,X)        
-                    labels_ = interp2lin(labels,Y,X)            
+                    if labels is not None:
+                        labels_ = interp2lin(labels,Y,X)            
                 if nD == 3:
                     X,Y,Z = sampleDefField_3D(sz)
                     data_ = interp3lin(data,X,Y,Z)        
-                    labels_ = interp3lin(labels,X,Y,Z)            
+                    if labels is not None:                
+                        labels_ = interp3lin(labels,X,Y,Z)            
                 
                 if normal_noise > 0:
                     data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
@@ -976,16 +1023,21 @@ def Augmenter( morph_width = 150,
                         if flip[j]:
                             if np.random.uniform() > 0.5:
                                 data_ = np.flip(data_,j+1)
-                                labels_ = np.flip(labels_,j+1)
+                                if labels is not None:
+                                    labels_ = np.flip(labels_,j+1)
                                 
                 
                 
                 data_res.append(data_)
-                labels_res.append(labels_)
+                if labels is not None:            
+                    labels_res.append(labels_)
             data_res = tf.concat(data_res,0)
-            labels_res = tf.concat(labels_res,0)
             
-            return data_res,labels_res
+            if labels is not None:            
+                labels_res = tf.concat(labels_res,0)
+                return data_res,labels_res
+            else:            
+                return data_res,None
             
     
 
@@ -1003,10 +1055,19 @@ def Augmenter( morph_width = 150,
         dy = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
         dy = np.squeeze(dy)
         
+        scfacs = [1,1]
+        if scaling is not None:
+            if isinstance(scaling,list):
+                scfacs = [1+np.random.uniform(-1,1)*scaling[0],1+np.random.uniform(-1,1)*scaling[1]]
+            else:
+                sciso = scaling*np.random.uniform(-1,1)
+                scfacs = [1+sciso,1+sciso]
+        
+        
         cx = 0.5*sz[2]
         cy = 0.5*sz[1]
-        nX = tf.math.cos(phi)*(X-cx) - tf.math.sin(phi)*(Y-cy) + cx + s*dx
-        nY = tf.math.sin(phi)*(X-cx) + tf.math.cos(phi)*(Y-cy) + cy + s*dy
+        nX = scfacs[0]*tf.math.cos(phi)*(X-cx) - scfacs[0]*tf.math.sin(phi)*(Y-cy) + cx + s*dx
+        nY = scfacs[1]*tf.math.sin(phi)*(X-cx) + scfacs[1]*tf.math.cos(phi)*(Y-cy) + cy + s*dy
         #dY = np.random.normal(0,s,X.shape)
         
         return nX,nY        
@@ -1024,7 +1085,17 @@ def Augmenter( morph_width = 150,
         dy = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
         dy = np.squeeze(dy)
         dz = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dz = np.squeeze(dy)
+        dz = np.squeeze(dz)
+        
+        
+        scfacs = [1,1,1]
+        if scaling is not None:
+            if isinstance(scaling,list):
+                scfacs = [1+np.random.uniform(-1,1)*scaling[0],1+np.random.uniform(-1,1)*scaling[1],1+np.random.uniform(-1,1)*scaling[2]]
+            else:
+                sciso = scaling*np.random.uniform(-1,1)
+                scfacs = [1+sciso,1+sciso,1+sciso]
+        
         
         cx = 0.5*sz[1]
         cy = 0.5*sz[2]
@@ -1037,9 +1108,9 @@ def Augmenter( morph_width = 150,
         dy = s*dy
         dz = s*dz
         
-        nX = R[0,0]*(X-cx) + R[0,1]*(Y-cy) + R[0,2]*(Z-cz) + cx + dx
-        nY = R[1,0]*(X-cx) + R[1,1]*(Y-cy) + R[1,2]*(Z-cz) + cy + dy
-        nZ = R[2,0]*(X-cx) + R[2,1]*(Y-cy) + R[2,2]*(Z-cz) + cz + dz
+        nX = scfacs[0]*R[0,0]*(X-cx) + scfacs[0]*R[0,1]*(Y-cy) + scfacs[0]*R[0,2]*(Z-cz) + cx + dx
+        nY = scfacs[1]*R[1,0]*(X-cx) + scfacs[1]*R[1,1]*(Y-cy) + scfacs[1]*R[1,2]*(Z-cz) + cy + dy
+        nZ = scfacs[2]*R[2,0]*(X-cx) + scfacs[2]*R[2,1]*(Y-cy) + scfacs[2]*R[2,2]*(Z-cz) + cz + dz
         
         return nX,nY,nZ
     

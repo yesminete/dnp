@@ -16,7 +16,7 @@ custom_layers = {}
 
 
 
-def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALID',verbose=False):
+def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALID',noBridge=False,verbose=False):
 
   if nD == 3:
       _conv = layers.Conv3D
@@ -37,7 +37,7 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
            return _convT(fdim,4+even,padding='VALID' )
       def conv(outK):
            return _conv(outK,4,padding='SAME') 
-      offs = [0,1,0,0,0,0]
+      offs = [0,1,0,0,0,0,0]
   else:
       def conv_down(fdim):
            return _conv(fdim,3,padding='SAME') 
@@ -46,6 +46,64 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
       def conv(outK):
            return _conv(outK,3,padding='SAME') 
       offs = [0,0,0,0,0,0]
+      
+  if not isinstance(feature_dim,list):
+      fdims=[]
+      for z in range(depth):
+          fdims.append(feature_dim*(1+z))     
+  else:
+      fdims = feature_dim
+
+  theLayers = {}
+  for z in range(depth):
+    fdim = fdims[z]
+    id_d = str(1000 + z+1)
+    id_u = str(2000 + depth-z+1)
+    if noBridge:
+        theLayers[id_d+"conv0"] =  conv_down(fdim) 
+    else:
+        theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
+        
+    for k in range(multiplicity-1):
+        theLayers[id_d+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
+    theLayers[id_d+"relu"] = _maxpool()
+    theLayers[id_u+"conv0"] = conv_up(fdim,offs[z])
+    for k in range(multiplicity-1):
+        if k == multiplicity-1:
+            theLayers[id_u+"conv"+str(k+1)] = [conv(fdim)] 
+        else:
+            theLayers[id_u+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
+            
+    theLayers[id_u+"relu"] = BNrelu()
+  theLayers["3000"] =  [layers.Dropout(rate=0.5), conv(outK)]
+  return patchwork.CNNblock(theLayers,verbose=verbose)
+
+
+
+
+def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False):
+
+          
+
+  if nD == 3:
+      _conv = lambda *args, **kwargs: biConvolution(*args, **kwargs, nD=3)
+      _convT = lambda *args, **kwargs: biConvolution(*args, **kwargs, nD=3,transpose=True,strides=(2,2,2))
+      _maxpool = lambda: layers.MaxPooling3D(pool_size=(2,2,2))
+  elif nD == 2:
+      _conv = lambda *args, **kwargs: biConvolution(*args, **kwargs, nD=2)
+      _convT = lambda *args, **kwargs: biConvolution(*args, **kwargs, nD=2,transpose=True,strides=(2,2))
+      _maxpool = lambda: layers.MaxPooling2D(pool_size=(2,2))
+  
+  def BNrelu():
+      return [layers.BatchNormalization(), layers.LeakyReLU()]
+  
+  def conv_down(fdim):
+         return _conv(out_n=fdim) 
+  def conv_up(fdim,even):
+         return _convT(out_n=fdim)
+  def conv(outK):
+         return _conv(out_n=outK) 
+  offs = [0,0,0,0,0,0]
       
   if not isinstance(feature_dim,list):
       fdims=[]
@@ -77,38 +135,46 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
 
 
 
-# def BNrelu(name=None):
-#   return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
+def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,verbose=False,activation='softmax'):
 
-# n = 10
-# s = (2,2)
-# pooly = lambda: layers.MaxPooling2D(pool_size=s)
-
-# def conv_down(name=None,dest=None):
-#   return layers.Conv2D(n,3,padding='SAME') 
-  
-# def conv_up(name=None):
-#   return layers.Conv2DTranspose(n,3,padding='SAME',strides=(2,2)) 
-  
-# def conv_out(outK,name=None):
-#   return layers.Conv2D(outK,3,padding='SAME') 
-  
-
-# def createClassifier(name=None,depth=6,outK=2,multiplicity=4):
-#   theLayers = {}
-#   for z in range(depth):
-#     id_d = str(1000 + z+1)
-#     for i in range(multiplicity):
-#         theLayers[id_d+"conv" + str(i)] = conv_down()
-#         theLayers[id_d+"relu" + str(i)] = BNrelu()
-#     theLayers[id_d+"spool"] = pooly() 
-#   theLayers["3001"] =  layers.Flatten()
-#   theLayers["3002"] =  layers.Dense(outK)
-#   theLayers["3003"] = layers.Activation('softmax')
     
-#   return patchwork.CNNblock(theLayers,verbose=False)
+    
+    if not isinstance(feature_dim,list):
+          fdims=[]
+          for z in range(depth):
+              fdims.append(feature_dim*(1+z))     
+    else:
+          fdims = feature_dim
 
 
+    
+    def BNrelu(name=None):
+      return [layers.BatchNormalization(name=name), layers.LeakyReLU()]
+    
+    if nD == 2:
+        _conv = lambda *args, **kwargs: biConvolution(*args, **kwargs, nD=2)
+        pooly = lambda: layers.MaxPooling2D(pool_size=(2,2))
+    if nD == 3:
+        _conv = lambda *args, **kwargs: biConvolution(*args, **kwargs, nD=3)
+        pooly = lambda: layers.MaxPooling3D(pool_size=(2,2,2))
+    
+    
+    theLayers = {}
+    for z in range(depth):
+      id_d = str(1000 + z+1)
+      for i in range(multiplicity):
+          theLayers[id_d+"_" + str(i) + "conv"] = _conv(out_n=fdims[z])
+          theLayers[id_d+"_" + str(i) + "relu"] = BNrelu()
+      theLayers[id_d+"spool"] = pooly() 
+    theLayers["3001"] =  layers.Flatten()
+    theLayers["3002"] =  layers.Dropout(rate=0.5)
+    theLayers["3003"] =  layers.Dense(outK)
+    if activation is not None:
+        theLayers["3005"] = layers.Activation(activation)
+      
+    return patchwork.CNNblock(theLayers,verbose=verbose)
+    
+    
 
 
 

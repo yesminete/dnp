@@ -538,13 +538,28 @@ def interp3lin(image,X,Y,Z):
 
 
 def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
-                           annotations_selector=None, exclude_incomplete_labels=True,
+                           annotations_selector=None, 
+                           class_selector=None, 
+                           exclude_incomplete_labels=True,
                            add_inverted_label=False,one_hot_index_list=None,max_num_data=None,
                            align_physical=True,
                            crop_fdim=None,
+                           crop_fdim_labels=None,
+                           crop_sdim=None,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
 
+    
+    def crop_spatial(img):
+        if crop_sdim is not None:
+            if nD == 2:
+                img = img[crop_sdim[0],...]
+                img = img[:,crop_sdim[1],...]
+            if nD == 3:
+                img = img[crop_sdim[0],...]
+                img = img[:,crop_sdim[1],...]
+                img = img[:,:,crop_sdim[2],...]
+        return img
     
     def load_nifti(fname):
         img = nib.load(fname)        
@@ -613,6 +628,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if crop_fdim is not None:
                 if len(img.shape) > nD:
                     img = img[...,crop_fdim]
+            img = crop_spatial(img)
             img = np.expand_dims(np.squeeze(img),0)
             if len(img.shape) < nD+2:
                 img = np.expand_dims(img,nD+1)                
@@ -629,17 +645,25 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     if isinstance(item,dict):
                         item = item[next(iter(item))]
                         fname = item['FilePath']
+                        ext = os.path.splitext(fname)[1]
+                        if 'json' in item:
+                            item = item['json']
+                            ext = '.json'
+                            fname = 'READING'
                     else:
                         fname = item
-                    ext = os.path.splitext(fname)[1]
+                        ext = os.path.splitext(fname)[1]
                     notfound = False
                     
                     if ext == '.json':
                         
-                        with open(fname) as json_file:
-                            jsobj = json.load(json_file)
+                        if fname != 'READING':
+                            with open(fname) as json_file:
+                                jsobj = json.load(json_file)
+                        else:
+                            jsobj = item
     
-                        if 'annotations' in jsobj:                    
+                        if 'annotations' in jsobj and annotations_selector is not None :                    
                             annos = loadAnnotation(jsobj['annotations'],asdict=True)
                             sel = annotations_selector['labels']   
                             
@@ -652,58 +676,58 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             for spec in sel:
                                 points = []
                                 for i in spec:
-                                    k = i.split(delim)
-                                    if k[0] not in annos:
+                                    key = i.split(delim)
+                                    if key[0] not in annos:
                                         notfound = True
                                         break
-                                    if k[1] in annos[k[0]]:
-                                        a = annos[k[0]][k[1]]
+                                    if key[1] in annos[key[0]]:
+                                        a = annos[key[0]][key[1]]
                                         p = a['coords'][0:nD]
                                         p.append(a['size']*sizefac)
                                         points.append(p)
                                     else:
-                                        print(k[1] + ' not present for ' + fname)
+                                        print(key[1] + ' not present for ' + fname)
                                 if notfound:
                                     break
                                 if len(points) == 0:
                                     notfound=True
                                     break
                                 img = renderpoints(points, header,ftype)
+                                img = crop_spatial(img)
+                            
                                 img = np.expand_dims(img,0)
                                 img = np.expand_dims(img,nD+1)
                                 labs.append(img)
-                        elif 'content' in jsobj:
+                        elif ('formcontent' in jsobj or 'content' in jsobj) and class_selector is not None:
                             delim='.'
-                            if 'delim' in annotations_selector:
-                                delim = annotations_selector['delim']
+                            if 'delim' in class_selector:
+                                delim = class_selector['delim']
+                            if 'formcontent' in jsobj:
+                                form = jsobj['formcontent']
+                            else:
+                                form = jsobj['content']
+                          
+                            sel = class_selector['classes']  
+                            if classes is None:
+                                classes = {}
                             
-                            form = jsobj['content']
-                            form = form[next(iter(form))]
-                            sel = annotations_selector['classes']   
-                            classes = []
+                            thisclass = []
                             for spec in sel:
-                                k = spec.split(delim)
-                                if len(k) == 1:                            
-                                    if k[0] not in form:
+                                key = spec.split(delim)
+                                obj = form
+                                for s in range(len(key)):
+                                    if key[s] not in obj :
                                         notfound = True
                                         break
                                     else:
-                                        classes.append(form[k[0]])
-                                elif len(k) == 2:
-                                        
-                                    if k[0] not in form or k[1] not in form[k[0]]:
-                                        notfound = True
-                                        break
-                                    else:
-                                        classes.append(form[k[0]][k[1]])
+                                        obj = obj[key[s]]
+                                if not notfound:                                
+                                    thisclass.append(float(obj))
                                 if notfound:
                                     break
-                                if len(classes) == 0:
-                                    notfound=True
-                                    break
-                                labs.append(classes)
+                            if not notfound:       
+                                classes[k] = thisclass
                             
-                            form
     
     
                     else:
@@ -714,6 +738,11 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
                                 img= resample_from_to(img, template_nii,order=3)
                         img = np.squeeze(img.get_fdata());
+                        img = crop_spatial(img)                        
+                        if crop_fdim_labels is not None:
+                            if len(img.shape) > nD:
+                                img = img[...,crop_fdim_labels]
+    
     
                         img = np.expand_dims(np.squeeze(img),0)
                         if len(img.shape) == nD+1:
@@ -771,15 +800,15 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             tmp = tf.convert_to_tensor(classes[k],dtype=ftype)
             tmp = tf.expand_dims(tmp,0)
             classset.append(tmp)
-        if labels is not None:                    
+        if labels is not None and len(labs) > 0:                    
             labs = tf.concat(labs,nD+1)
             labelset.append(labs)
 
         resolutions.append(resolution)
         subjects_names.append(k)
         
-    if classes is not None and labels is not None:
-        return trainset,labelset,classes,resolutions,subjects_names;
+    if classes is not None and labels is not None and len(labelset) > 0:
+        return trainset,labelset,classset,resolutions,subjects_names;
         
     if classes is not None:
         return trainset,classset,resolutions,subjects_names;

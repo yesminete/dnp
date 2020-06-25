@@ -253,7 +253,7 @@ class CropGenerator():
       # grep and prep the labels
       labels_ = None
       class_labels_ = None
-      if labelset[j] is not None:
+      if labelset is not None and labelset[j] is not None:
           if (self.model.classifier_train and not self.create_indicator_classlabels) and self.model.spatial_train:
               class_labels_ = labelset[j][0]
               labels_ = labelset[j][1]
@@ -329,6 +329,8 @@ class CropGenerator():
           for k in range(len(scales)):
               m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
               tmp = scales[k]['class_labels']
+              if len(tmp.shape) == 1:
+                  tmp = tf.expand_dims(tmp,1)
               tmp = tf.reshape(tf.tile(tf.expand_dims(tmp,1),[1,m,1]),[m*tmp.shape[0],tmp.shape[1]])              
               scales[k]['class_labels'] = tmp
 
