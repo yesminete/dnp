@@ -62,7 +62,7 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
     if noBridge:
         theLayers[id_d+"conv0"] =  conv_down(fdim) 
     else:
-        theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
+        theLayers[id_d+"conv0"] = [{'f': [conv_down(fdim)]+BNrelu() } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
         
     for k in range(multiplicity-1):
         theLayers[id_d+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
@@ -117,7 +117,7 @@ def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False
     fdim = fdims[z]
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
-    theLayers[id_d+"conv0"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
+    theLayers[id_d+"conv0"] = [{'f': [conv_down(fdim)]+BNrelu() } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
     for k in range(multiplicity-1):
         theLayers[id_d+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
     theLayers[id_d+"relu"] = _maxpool()
