@@ -16,7 +16,8 @@ custom_layers = {}
 
 
 
-def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALID',noBridge=False,verbose=False):
+def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
+                  padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
 
   if nD == 3:
       _conv = layers.Conv3D
@@ -54,19 +55,35 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,padding='VALI
   else:
       fdims = feature_dim
 
+
   theLayers = {}
   for z in range(depth):
+      
+    if input_shape is not None:
+        for r in range(len(input_shape)):
+            input_shape[r] = input_shape[r]/2
+      
     fdim = fdims[z]
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
     if noBridge:
-        theLayers[id_d+"conv0"] =  conv_down(fdim) 
+        theLayers[id_d+"conv0"] =  [conv_down(fdim) ]+BNrelu()
     else:
         theLayers[id_d+"conv0"] = [{'f': [conv_down(fdim)]+BNrelu() } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
-        
+                
     for k in range(multiplicity-1):
         theLayers[id_d+"conv"+str(k+1)] = [conv(fdim)] + BNrelu()
     theLayers[id_d+"relu"] = _maxpool()
+     
+    if centralDense is not None:
+        if z == depth-1:
+            theLayers[id_d+"s_central_0"] = layers.Flatten()
+            for k in range(len(centralDense['feature_dim'])):
+                theLayers[id_d+"s_central_1_"+str(k)] = [layers.Dense(centralDense['feature_dim'][k])]+BNrelu()
+            theLayers[id_d+"s_central_2"] = 'reshape_' + str(centralDense['out'])
+    
+    
+    
     theLayers[id_u+"conv0"] = conv_up(fdim,offs[z])
     for k in range(multiplicity-1):
         if k == multiplicity-1:

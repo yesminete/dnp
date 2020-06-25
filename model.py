@@ -66,6 +66,10 @@ class CNNblock(layers.Layer):
   def call(self, inputs, alphas=None, training=False):
     
     def apply_fun(f,x):
+                
+        
+        if len(x.shape) == nD+2:
+            self.last_spatial_shape = x.shape        
         if self.verbose:
             print("  " + f.name , "input_shape: " ,  x.shape)
         if hasattr(f,'isBi') and f.isBi:
@@ -102,7 +106,17 @@ class CNNblock(layers.Layer):
           x = tf.concat([x,r],nD+1)
 
 
+      if isinstance(self.theLayers[l],str) and self.theLayers[l][0:7]  == 'reshape':
+          prodsz = np.prod(self.last_spatial_shape[1:-1])
+          outfdim = int(self.theLayers[l][8:])
+          self.theLayers[l] = [layers.Dense(prodsz*outfdim),
+                               layers.Reshape(self.last_spatial_shape[1:-1] + [outfdim])]
+
+
       a = self.theLayers[l]      
+      
+          
+      
       if isinstance(a,list):
         if isinstance(a[0],dict):
           y = None
