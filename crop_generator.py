@@ -713,14 +713,23 @@ class CropGenerator():
                 return self.patch_size
               
     
-      def get_scalefac(level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
+      def get_scalefac(level,abssz):  # either a float, or a list of floats where each entry corresponds to a different depth level,
                                   # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
           if isinstance(self.scale_fac,float) or isinstance(self.scale_fac,int):
               return [self.scale_fac]*self.ndim
           elif isinstance(self.scale_fac,dict):
+              if ('level' + str(level))  not in self.scale_fac:
+                  return None
               tmp = self.scale_fac['level' + str(level)]
               if isinstance(tmp,float) or isinstance(tmp,int):
                   return [tmp]*self.ndim
+              elif isinstance(tmp,str):
+                  absv = tmp.replace("mm","").split(",")
+                  absv = list(map(int, absv))
+                  tmp = []
+                  for k in range(self.ndim):
+                      tmp.append(absv[k]/abssz[k])
+                  return tmp
               else:
                   return tmp
           elif isinstance(self.scale_fac,Iterable):
@@ -736,8 +745,10 @@ class CropGenerator():
           else:
               return sm
         
-      
-      this_scale_fac=get_scalefac(level)
+      last_abssz = None
+      if crops is not None:
+          last_abssz = crops['absolute_size_patch_mm']
+      this_scale_fac=get_scalefac(level,last_abssz)
       
       
       init_scale = self.init_scale
@@ -771,6 +782,8 @@ class CropGenerator():
       if generate_type == 'tree' and crops is None:
         assert bsize == 1, "for generate_type=tree the batch_size has to be one!"
  
+    
+      
       start = timer()
 
       ############### compute bbox coordinates
@@ -911,13 +924,15 @@ class CropGenerator():
       for k in range(nD):
         relres.append(((parent_boxes[0,k+nD]-parent_boxes[0,k])*data_parent.shape[k+1]/patch_size[k]).numpy() ) 
                     
+      abssz = None
+      if resolution is not None:
+          abssz = resolution[0:nD] * np.array(relres) * patch_size[0:nD]
   
       if verbose:
         print("--------- cropping, level ",level)
         print("shape of patch: ", *patch_size )
         print("voxsize (relative to original scale): ", *relres)
         if resolution is not None:
-            abssz = resolution[0:nD] * np.array(relres) * patch_size[0:nD]
             print("patchsize (mm): ", *abssz)
         print("numpatches in level: %d" % (parent_box_index.shape[0] / data_parent.shape[0]))
         print("shape of full output: ",  *list(map(lambda x: x.numpy(), dest_full_size[1:])))
@@ -968,6 +983,7 @@ class CropGenerator():
               "parent_box_scatter_index": parent_box_scatter_index,
               "dest_full_size":dest_full_size,
 
+              "absolute_size_patch_mm":abssz,
               "aspect_correction":forwarded_aspects
               }
 

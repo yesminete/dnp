@@ -201,10 +201,10 @@ cgen.sample(tf.ones([1,109,100,100]),None,generate_type='tree',
 
 #%% 2D
 nD=2
-cgen = patchwork.CropGenerator(patch_size = (32,32), 
-                  scale_fac =  0.5, 
+cgen = patchwork.CropGenerator(patch_size = (128,128), 
+                  scale_fac = 0.5, #{'level1': '100mm,100mm'}, 
                   scale_fac_ref = 'max',
-                  init_scale = '64vx,64vx',
+                  init_scale = [64,64],
                   smoothfac_data=['boxcar',0.5],
                   ndim=nD,
                   interp_type = 'NN',
@@ -214,7 +214,7 @@ cgen = patchwork.CropGenerator(patch_size = (32,32),
 
 
 
-cgen.sample(tf.ones([1,100,100]),None,generate_type='tree',
+cgen.sample(tf.ones([1,750,750]),None,generate_type='tree',
                                     resolutions=[1,1],
                                     num_patches=1,
                                     verbose=True)
