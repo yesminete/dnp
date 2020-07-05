@@ -315,7 +315,7 @@ class PatchWorkModel(Model):
       return inp
 
 
-    testIT=True
+    testIT=False
       
     nD = self.cropper.ndim
     output = []
@@ -385,7 +385,7 @@ class PatchWorkModel(Model):
          
          # cat with total input
          if self.forward_type == 'simple':
-             if testIT:
+             if 0:#testIT:
                 inp = last_cropped
              else:
                 inp = tf.concat([inp,last_cropped],(nD+1))
@@ -419,7 +419,10 @@ class PatchWorkModel(Model):
           else:
               res = self.blocks[k](inp,res_nonspatial,training=training)      
       if self.spatial_train:
-          current_output.append(res[...,0:self.num_labels])
+          if testIT:
+              current_output.append(res)
+          else:
+              current_output.append(res[...,0:self.num_labels])
 
       output = output + current_output
     
