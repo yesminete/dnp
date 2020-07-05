@@ -1017,7 +1017,7 @@ class CropGenerator():
       local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type,
                                                          aspects=None)
       parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size,interp_type=self.interp_type,
-                                                          aspects=None)
+                                                          aspects=aspect_correction)
       parent_box_scatter_index, _ = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size,interp_type=self.scatter_type,
                                                            aspects=aspect_correction)
   
