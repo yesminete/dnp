@@ -450,6 +450,7 @@ class PatchWorkModel(Model):
                  jitter_border_fix = False,
                  overlap=0,
                  repetitions=5,           
+                 dphi=0,
                  branch_factor=1,
                  scale_to_original=True,
                  verbose=False,
@@ -511,6 +512,7 @@ class PatchWorkModel(Model):
                                     jitter_border_fix = jitter_border_fix,
                                     overlap=overlap,
                                     num_patches=reps,
+                                    dphi=dphi,
                                     branch_factor=branch_factor,
                                     patch_size_factor=patch_size_factor,
                                     lazyEval=lazyEval,
@@ -597,6 +599,7 @@ class PatchWorkModel(Model):
                  num_chunks=1,
                  scale_to_original=True,
                  scalevalue=None,
+                 dphi=0,
                  along4dim=False,
                  align_physical=True,
                  patch_size_factor=1,
@@ -652,6 +655,7 @@ class PatchWorkModel(Model):
                                 repetitions=repetitions,
                                 num_chunks=num_chunks,
                                 branch_factor=branch_factor,
+                                dphi=dphi,
                                 resolution = resolution,
                                 lazyEval = lazyEval,
                                 patch_size_factor=patch_size_factor,
@@ -860,6 +864,7 @@ class PatchWorkModel(Model):
             showplot=True,
             autosave=True,
             augment=None,
+            rot_intrinsic=0,
             loss=None,
             optimizer=None
             ):
@@ -874,9 +879,11 @@ class PatchWorkModel(Model):
             rset = [resolutions[i] for i in subset]      
             
         if traintype == 'random':
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random',  num_patches=num_patches,augment=augment,balance=balance)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
+                                    num_patches=num_patches,augment=augment,balance=balance,dphi=rot_intrinsic)
         elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,jitter_border_fix=jitter_border_fix,augment=augment,balance=balance)
+            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
+                                    jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=rot_intrinsic)
         return c
       
     if loss is not None:

@@ -181,48 +181,25 @@ def createClassifier(name=None,depth=4,outK=2):
 #%% 3D
 nD=3
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
-                  scale_fac =  0.7, 
+                  scale_fac =  0.3, 
                   scale_fac_ref = 'max',
                   init_scale = -1,#'50mm,50mm,50mm',
-                  smoothfac_data=['boxcar',None],
+                  #smoothfac_data=['boxcar',None],
                   ndim=3,
                   interp_type = 'NN',
                   scatter_type = 'NN',
+                  
                   #create_indicator_classlabels=True,
-                  depth=2)
+                  depth=1)
 
 
 
-cgen.sample(tf.ones([1,109,100,100]),None,generate_type='tree',
-                                    resolutions=[1,1,1],
-                                    num_patches=1,
-                                    verbose=True)
+# cgen.sample(trainset[0],None,generate_type='random',
+#                                     resolutions=[1,1,1],
+#                                     num_patches=1,
+#                                     verbose=True)
 
 
-#%% 2D
-nD=2
-cgen = patchwork.CropGenerator(patch_size = (128,128), 
-                  scale_fac = 0.5, #{'level1': '100mm,100mm'}, 
-                  scale_fac_ref = 'max',
-                  init_scale = [64,64],
-                  smoothfac_data=['boxcar',0.5],
-                  ndim=nD,
-                  interp_type = 'NN',
-                  scatter_type = 'NN',
-                  #create_indicator_classlabels=True,
-                  depth=2)
-
-
-
-cgen.sample(tf.ones([1,750,750]),None,generate_type='tree',
-                                    resolutions=[1,1],
-                                    num_patches=1,
-                                    verbose=True)
-
-
-
-
-#%%
 model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
@@ -237,7 +214,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  classifier_train=True,
                       
                       finalBlock= customLayers.sigmoid_softmax(),
-                     # forward_type='simple',
+                     # forward_typinverse_rote='simple',
                       num_labels = 1,
 #                      num_classes = 1                      
                       )
@@ -247,10 +224,70 @@ model = patchwork.PatchWorkModel(cgen,
 #                      lazyEval=0.3#{'reduceFun':'classifier_output'}
 #                      )
 
-res = model.apply_full(trainset[0][0:1,...],generate_type='random',jitter=0.05,   repetitions=1,verbose=True)
+res = model.apply_full(trainset[0],resolution=resolutions[0],
+                       generate_type='random',jitter=0,   repetitions=10,dphi=10,verbose=True,scale_to_original=False)
+#res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
+
+plt.imshow(tf.squeeze(res[30,:,:]))
+
+#%% 2D
+nD=2
+cgen = patchwork.CropGenerator(patch_size = [(64,64),(64,64)] ,
+                  scale_fac =  0.7,
+                  scale_fac_ref = 'min',
+                  init_scale = [128,128],
+                  #smoothfac_data=['boxcar',0.5],
+                  ndim=nD,
+                  interp_type = 'NN',
+                  keepAspect=True,
+                  scatter_type = 'NN',
+                  #create_indicator_classlabels=True,
+                  depth=2)
+
+
+
+# cgen.sample(tf.ones([1,750,750]),None,generate_type='tree',
+#                                     resolutions=[1,1],
+#                                     num_patches=1,
+#                                     verbose=True)
+
+
+
+
+
+model = patchwork.PatchWorkModel(cgen,
+                      #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
+                      blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
+                     # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
+                      spatial_train=True,
+                      intermediate_loss=False,
+                      #block_out=[4,1],
+
+                    #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
+                    #  cls_intermediate_out=2,
+                    #  cls_intermediate_loss=True,
+                    #  classifier_train=True,
+                      
+                      finalBlock= customLayers.sigmoid_softmax(),
+                     # forward_typinverse_rote='simple',
+                      num_labels = 1,
+#                      num_classes = 1                      
+                      )
+# #%
+# x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
+#                      jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
+#                      lazyEval=0.3#{'reduceFun':'classifier_output'}
+#                      )
+
+res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
+                       generate_type='random',jitter=0,   repetitions=20,dphi=10,verbose=True,scale_to_original=False)
+#res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
+#                       generate_type='random',jitter=0.05,   repetitions=20,dphi=0.9,verbose=True,scale_to_original=False)
 
 print(res.shape)
-#print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)
+plt.imshow(tf.squeeze(res))
+plt.pause(0.001)
+#print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)inverse_rot
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 
 #model.summary()

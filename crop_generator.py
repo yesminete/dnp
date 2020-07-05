@@ -215,6 +215,7 @@ class CropGenerator():
              jitter=0,                #  if 'tree' this is the amount of random jitter
              jitter_border_fix=False,
              patch_size_factor=1,
+             dphi=0,
              overlap=0,
              balance=None,
              augment=None,
@@ -287,7 +288,7 @@ class CropGenerator():
                                                          generate_type,test,
                                                            num_patches=num_patches,branch_factor=branch_factor,
                                                            jitter=jitter,jitter_border_fix=jitter_border_fix,
-                                                           patch_size_factor=patch_size_factor,
+                                                           patch_size_factor=patch_size_factor,dphi=dphi,
                                                            overlap=overlap,resolution=resolution_,balance=balance,verbose=verbose)
 
       # for lazy  prediction return just the function      
@@ -460,7 +461,7 @@ class CropGenerator():
   #  local_boxes - normalized coordinates of shape [N,4] (2D) or [N,6] (3D), 
   #  sz - abs. size of images from which crop is performed (list of size nD)
   #  patch_size - size of patches (list of size nD) 
-  def convert_to_gatherND_index(self,local_boxes,sz,patch_size,interp_type='NN'):
+  def convert_to_gatherND_index(self,local_boxes,sz,patch_size,interp_type='NN',aspects=None):
       nD = self.ndim
 
       if sz is None:             
@@ -468,22 +469,51 @@ class CropGenerator():
          for k in range(nD):
            sz[k+1] = tf.math.round(patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) )
 
+      print(sz)
       rans = [None] * nD
-      start_abs = [None] * nD
+      center = [None] * nD
       for k in range(nD):
-        scfac = (local_boxes[0,(k+nD):(k+nD+1)]-local_boxes[0,k:k+1])/patch_size[k]*sz[k+1]
-        rans[k] = tf.cast(tf.range(patch_size[k]),dtype=self.ftype)*scfac
-        start_abs[k] = local_boxes[:,k:(k+1)] * sz[k+1]
+        wid = (local_boxes[0,(k+nD):(k+nD+1)]-local_boxes[0,k:k+1])
+        scfac = wid/patch_size[k]*sz[k+1]
+        rans[k] = tf.cast(tf.range(patch_size[k]),dtype=self.ftype)*scfac-patch_size[k]*0.5*scfac
+        center[k] = (local_boxes[:,k:(k+1)] + local_boxes[:,(k+nD):(k+nD+1)])*0.5 * sz[k+1]
 
-      start_abs = tf.transpose(start_abs,[1,0,2]);
+      center = tf.transpose(center,[1,0,2]);
       res_shape = [1] * (nD+2)
       res_shape[0] = local_boxes.shape[0]
       res_shape[nD+1] = nD
-      start_abs = tf.reshape(start_abs,res_shape)
-
+      center = tf.reshape(center,res_shape)
       qwq = tf.expand_dims(rep_rans(rans,patch_size,nD),0)
 
-      local_box_index = start_abs+qwq
+
+      if local_boxes.shape[1] > nD*2:
+            qwq = tf.tile(qwq,[local_boxes.shape[0]]+[1]*(nD+1))
+            phi = local_boxes[:,(2*nD):]
+            if nD == 2:
+                phi = tf.expand_dims(local_boxes[:,(2*nD):],2)
+                a = tf.math.cos(phi)
+                b = tf.math.sin(phi)
+                R = tf.concat([tf.concat([a,b],1),
+                               tf.concat([-b,a],1)],2)
+            else:
+                R = quaternion2mat(phi)  
+                c=lambda x: tf.expand_dims(tf.concat(x,1),2)
+                R = tf.concat([c(R[0]),c(R[1]),c(R[2])],2)
+    
+            if aspects is not None:
+                aspects = tf.cast(aspects,dtype=self.ftype)
+                R = tf.einsum('bij,i,j->bij',R,aspects,1/aspects)
+                #f = aspects
+                #p = f[1]/f[0]
+                #R = tf.concat([tf.concat([a,b*p],1),
+                #               tf.concat([-b/p,a],1)],2)
+            if nD==2:
+                qwq = tf.einsum('bxyi,bij->bxyj',qwq,R)
+            else:
+                qwq = tf.einsum('bxyzi,bij->bxyzj',qwq,R)
+
+
+      local_box_index = center+qwq
 
       if interp_type == 'NN': # cast index to int
           local_box_index = tf.dtypes.cast(tf.floor(local_box_index+0.5),dtype=tf.int32)
@@ -510,7 +540,7 @@ class CropGenerator():
   #  numboxes - number of boxes to be distributed
   # returns boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) suitable as
   #  input for convert_to_gatherND_index
-  def random_boxes(self,bbox_sz,labels, numboxes,balance):
+  def random_boxes(self,bbox_sz,labels, numboxes,balance,dphi=0):
       
           
       
@@ -605,15 +635,22 @@ class CropGenerator():
               centers = draw_uniform()
               
       local_boxes = centers + bbox_sz
-          
+      
+      if dphi > 0:
+          if nD==2:
+              local_boxes = np.concatenate([local_boxes,np.random.uniform(-dphi,dphi,[local_boxes.shape[0],1])],1)
+          else:
+              quats = np.random.normal(0,dphi*0.01,[local_boxes.shape[0],3])
+              local_boxes = np.concatenate([local_boxes,quats],1)
+              
       
       for k in range(nD):
-          idx = local_boxes[:,k]<0
-          local_boxes[idx,nD+k] = local_boxes[idx,nD+k] - local_boxes[idx,k]
-          local_boxes[idx,k] = 0
-          idx = local_boxes[:,k+nD]>1
-          local_boxes[idx,k] = local_boxes[idx,k] - local_boxes[idx,k+nD] + 1
-          local_boxes[idx,nD+k] = 1
+            idx = local_boxes[:,k]<0
+            local_boxes[idx,nD+k] = local_boxes[idx,nD+k] - local_boxes[idx,k]
+            local_boxes[idx,k] = 0
+            idx = local_boxes[:,k+nD]>1
+            local_boxes[idx,k] = local_boxes[idx,k] - (local_boxes[idx,k+nD]-1)
+            local_boxes[idx,nD+k] = 1
       local_boxes = tf.convert_to_tensor(local_boxes,dtype=self.ftype)
             
       return local_boxes
@@ -629,7 +666,7 @@ class CropGenerator():
   #  overlap - an integer giving the additoinal number of boxes per dimension
   #  jitter - to add random jitter 
   # return boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) 
-  def tree_boxes(self,bbox_sz,overlap,jitter=0,jitter_border_fix=False):
+  def tree_boxes(self,bbox_sz,overlap,jitter=0,jitter_border_fix=False,dphi=0):
 
       nD = self.ndim
       centers = [None] * nD
@@ -691,6 +728,12 @@ class CropGenerator():
           centers = centers + rands
 
       qwq = tf.tile(tf.reshape(centers,tf.cast([totnum,nD],dtype=tf.int32)),[1,2]) + bbox_sz
+      
+      if dphi > 0:
+          qwq = np.concatenate([qwq,np.random.uniform(-dphi,dphi,[qwq.shape[0],1])],1)
+      qwq = tf.cast(qwq,dtype=self.ftype)
+      
+      
       return qwq, qwq.shape[0];
 
 
@@ -701,6 +744,7 @@ class CropGenerator():
       jitter_border_fix=False,
       num_patches=1,
       branch_factor=1,
+      dphi=0,
       patch_size_factor=1,
       overlap=0,resolution=None,balance=None,verbose=True):
       
@@ -865,16 +909,16 @@ class CropGenerator():
 
 
         if generate_type == 'random':     
-          local_boxes = self.random_boxes(bbox_sz,labels_parent,bsize*replicate_patches,balance)
+          local_boxes = self.random_boxes(bbox_sz,labels_parent,bsize*replicate_patches,balance,dphi=dphi)
         elif generate_type == 'tree':   
           if crops is not None:
               local_boxes = []
               for t in range(crops['parent_boxes'].shape[0]):
-                lb,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix)
+                lb,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix,dphi=dphi)
                 local_boxes.append(tf.expand_dims(lb,1))
               local_boxes = tf.concat(local_boxes,1)
           else:
-              local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix)
+              local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix,dphi=dphi)
             
           
 
@@ -886,25 +930,83 @@ class CropGenerator():
         parent_boxes = local_boxes
       else: # preceding layers (crops have to recomputed according to grandparent)
         last_boxes = crops['parent_boxes']
-        if generate_type == 'random':     
-          rans = [None] * (2*nD)          
-          last_boxes = tf.tile(last_boxes,[replicate_patches,1])                   
-          for k in range(nD):
-              delta = last_boxes[:,(k+nD):(k+nD+1)]-last_boxes[:,k:(k+1)] 
-              rans[k] = local_boxes[:,k:(k+1)]*delta + last_boxes[:,k:(k+1)]
-              rans[k+nD] = local_boxes[:,(k+nD):(k+nD+1)]*delta + last_boxes[:,k:(k+1)]
-          parent_boxes = tf.concat(rans,1)
+          
+        if generate_type == 'tree':          
+           ccatdim=2
+           last_boxes = tf.expand_dims(last_boxes,0)
+        else:
+           ccatdim=1
+           last_boxes = tf.tile(last_boxes,[replicate_patches,1])                   
+          
+        center_last = []
+        center_local = []
+        wid = []
+        wid_local = []            
+        for j in range(nD):
+            center_last.append( (last_boxes[...,(nD+j):(nD+1+j)]+last_boxes[...,j:(j+1)])*0.5 )
+            center_local.append( (local_boxes[...,(nD+j):(nD+1+j)]+local_boxes[...,j:(j+1)])*0.5 - 0.5 )
+            wid.append( (last_boxes[...,(nD+j):(j+nD+1)]-last_boxes[...,j:(j+1)]) )
+            wid_local.append(local_boxes[...,(nD+j):(j+nD+1)]-local_boxes[...,j:(j+1)])
 
-        elif generate_type == 'tree':          
-          last_boxes = tf.expand_dims(last_boxes,0)
-          rans = [None] * (2*nD)
-          for k in range(nD):
-              delta = (last_boxes[:,:,(k+nD):(k+nD+1)]-last_boxes[:,:,k:(k+1)]) 
-              rans[k] = local_boxes[:,:,k:(k+1)]*delta + last_boxes[:,:,k:(k+1)]
-              rans[k+nD] = local_boxes[:,:,(k+nD):(k+nD+1)]*delta + last_boxes[:,:,k:(k+1)]
-          parent_boxes = tf.concat(rans,2)
-          parent_boxes = tf.reshape(parent_boxes,[parent_boxes.shape[0]*parent_boxes.shape[1], 2*nD])
-          local_boxes = tf.reshape(local_boxes,[local_boxes.shape[0]*local_boxes.shape[1], 2*nD])
+        if last_boxes.shape[ccatdim] > nD*2:
+            phi = last_boxes[...,2*nD:]
+        else:
+            phi = last_boxes[...,0:(1+(nD-2)*2)]*0
+        
+        center_ = center_last
+        if nD == 2:
+            R = [ [tf.math.cos(phi),tf.math.sin(phi)],
+                  [-tf.math.sin(phi),tf.math.cos(phi)]  ]
+        else:
+            R = quaternion2mat(phi)
+
+        for a in range(nD):
+            for b in range(nD):
+                center_[a] += R[a][b]*center_local[b]*wid[a]*sz[1+b]/sz[1+a]
+
+        toconcat = [None] * (2*nD)
+        for a in range(nD):
+            toconcat[a] =    center_[a]-wid[a]*wid_local[a]*0.5
+            toconcat[a+nD] = center_[a]+wid[a]*wid_local[a]*0.5
+        if nD==2:
+            toconcat.append(phi+local_boxes[...,2*nD:])
+        else:
+            toconcat.append(quaternion_prod(phi,local_boxes[...,2*nD:]))
+        parent_boxes = tf.concat(toconcat,ccatdim)
+
+        if generate_type == 'tree':                  
+            parent_boxes = tf.reshape(parent_boxes,[parent_boxes.shape[0]*parent_boxes.shape[1], parent_boxes.shape[2]])
+            local_boxes = tf.reshape(local_boxes,[local_boxes.shape[0]*local_boxes.shape[1],  local_boxes.shape[2]])
+
+            
+  #          p = sz[2]/sz[1]
+                                
+  #          centerX_ = center_last[0] + (tf.math.cos(phi)*center[0]_local*wid[0]*sz[1]/sz[1] + tf.math.sin(phi)*center[1]_local*wid[0]*sz[2]/sz[1])
+  #          centerY_ = center_last[1] + (-tf.math.sin(phi)*center[0]_local*wid[1]*sz[1]/sz[2] + tf.math.cos(phi)*center[1]_local*wid[1]*sz[2]/sz[2])
+
+            # centerX_last = (last_boxes[...,(nD):(nD+1)]+last_boxes[...,0:(0+1)])*0.5
+            # centerY_last = (last_boxes[...,(1+nD):(1+nD+1)]+last_boxes[...,1:(2)])*0.5
+            # centerX_local = (local_boxes[...,(nD):(nD+1)]+local_boxes[...,0:(0+1)])*0.5 - 0.5
+            # centerY_local = (local_boxes[...,(1+nD):(1+nD+1)]+local_boxes[...,1:(2)])*0.5 - 0.5
+            # widX =  (last_boxes[...,(nD):(nD+1)]-last_boxes[...,0:(0+1)])
+            # widY = (last_boxes[...,(1+nD):(1+nD+1)]-last_boxes[...,1:(2)])
+            # widX_local = (local_boxes[...,(nD):(nD+1)]-local_boxes[...,0:(0+1)])
+            # widY_local = (local_boxes[...,(1+nD):(1+nD+1)]-local_boxes[...,1:(2)])
+
+            # centerX_ = centerX_last + (tf.math.cos(phi)*centerX_local*widX + tf.math.sin(phi)*centerY_local*widX*p)
+            # centerY_ = centerY_last + (-tf.math.sin(phi)*centerX_local*widY/p + tf.math.cos(phi)*centerY_local*widY)
+  
+            # print("###################################")
+            # print("forw_asp", forwarded_aspects)
+            # print("patch_size", patch_size_)
+            # print("sz", sz)                      
+            # print("###################################")
+    
+            #toconcat = [centerX_-widX*widX_local*0.5,centerY_-widY*widY_local*0.5, 
+            #            centerX_+widX*widX_local*0.5,centerY_+widY*widY_local*0.5,phi+local_boxes[...,2*nD:]]
+            #parent_boxes = tf.concat(toconcat,ccatdim)
+            
+            
       
 
       dest_full_size = [None]*(nD+1)
@@ -913,9 +1015,12 @@ class CropGenerator():
 
 
       # compute the index suitable for gather_nd
-      local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type)
-      parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size,interp_type=self.interp_type)
-      parent_box_scatter_index, _ = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size,interp_type=self.scatter_type)
+      local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type,
+                                                         aspects=None)
+      parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size,interp_type=self.interp_type,
+                                                          aspects=None)
+      parent_box_scatter_index, _ = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size,interp_type=self.scatter_type,
+                                                           aspects=aspect_correction)
   
 
 
@@ -1044,6 +1149,44 @@ class CropGenerator():
 
 
 
+
+def quaternion2mat(q):
+    x = q[...,0:1]
+    y = q[...,1:2]
+    z = q[...,2:3]
+                   
+    w = tf.math.sqrt(tf.maximum(0.0,1.0-(x*x+y*y+z*z)));
+    Rxx = 1 - 2*(y*y + z*z);
+    Rxy = 2*(x*y - z*w);
+    Rxz = 2*(x*z + y*w);
+    Ryx = 2*(x*y + z*w);
+    Ryy = 1 - 2*(x*x + z*z);
+    Ryz = 2*(y*z - x*w );
+    Rzx = 2*(x*z - y*w );
+    Rzy = 2*(y*z + x*w );
+    Rzz = 1 - 2 *(x*x + y*y);
+    return [ [Rxx,Rxy,Rxz],
+             [Ryx,Ryy,Ryz], 
+             [Rzx,Rzy,Rzz] ]
+
+def quaternion_prod(x,y):
+
+    p1 = x[...,0:1]
+    p2 = x[...,1:2]
+    p3 = x[...,3:4]
+    
+    q1 = y[...,0:1]
+    q2 = y[...,1:2]
+    q3 = y[...,3:4]
+
+    p0 = sqrt(max(0.0,1.0-(p1*p1+p2*p2+p3*p3)));
+    q0 = sqrt(max(0.0,1.0-(q1*q1+q2*q2+q3*q3)));
+  
+    
+    #real = p0*q0 − (p1*q1 + p2*q2 + p3*q3),
+    return tf.concat([(p2*q3 - p3*q2) + (p2*q3 - p3*q2) + p0*q1 + q0*p1,
+                      (p3*q1 - p1*q3) + (p3*q1 - p1*q3) + p0*q2 + q0*p2,
+                      (p1*q2 - p2*q1) + (p1*q2 - p2*q1) + p0*q3 + q0*p3],-1)
 
 
 
