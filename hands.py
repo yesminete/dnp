@@ -280,12 +280,12 @@ model = patchwork.PatchWorkModel(cgen,
 #                      )
 
 res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=500,dphi=10,verbose=True,scale_to_original=False)
+                       generate_type='random',jitter=0,   repetitions=500,dphi=10,verbose=True,scale_to_original=False,testIT=True)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 #                       generate_type='random',jitter=0.05,   repetitions=20,dphi=0.9,verbose=True,scale_to_original=False)
 
 print(res.shape)
-plt.imshow(tf.squeeze(res[:,:,0]))
+plt.imshow(tf.squeeze(res[:,:,1]))
 plt.pause(0.001)
 #print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)inverse_rot
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)

@@ -298,7 +298,7 @@ class PatchWorkModel(Model):
 
 
 
-  def call(self, inputs, training=False, lazyEval=None):
+  def call(self, inputs, training=False, lazyEval=None, testIT=False):
 
     def subsel(inp,idx,w):
       sz = inp.shape
@@ -314,9 +314,7 @@ class PatchWorkModel(Model):
       inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
       return inp
 
-
-    testIT=False
-      
+    
     nD = self.cropper.ndim
     output = []
     res = None
@@ -461,7 +459,8 @@ class PatchWorkModel(Model):
                  patch_size_factor=1,
                  lazyEval = None,
                  max_patching=False,
-                 patch_stats= False
+                 patch_stats= False,
+                 testIT=False
                  ):
 
 
@@ -533,7 +532,7 @@ class PatchWorkModel(Model):
                     r = [r]
             # otherwise use ordinary apply
             else:
-                r = self(data_,lazyEval=lazyEval)
+                r = self(data_,lazyEval=lazyEval,testIT=testIT)
             print(">>> time elapsed, network application: " + str(timer() - start) )
                 
             if max_patching:
