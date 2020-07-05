@@ -640,7 +640,7 @@ class CropGenerator():
           if nD==2:
               local_boxes = np.concatenate([local_boxes,np.random.uniform(-dphi,dphi,[local_boxes.shape[0],1])],1)
           else:
-              quats = np.random.normal(0,dphi*0.01,[local_boxes.shape[0],3])
+              quats = np.random.normal(0,dphi,[local_boxes.shape[0],3])
               local_boxes = np.concatenate([local_boxes,quats],1)
               
       
@@ -1013,7 +1013,6 @@ class CropGenerator():
       for k in range(nD):
           dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(1/patch_size_factor*patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
 
-
       # compute the index suitable for gather_nd
       local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type,
                                                          aspects=None)
@@ -1173,14 +1172,14 @@ def quaternion_prod(x,y):
 
     p1 = x[...,0:1]
     p2 = x[...,1:2]
-    p3 = x[...,3:4]
+    p3 = x[...,2:3]
     
     q1 = y[...,0:1]
     q2 = y[...,1:2]
-    q3 = y[...,3:4]
+    q3 = y[...,2:3]
 
-    p0 = sqrt(max(0.0,1.0-(p1*p1+p2*p2+p3*p3)));
-    q0 = sqrt(max(0.0,1.0-(q1*q1+q2*q2+q3*q3)));
+    p0 = tf.math.sqrt(tf.maximum(0.0,1.0-(p1*p1+p2*p2+p3*p3)));
+    q0 = tf.math.sqrt(tf.maximum(0.0,1.0-(q1*q1+q2*q2+q3*q3)));
   
     
     #real = p0*q0 − (p1*q1 + p2*q2 + p3*q3),

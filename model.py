@@ -315,7 +315,7 @@ class PatchWorkModel(Model):
       return inp
 
 
-    testIT=False
+    testIT=True
       
     nD = self.cropper.ndim
     output = []
