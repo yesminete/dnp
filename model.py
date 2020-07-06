@@ -375,7 +375,10 @@ class PatchWorkModel(Model):
                 inp_nonspatial = tf.tile(inp_nonspatial,multiples)
         
          # crop the relevant rgion
-         last_cropped = tf.gather_nd(last,coords,batch_dims=1)
+         if self.cropper.interp_type == 'lin':
+             last_cropped = tf.gather_nd(last,tf.cast(0.5+coords,dtype=tf.int32),batch_dims=1)
+         else:
+             last_cropped = tf.gather_nd(last,coords,batch_dims=1)
          
          
          if k < len(self.preprocessor) :

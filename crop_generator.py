@@ -102,6 +102,12 @@ def stitchResult(r,level, scales,scatter_type):
 
 def scatter_interp(x,data,sz):
     
+    
+      # sz = []
+      # for i in range(len(sz_)-1):
+      #     sz.append(sz_[i]+10)
+      # sz.append(sz_[-1])
+    
       nD = len(sz)-1
       
       ones = data*0+1
@@ -469,7 +475,6 @@ class CropGenerator():
          for k in range(nD):
            sz[k+1] = tf.math.round(patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) )
 
-      print(sz)
       rans = [None] * nD
       center = [None] * nD
       for k in range(nD):
@@ -519,13 +524,16 @@ class CropGenerator():
           local_box_index = tf.dtypes.cast(tf.floor(local_box_index+0.5),dtype=tf.int32)
     
           ## clip indices
-          lind = []
-          for k in range(nD):
-            tmp = local_box_index[...,k:(k+1)]
-            tmp = tf.math.maximum(tmp,0)
-            tmp = tf.math.minimum(tmp,tf.cast(sz[k+1]-1,tf.int32))
-            lind.append(tmp)
-          local_box_index = tf.concat(lind,nD+1)
+      lind = []
+      for k in range(nD):
+          tmp = local_box_index[...,k:(k+1)]
+          tmp = tf.math.maximum(tmp,0)
+          if interp_type == 'NN': 
+             tmp = tf.math.minimum(tmp,tf.cast(sz[k+1]-1,tf.int32))
+          else:
+             tmp = tf.math.minimum(tmp,sz[k+1]-2)
+          lind.append(tmp)
+      local_box_index = tf.concat(lind,nD+1)
 
     
 
