@@ -232,8 +232,8 @@ plt.imshow(tf.squeeze(res[30,:,:]))
 
 #%% 2D
 nD=2
-cgen = patchwork.CropGenerator(patch_size = (128,64) ,
-                  scale_fac =  0.7,
+cgen = patchwork.CropGenerator(patch_size = (256,128) ,
+                  scale_fac =  0.8,
                   scale_fac_ref = 'min',
                   init_scale = [128,256],
                   #smoothfac_data=['boxcar',0.5],
@@ -242,7 +242,7 @@ cgen = patchwork.CropGenerator(patch_size = (128,64) ,
                   keepAspect=True,
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
-                  depth=1)
+                  depth=2)
 
 
 
@@ -256,22 +256,22 @@ cgen = patchwork.CropGenerator(patch_size = (128,64) ,
 
 
 model = patchwork.PatchWorkModel(cgen,
-                      #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
-                      blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
+                      blockCreator= lambda level,outK : customLayers.createUnet_bi(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      spatial_train=True,
+                      spatial_train=False,
                       intermediate_loss=False,
                       #block_out=[4,1],
-
+                          
+                      classifierCreator= lambda level,outK : customLayers.simpleClassifier(outK=outK,nD=nD),
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                     #  cls_intermediate_out=2,
                     #  cls_intermediate_loss=True,
-                    #  classifier_train=True,
+                      classifier_train=True,
                       
-                      finalBlock= customLayers.sigmoid_softmax(),
+                    #  finalBlock= customLayers.sigmoid_softmax(),
                      # forward_typinverse_rote='simple',
-                      num_labels = 1,
-#                      num_classes = 1                      
+                      #num_labels = 4,
+                       num_classes = 4                      
                       )
 # #%
 # x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
@@ -280,13 +280,13 @@ model = patchwork.PatchWorkModel(cgen,
 #                      )
 
 res = model.apply_full(trainset[0][0:1,:,:,...],resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=2,dphi=0.5,verbose=True,scale_to_original=False,testIT=True)
+                       generate_type='random',jitter=0,   repetitions=100,dphi=0.1,verbose=True,scale_to_original=True,testIT=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 #                       generate_type='random',jitter=0.05,   repetitions=20,dphi=0.9,verbose=True,scale_to_original=False)
 
 print(res.shape)
-plt.imshow(tf.squeeze(res[:,:,0]))
-plt.pause(0.001)
+#plt.imshow(tf.squeeze(res[:,:,0]))
+#plt.pause(0.001)
 #print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)inverse_rot
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 
@@ -330,7 +330,7 @@ augment = patchwork.Augmenter(    morph_width = 150
 #%%
 #model.modelname = "models/test"
 
-model.train(trainset,labelset,
+model.train(trainset,[tf.ones([1,4]),tf.ones([1,4])*0],
             resolutions=resolutions,
             loss=loss,
             valid_ids = [],

@@ -45,19 +45,25 @@ class CropInstance:
     self.cropper = cropper
     self.intermediate_loss = intermediate_loss
 
+  def extb2dim(self,x,batchdim2):
+      if batchdim2 == -1:
+          return x      
+      sz = x.shape
+      x = tf.reshape(x,[sz[0]//batchdim2, batchdim2] + sz[1:])
+      return x
+
   # get input training data 
-  def getInputData(self):
-            
+  def getInputData(self,batchdim2=-1):                    
     cnt = 0
     inp = {}
     for x in self.scales:
-      inp['input'+str(cnt)] = x['data_cropped']
-      inp['cropcoords'+str(cnt)] = x['local_box_index']
+      inp['input'+str(cnt)] = self.extb2dim(x['data_cropped'],batchdim2)
+      inp['cropcoords'+str(cnt)] = self.extb2dim(x['local_box_index'],batchdim2)
       cnt = cnt + 1
     return inp
 
   # get target training data 
-  def getTargetData(self):
+  def getTargetData(self,batchdim2=-1):
     out = []
     
     create_indicator_classlabels = self.cropper.create_indicator_classlabels
@@ -78,6 +84,9 @@ class CropInstance:
     if spatial_train:
         out.append(self.scales[-1]['labels_cropped'])
     
+    for k in range(len(out)):
+        out[k] = self.extb2dim(out[k],batchdim2)
+        out[k] = tf.reduce_max(out[k],axis=1)
     
     return out
 

@@ -321,9 +321,22 @@ class PatchWorkModel(Model):
           nsz.append(sz[k+2])                
       inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
       return inp
+  
+    nD = self.cropper.ndim
+    
+    ## squeeze additional batch_dim if necearray
+    original_shape = None
+    if len(inputs['input0'].shape) > nD+2:
+        original_shape = inputs['input0'].shape[1]
+        for k in inputs:
+            sz = inputs[k].shape
+            if nD == 2:            
+                newsz = [-1, sz[2], sz[3], sz[4]]
+            else:
+                newsz = [-1, sz[2], sz[3], sz[4], sz[5]]
+            inputs[k] = tf.reshape(inputs[k],newsz)
 
     
-    nD = self.cropper.ndim
     output = []
     res = None
     res_nonspatial = None
@@ -444,6 +457,15 @@ class PatchWorkModel(Model):
             else:                    
                 output.append(self.finalBlock(lo,training=training))
 
+    ## undo the sequueze of potential batch_dim2 and reduce via max
+    if original_shape is not None:
+        for k in range(len(output)):
+            sz = output[k].shape
+            newsz = [-1,original_shape]
+            for j in range(len(sz)-1):
+                newsz.append(sz[j+1])
+            output[k] = tf.reshape(output[k],newsz)
+            output[k] = tf.reduce_max(output[k],axis=1)
                 
     if not self.intermediate_loss:
       if self.spatial_train and self.classifier_train:
@@ -896,6 +918,7 @@ class PatchWorkModel(Model):
             traintype='random',
             num_patches=10,
             valid_ids = [],
+            valid_num_patches=None,
             jitter=0,
             jitter_border_fix=False,
             balance=None,
@@ -903,6 +926,7 @@ class PatchWorkModel(Model):
             showplot=True,
             autosave=True,
             augment=None,
+            max_agglomerative=False,
             rot_intrinsic=0,
             loss=None,
             optimizer=None
@@ -923,12 +947,19 @@ class PatchWorkModel(Model):
             rset = [resolutions[i] for i in subset]      
             
         if traintype == 'random':
+            np = num_patches
+            if valid:
+                np = valid_num_patches
             c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
-                                    num_patches=num_patches,augment=augment,balance=balance,dphi=dphi)
+                                    num_patches=np,augment=augment,balance=balance,dphi=dphi)
         elif traintype == 'tree':
             c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
                                     jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=dphi)
         return c
+    
+    
+    if valid_num_patches is None:
+        valid_num_patches = num_patches
       
     if loss is not None:
         if optimizer is None:
@@ -962,8 +993,12 @@ class PatchWorkModel(Model):
         ### fitting
         history = History()
       
-        inputdata = c.getInputData()
-        targetdata = c.getTargetData()
+        b2dim = -1
+        if max_agglomerative:
+            b2dim = num_patches
+        
+        inputdata = c.getInputData(b2dim)
+        targetdata = c.getTargetData(b2dim)
         print("starting training")
         start = timer()
         self.fit(inputdata,targetdata,
