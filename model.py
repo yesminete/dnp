@@ -207,8 +207,8 @@ class PatchWorkModel(Model):
                preprocCreator=None,
 
                forward_type='simple',
-               trainloss_hist = [],
-               validloss_hist = [],
+               trainloss_hist = None,
+               validloss_hist = None,
                trained_epochs = 0,
                modelname = None
                ):
@@ -221,6 +221,13 @@ class PatchWorkModel(Model):
     self.forward_type = forward_type
     self.num_labels = num_labels
     self.num_classes = num_classes
+
+    if trainloss_hist is None:
+        trainloss_hist = {}
+    if validloss_hist is None:
+        validloss_hist = {}
+
+
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
     self.block_out = block_out
@@ -230,7 +237,8 @@ class PatchWorkModel(Model):
     self.classifier_train=classifier_train
     self.spatial_train=spatial_train
 
-    
+        
+        
     self.trainloss_hist = trainloss_hist
     self.validloss_hist = validloss_hist
     self.trained_epochs = trained_epochs
@@ -799,24 +807,50 @@ class PatchWorkModel(Model):
   def show_train_stat(self):
 
     import matplotlib.pyplot as plt
-      
-    l = len(self.trainloss_hist[0][1])
-    cols = 'rbymck'
-    for k  in range(l):        
-        x = [ i for i, j in self.trainloss_hist ]
-        y = [ j[k] for i, j in self.trainloss_hist ]
-        if k==0:
-            plt.semilogy(x,y,cols[k],label="total train loss ")
-        else:
-            plt.semilogy(x,y,cols[k],label="train loss " + str(k))
-    if len(self.validloss_hist) > 0:
-        x = [ i for i, j in self.validloss_hist ]
-        y = [ j for i, j in self.validloss_hist ]
-        plt.semilogy(x,y,'g',label="valid loss")
-    plt.legend()
-    plt.grid()
-    plt.title(self.modelname)
-    plt.pause(0.001)
+    
+    if isinstance(self.trainloss_hist,list):
+        
+        l = len(self.trainloss_hist[0][1])
+        cols = 'rbymck'
+        for k  in range(l):        
+            x = [ i for i, j in self.trainloss_hist ]
+            y = [ j[k] for i, j in self.trainloss_hist ]
+            if k==0:
+                plt.semilogy(x,y,cols[k],label="total train loss ")
+            else:
+                plt.semilogy(x,y,cols[k],label="train loss " + str(k))
+        if len(self.validloss_hist) > 0:
+            x = [ i for i, j in self.validloss_hist ]
+            y = [ j for i, j in self.validloss_hist ]
+            plt.semilogy(x,y,'g',label="valid loss")
+        plt.legend()
+        plt.grid()
+        plt.title(self.modelname)
+        plt.pause(0.001)
+        
+    else:
+#%%
+        loss_hist = self.trainloss_hist
+        
+        def plothist(loss_hist,txt):
+            cols = 'rbymck'   
+            cnt = 0
+            for k in sorted(loss_hist):
+                x = [ i for i, j in loss_hist[k] ]
+                y = [ j for i, j in loss_hist[k] ]
+                if txt == "":                     
+                    plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
+                else:
+                    plt.semilogy(x,y,cols[cnt],label=txt+k)
+                cnt+=1
+        plothist(self.trainloss_hist,'train_')
+        plothist(self.validloss_hist,'')
+        plt.legend()
+        plt.grid()
+        plt.title(self.modelname)
+        plt.pause(0.001)  
+            
+#%%        
 
 
   # Trains the model for a certain number of iterations. For each iteration 
@@ -876,19 +910,24 @@ class PatchWorkModel(Model):
       
       
       
-    def getSample(subset):
+    def getSample(subset,valid=False):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
         rset = None
+        
+        dphi = rot_intrinsic
+        if valid:
+            dphi=0
+        
         if resolutions is not None:
             rset = [resolutions[i] for i in subset]      
             
         if traintype == 'random':
             c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
-                                    num_patches=num_patches,augment=augment,balance=balance,dphi=rot_intrinsic)
+                                    num_patches=num_patches,augment=augment,balance=balance,dphi=dphi)
         elif traintype == 'tree':
             c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
-                                    jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=rot_intrinsic)
+                                    jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=dphi)
         return c
       
     if loss is not None:
@@ -937,30 +976,52 @@ class PatchWorkModel(Model):
         c=None
         inputdata=None
         targetdata=None
-        
-        
-        loss = [None]*len(history.history['loss'])
-        for k in range(len(history.history['loss'])):
-            loss[k] = []
-            loss[k].append(history.history['loss'][k])           
-            for j in range(5):
-                if ('output_'+str(j+1)+'_loss') not in history.history:
-                    break
-                loss[k].append(history.history['output_'+str(j+1)+'_loss'][k])
 
+
+        def accum_hist(loss_hist,cur_hist):
+            for k in cur_hist:
+                if k not in loss_hist:
+                    loss_hist[k] = []                    
+            for k in loss_hist:
+                loss_hist[k] += list(zip(list(range(self.trained_epochs,self.trained_epochs+epochs)),cur_hist[k]))
+
+        if isinstance( self.trainloss_hist,list):
+            
+            loss = [None]*len(history.history['loss'])
+            for k in range(len(history.history['loss'])):
+                loss[k] = []
+                loss[k].append(history.history['loss'][k])           
+                for j in range(5):
+                    if ('output_'+str(j+1)+'_loss') not in history.history:
+                        break
+                    loss[k].append(history.history['output_'+str(j+1)+'_loss'][k])
+            
+            self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),loss))
+        else:
+            accum_hist(self.trainloss_hist,history.history)
+            
         
-        self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),loss))
-        self.trained_epochs += epochs
         print("time elapsed, fitting: " + str(end - start) )
         
         ### validation
         if len(valid_ids) > 0:
             print("sampling patches for validation")
-            c = getSample(valid_ids)    
+            c = getSample(valid_ids,True)    
             print("validating")
             res = self.evaluate(c.getInputData(),c.getTargetData(),
                   verbose=2)                
-            self.validloss_hist = self.validloss_hist + [(self.trained_epochs,res)]
+
+            if isinstance(self.validloss_hist,list):
+                self.validloss_hist = self.validloss_hist + [(self.trained_epochs,res)]
+            else:    
+                tmp = {}
+                for k in range(len(res)):
+                    tmp['validloss_' + str(k)] = [res[k]]
+                accum_hist(self.validloss_hist,tmp)
+                
+            
+        self.trained_epochs += epochs
+            
             
 
         
