@@ -84,9 +84,10 @@ class CropInstance:
     if spatial_train:
         out.append(self.scales[-1]['labels_cropped'])
     
-    for k in range(len(out)):
-        out[k] = self.extb2dim(out[k],batchdim2)
-        out[k] = tf.reduce_max(out[k],axis=1)
+    if batchdim2 != -1:
+        for k in range(len(out)):
+            out[k] = self.extb2dim(out[k],batchdim2)
+            out[k] = tf.reduce_max(out[k],axis=1)
     
     return out
 

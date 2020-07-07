@@ -258,15 +258,15 @@ cgen = patchwork.CropGenerator(patch_size = (256,128) ,
 model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : customLayers.createUnet_bi(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      spatial_train=False,
+                      spatial_train=True,
                       intermediate_loss=False,
                       #block_out=[4,1],
                           
-                      classifierCreator= lambda level,outK : customLayers.simpleClassifier(outK=outK,nD=nD),
+                    #  classifierCreator= lambda level,outK : customLayers.simpleClassifier(outK=outK,nD=nD),
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                     #  cls_intermediate_out=2,
                     #  cls_intermediate_loss=True,
-                      classifier_train=True,
+                     # classifier_train=True,
                       
                     #  finalBlock= customLayers.sigmoid_softmax(),
                      # forward_typinverse_rote='simple',
@@ -330,7 +330,7 @@ augment = patchwork.Augmenter(    morph_width = 150
 #%%
 #model.modelname = "models/test"
 
-model.train(trainset,[tf.ones([1,4]),tf.ones([1,4])*0],
+model.train(trainset,labelset,
             resolutions=resolutions,
             loss=loss,
             valid_ids = [],
