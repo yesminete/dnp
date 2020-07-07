@@ -845,7 +845,7 @@ class PatchWorkModel(Model):
             x = [ i for i, j in self.validloss_hist ]
             y = [ j for i, j in self.validloss_hist ]
             plt.semilogy(x,y,'g',label="valid loss")
-        plt.legend()
+        plt.legend(fontsize=10)
         plt.grid()
         plt.title(self.modelname)
         plt.pause(0.001)
