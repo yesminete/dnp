@@ -650,6 +650,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             item = item['json']
                             ext = '.json'
                             fname = 'READING'
+                        elif fname == '':
+                            ext = '.json'
+                            fname = 'PINFO'
                     else:
                         fname = item
                         ext = os.path.splitext(fname)[1]
@@ -657,7 +660,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     
                     if ext == '.json':
                         
-                        if fname != 'READING':
+                        if fname != 'READING' and fname != 'PINFO':
                             with open(fname) as json_file:
                                 jsobj = json.load(json_file)
                         else:
@@ -698,14 +701,16 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                 img = np.expand_dims(img,0)
                                 img = np.expand_dims(img,nD+1)
                                 labs.append(img)
-                        elif ('formcontent' in jsobj or 'content' in jsobj) and class_selector is not None:
+                        elif class_selector is not None:
                             delim='.'
                             if 'delim' in class_selector:
                                 delim = class_selector['delim']
                             if 'formcontent' in jsobj:
                                 form = jsobj['formcontent']
-                            else:
+                            elif 'content' in jsobj:
                                 form = jsobj['content']
+                            else:
+                                form = jsobj
                           
                             sel = class_selector['classes']  
                             if classes is None:
@@ -713,6 +718,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             
                             thisclass = []
                             for spec in sel:
+                                whichtag = None
+                                if len(spec.split(":")) > 1:
+                                    whichtag = spec.split(":")[1]
+                                    spec = spec.split(":")[0]
                                 key = spec.split(delim)
                                 obj = form
                                 for s in range(len(key)):
@@ -721,6 +730,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                         break
                                     else:
                                         obj = obj[key[s]]
+                                if whichtag is not None:
+                                    obj = float(obj.find("/"+whichtag+"/")> -1)
                                 if not notfound:                                
                                     thisclass.append(float(obj))
                                 if notfound:

@@ -161,7 +161,7 @@ def createCNNBlockFromObj(obj,custom_objects=None):
               return layers.deserialize({'class_name':x['name'],'config':x['keras_layer']},
                                         custom_objects=custom_objects)
           if 'CNNblock' in x:
-              return CNNblock(x['CNNblock'])            
+              return createCNNBlockFromObj(x['CNNblock'],custom_objects=custom_objects)            
           for k in x:
               x[k] = tolayer(x[k])
           return x
@@ -178,7 +178,7 @@ def createCNNBlockFromObj(obj,custom_objects=None):
   if isinstance(theLayers,list):
       res = []
       for l in theLayers:
-          res.append(createCNNBlockFromObj(l))
+          res.append(createCNNBlockFromObj(l,custom_objects=custom_objects))
       return res
   else:
       return CNNblock(theLayers)
@@ -196,6 +196,7 @@ class PatchWorkModel(Model):
                block_out=None,
                
                spatial_train=True,
+               spatial_max_train=False,
                finalBlock=None,
 
                classifierCreator=None,
@@ -235,7 +236,8 @@ class PatchWorkModel(Model):
     self.cls_intermediate_out = cls_intermediate_out
     self.num_classes=num_classes
     self.classifier_train=classifier_train
-    self.spatial_train=spatial_train
+    self.spatial_train=spatial_train or spatial_max_train
+    self.spatial_max_train=spatial_max_train
 
         
         
@@ -258,7 +260,7 @@ class PatchWorkModel(Model):
     
     for k in range(self.cropper.depth-1): 
       self.blocks.append(blockCreator(level=k, outK=self.block_out[k]))
-    if self.spatial_train:
+    if self.spatial_train :
       self.blocks.append(blockCreator(level=cropper.depth-1, outK=self.block_out[cropper.depth-1]))
 
     if preprocCreator is not None:
@@ -326,7 +328,7 @@ class PatchWorkModel(Model):
     
     ## squeeze additional batch_dim if necearray
     original_shape = None
-    if len(inputs['input0'].shape) > nD+2:
+    if not callable(inputs) and len(inputs['input0'].shape) > nD+2:
         original_shape = inputs['input0'].shape[1]
         for k in inputs:
             sz = inputs[k].shape
@@ -372,8 +374,7 @@ class PatchWorkModel(Model):
 
       ## get data and cropcoords at currnet scale
       if callable(inputs):
-          inp,coords = inputs(idx=idx)
-          
+          inp,coords = inputs(idx=idx)          
       else:
           inp = inputs['input' + str(k)]
           coords = inputs['cropcoords' + str(k)]
@@ -466,7 +467,10 @@ class PatchWorkModel(Model):
                 newsz.append(sz[j+1])
             output[k] = tf.reshape(output[k],newsz)
             output[k] = tf.reduce_max(output[k],axis=1)
-                
+    if self.spatial_max_train:
+        for k in range(len(output)):
+            output[k] = tf.reduce_max(output[k],axis=list(range(1,nD+1)))
+            
     if not self.intermediate_loss:
       if self.spatial_train and self.classifier_train:
          return [output[-2], output[-1]]
@@ -569,10 +573,20 @@ class PatchWorkModel(Model):
             print(">>> time elapsed, network application: " + str(timer() - start) )
                 
             if max_patching:
+                
                 for k in level:
-                    sz = r[k].shape
-                    tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)),keepdims=True)
-                    r[k] = tf.tile(tmp,[1] + list(sz[1:-1]) + [1])
+                    if self.spatial_train:
+                        sz = r[k].shape
+                        tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)),keepdims=True)
+                        r[k] = tf.tile(tmp,[1] + list(sz[1:-1]) + [1])
+                    else:
+                        if k == -1:
+                            sz = data_['input' + str(self.cropper.depth-1)].shape
+                        else:
+                            sz = data_['input' + str(k)].shape
+                        for i in range(nD):
+                            r[k] = tf.expand_dims(r[k],1)
+                        r[k] = tf.tile(r[k],[1] + list(sz[1:-1]) + [1])
 
             if patch_stats:
                 for k in level:
@@ -591,7 +605,7 @@ class PatchWorkModel(Model):
                     
             print(">>> stitching result")
             start = timer()
-            if self.spatial_train:
+            if (self.spatial_train or max_patching) and not self.spatial_max_train:
                 for k in level:            
                   a,b = x.stitchResult(r,k)
                   pred[k] += a
@@ -601,7 +615,7 @@ class PatchWorkModel(Model):
          if (np.amin(sumpred[-1])) > 0:
              break
               
-     if self.spatial_train:
+     if (self.spatial_train  or max_patching)  and not self.spatial_max_train:
          res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
@@ -729,6 +743,8 @@ class PatchWorkModel(Model):
       
       img1.header.set_data_dtype('int16')          
 
+      pred_nii = None
+
       if ofname is not None:
     
           if isinstance(ofname,list):
@@ -757,9 +773,10 @@ class PatchWorkModel(Model):
               
 
             
-          
-          
-      return pred_nii,res;
+      if pred_nii is not None:        
+          return pred_nii,res;
+      else:
+          return res
 
 
 
@@ -787,7 +804,7 @@ class PatchWorkModel(Model):
     del x['cropper']
 
     blocks = x['blocks']
-    blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level]['CNNblock'],custom_objects=custom_objects)
+    blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level],custom_objects=custom_objects)
     del x['blocks']
 
     clsCreator = None
@@ -795,7 +812,7 @@ class PatchWorkModel(Model):
         classi = x['classifiers']
         del x['classifiers']
         if classi is not None and len(classi) > 0:
-            clsCreator = lambda level,outK=0 : (createCNNBlockFromObj(classi[level]['CNNblock'],custom_objects=custom_objects) if level < len(classi) else None)
+            clsCreator = lambda level,outK=0 : (createCNNBlockFromObj(classi[level],custom_objects=custom_objects) if level < len(classi) else None)
 
     preprocCreator = None
     if 'preprocessor' in x:
@@ -919,6 +936,9 @@ class PatchWorkModel(Model):
             num_patches=10,
             valid_ids = [],
             valid_num_patches=None,
+            batch_size=None,
+            verbose=1,
+            steps_per_epoch=None,
             jitter=0,
             jitter_border_fix=False,
             balance=None,
@@ -1003,7 +1023,9 @@ class PatchWorkModel(Model):
         start = timer()
         self.fit(inputdata,targetdata,
                   epochs=epochs,
-                  verbose=2,
+                  verbose=verbose,
+                  steps_per_epoch=steps_per_epoch,
+                  batch_size=batch_size,
                   callbacks=[history])
         end = timer()
         
@@ -1053,7 +1075,9 @@ class PatchWorkModel(Model):
                 for k in range(len(res)):
                     tmp['validloss_' + str(k)] = [res[k]]
                 accum_hist(self.validloss_hist,tmp)
-                
+            
+            c = None
+            res = None
             
         self.trained_epochs += epochs
             
@@ -1077,15 +1101,15 @@ class PatchWorkModel(Model):
 
 class patchworkModelEncoder(json.JSONEncoder):
     def default(self, obj):
-        
         name = obj.__class__.__name__
+        print(name)
 
         if name == "PatchWorkModel":
            return obj.serialize_()
         if name =="CropGenerator":
            return obj.serialize_()
         if name == "CNNblock":            
-           return {'CNNblock': obj.theLayers }
+           return {'CNNblock': dict(obj.theLayers) }
         if isinstance(obj,layers.Layer):
            return {'keras_layer':obj.get_config(), 'name': obj.__class__.__name__ }
         if isinstance(obj,dict):

@@ -152,7 +152,8 @@ def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False
 
 
 
-def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,verbose=False,activation='softmax'):
+def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
+                     verbose=False,activation='sigmoid'):
 
     
     
@@ -181,8 +182,8 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,verbose=Fa
       id_d = str(1000 + z+1)
       for i in range(multiplicity):
           theLayers[id_d+"_" + str(i) + "conv"] = _conv(out_n=fdims[z])
-          theLayers[id_d+"_" + str(i) + "relu"] = BNrelu()
-      theLayers[id_d+"spool"] = pooly() 
+          theLayers[id_d+"_" + str(i) + "relu"] = BNrelu() 
+      theLayers[id_d+"spool"] = [pooly()]
     theLayers["3001"] =  layers.Flatten()
     theLayers["3002"] =  layers.Dropout(rate=0.5)
     theLayers["3003"] =  layers.Dense(outK)

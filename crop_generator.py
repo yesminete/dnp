@@ -79,16 +79,16 @@ class CropInstance:
         if intermediate_loss and spatial_train:
             out.append(x['labels_cropped'])
         
-    if classifier_train:
+    if classifier_train or self.cropper.model.spatial_max_train:
         out.append(self.scales[-1]['class_labels'])
-    if spatial_train:
+    if spatial_train and not self.cropper.model.spatial_max_train:
         out.append(self.scales[-1]['labels_cropped'])
     
     if batchdim2 != -1:
         for k in range(len(out)):
             out[k] = self.extb2dim(out[k],batchdim2)
             out[k] = tf.reduce_max(out[k],axis=1)
-    
+        
     return out
 
   def stitchResult(self,r,level):
@@ -274,7 +274,7 @@ class CropGenerator():
           if (self.model.classifier_train and not self.create_indicator_classlabels) and self.model.spatial_train:
               class_labels_ = labelset[j][0]
               labels_ = labelset[j][1]
-          elif self.model.spatial_train:
+          elif self.model.spatial_train and not self.model.spatial_max_train:
               labels_ = labelset[j]
           else:
               class_labels_ = labelset[j]
@@ -342,7 +342,7 @@ class CropGenerator():
         scales = self.tree_complete(scales)
 
       # for repmatting the classlabels
-      if scales[k]['class_labels'] is not None and self.model.classifier_train:
+      if scales[k]['class_labels'] is not None and (self.model.classifier_train or self.model.spatial_max_train):
           for k in range(len(scales)):
               m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
               tmp = scales[k]['class_labels']
