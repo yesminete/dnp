@@ -186,6 +186,80 @@ def createCNNBlockFromObj(obj,custom_objects=None):
 
 ############################ The definition of the Patchwork model
 
+class myHistory :
+    
+  def __init__(self,model):
+      self.trainloss_hist = {}
+      self.validloss_hist = {}
+      self.model = model
+
+  def accum(self,which,cur_hist,epochs):
+      
+      if self.trainloss_hist is None:
+          self.trainloss_hist = {}
+      if self.validloss_hist is None:
+          self.validloss_hist = {}
+          
+      if which == 'train':
+          loss_hist = self.trainloss_hist
+      if which == 'valid':
+          loss_hist = self.validloss_hist
+      for k in cur_hist:
+         if k not in loss_hist:
+            loss_hist[k] = []                    
+      for k in loss_hist:
+         loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
+
+    
+  def show_train_stat(self):
+
+    import matplotlib.pyplot as plt
+    
+    if isinstance(self.trainloss_hist,list):
+        
+        l = len(self.trainloss_hist[0][1])
+        cols = 'rbymck'
+        for k  in range(l):        
+            x = [ i for i, j in self.trainloss_hist ]
+            y = [ j[k] for i, j in self.trainloss_hist ]
+            if k==0:
+                plt.semilogy(x,y,cols[k],label="total train loss ")
+            else:
+                plt.semilogy(x,y,cols[k],label="train loss " + str(k))
+        if len(self.validloss_hist) > 0:
+            x = [ i for i, j in self.validloss_hist ]
+            y = [ j for i, j in self.validloss_hist ]
+            plt.semilogy(x,y,'g',label="valid loss")
+        plt.legend(fontsize=10)
+        plt.grid()
+        plt.title(self.model.modelname)
+        plt.pause(0.001)
+        
+    else:
+#%%
+        loss_hist = self.trainloss_hist
+        
+        def plothist(loss_hist,txt):
+            cols = 'rbymck'   
+            cnt = 0
+            for k in sorted(loss_hist):
+                x = [ i for i, j in loss_hist[k] ]
+                y = [ j for i, j in loss_hist[k] ]
+                if txt == "":                     
+                    plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
+                else:
+                    plt.semilogy(x,y,cols[cnt],label=txt+k)
+                cnt+=1
+        plothist(self.trainloss_hist,'train_')
+        plothist(self.validloss_hist,'')
+        plt.legend()
+        plt.grid()
+        plt.title(self.model.modelname)
+        plt.pause(0.001)  
+
+
+
+
 class PatchWorkModel(Model):
   def __init__(self,cropper,
 
@@ -223,14 +297,13 @@ class PatchWorkModel(Model):
     self.num_labels = num_labels
     self.num_classes = num_classes
 
-    if trainloss_hist is None:
-        trainloss_hist = {}
-    if validloss_hist is None:
-        validloss_hist = {}
-
+    self.myhist = myHistory(self)
+    self.myhist.trainloss_hist = trainloss_hist
+    self.myhist.validloss_hist = validloss_hist
 
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+        
     self.block_out = block_out
     self.cls_intermediate_loss = cls_intermediate_loss
     self.cls_intermediate_out = cls_intermediate_out
@@ -239,10 +312,13 @@ class PatchWorkModel(Model):
     self.spatial_train=spatial_train or spatial_max_train
     self.spatial_max_train=spatial_max_train
 
-        
-        
-    self.trainloss_hist = trainloss_hist
-    self.validloss_hist = validloss_hist
+
+    # for k in trainloss_hist:
+    #     self.trainloss_hist[k] = []
+    #     for j in range(len(trainloss_hist[k])):
+    #        self.trainloss_hist[k].append((0,1))
+    
+    
     self.trained_epochs = trained_epochs
     self.modelname = modelname
     
@@ -296,8 +372,8 @@ class PatchWorkModel(Model):
 
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
-               'trainloss_hist':self.trainloss_hist,
-               'validloss_hist':self.validloss_hist,
+               'trainloss_hist':self.myhist.trainloss_hist,
+               'validloss_hist':self.myhist.validloss_hist,
                'trained_epochs':self.trained_epochs
             }
 
@@ -829,7 +905,14 @@ class PatchWorkModel(Model):
     if fb is not None:
         finalBlock = createCNNBlockFromObj(fb, custom_objects=custom_objects)
     
-    
+  #  del x['trainloss_hist']
+  #  del x['validloss_hist']
+  
+    # for k in x['trainloss_hist']:
+    #     for j in range(len(x['trainloss_hist'][k])):
+    #        x['trainloss_hist'][k][j] = list(x['trainloss_hist'][k][j])
+        
+  
     model = PatchWorkModel(cropper, blkCreator,
                            classifierCreator=clsCreator, 
                            preprocCreator=preprocCreator,
@@ -844,50 +927,51 @@ class PatchWorkModel(Model):
     return model
     
   def show_train_stat(self):
+      self.myhist.show_train_stat()
 
-    import matplotlib.pyplot as plt
+#     import matplotlib.pyplot as plt
     
-    if isinstance(self.trainloss_hist,list):
+#     if isinstance(self.trainloss_hist,list):
         
-        l = len(self.trainloss_hist[0][1])
-        cols = 'rbymck'
-        for k  in range(l):        
-            x = [ i for i, j in self.trainloss_hist ]
-            y = [ j[k] for i, j in self.trainloss_hist ]
-            if k==0:
-                plt.semilogy(x,y,cols[k],label="total train loss ")
-            else:
-                plt.semilogy(x,y,cols[k],label="train loss " + str(k))
-        if len(self.validloss_hist) > 0:
-            x = [ i for i, j in self.validloss_hist ]
-            y = [ j for i, j in self.validloss_hist ]
-            plt.semilogy(x,y,'g',label="valid loss")
-        plt.legend(fontsize=10)
-        plt.grid()
-        plt.title(self.modelname)
-        plt.pause(0.001)
+#         l = len(self.trainloss_hist[0][1])
+#         cols = 'rbymck'
+#         for k  in range(l):        
+#             x = [ i for i, j in self.trainloss_hist ]
+#             y = [ j[k] for i, j in self.trainloss_hist ]
+#             if k==0:
+#                 plt.semilogy(x,y,cols[k],label="total train loss ")
+#             else:
+#                 plt.semilogy(x,y,cols[k],label="train loss " + str(k))
+#         if len(self.validloss_hist) > 0:
+#             x = [ i for i, j in self.validloss_hist ]
+#             y = [ j for i, j in self.validloss_hist ]
+#             plt.semilogy(x,y,'g',label="valid loss")
+#         plt.legend(fontsize=10)
+#         plt.grid()
+#         plt.title(self.modelname)
+#         plt.pause(0.001)
         
-    else:
-#%%
-        loss_hist = self.trainloss_hist
+#     else:
+# #%%
+#         loss_hist = self.trainloss_hist
         
-        def plothist(loss_hist,txt):
-            cols = 'rbymck'   
-            cnt = 0
-            for k in sorted(loss_hist):
-                x = [ i for i, j in loss_hist[k] ]
-                y = [ j for i, j in loss_hist[k] ]
-                if txt == "":                     
-                    plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
-                else:
-                    plt.semilogy(x,y,cols[cnt],label=txt+k)
-                cnt+=1
-        plothist(self.trainloss_hist,'train_')
-        plothist(self.validloss_hist,'')
-        plt.legend()
-        plt.grid()
-        plt.title(self.modelname)
-        plt.pause(0.001)  
+#         def plothist(loss_hist,txt):
+#             cols = 'rbymck'   
+#             cnt = 0
+#             for k in sorted(loss_hist):
+#                 x = [ i for i, j in loss_hist[k] ]
+#                 y = [ j for i, j in loss_hist[k] ]
+#                 if txt == "":                     
+#                     plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
+#                 else:
+#                     plt.semilogy(x,y,cols[cnt],label=txt+k)
+#                 cnt+=1
+#         plothist(self.trainloss_hist,'train_')
+#         plothist(self.validloss_hist,'')
+#         plt.legend()
+#         plt.grid()
+#         plt.title(self.modelname)
+#         plt.pause(0.001)  
             
 #%%        
 
@@ -1034,31 +1118,27 @@ class PatchWorkModel(Model):
         inputdata=None
         targetdata=None
 
+        self.myhist.accum('train',history.history,epochs)
 
-        def accum_hist(loss_hist,cur_hist):
-            for k in cur_hist:
-                if k not in loss_hist:
-                    loss_hist[k] = []                    
-            for k in loss_hist:
-                loss_hist[k] += list(zip(list(range(self.trained_epochs,self.trained_epochs+epochs)),cur_hist[k]))
 
-        if isinstance( self.trainloss_hist,list):
+        # if isinstance( self.trainloss_hist,list):
             
-            loss = [None]*len(history.history['loss'])
-            for k in range(len(history.history['loss'])):
-                loss[k] = []
-                loss[k].append(history.history['loss'][k])           
-                for j in range(5):
-                    if ('output_'+str(j+1)+'_loss') not in history.history:
-                        break
-                    loss[k].append(history.history['output_'+str(j+1)+'_loss'][k])
+        #     loss = [None]*len(history.history['loss'])
+        #     for k in range(len(history.history['loss'])):
+        #         loss[k] = []
+        #         loss[k].append(history.history['loss'][k])           
+        #         for j in range(5):
+        #             if ('output_'+str(j+1)+'_loss') not in history.history:
+        #                 break
+        #             loss[k].append(history.history['output_'+str(j+1)+'_loss'][k])
             
-            self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),loss))
-        else:
-            accum_hist(self.trainloss_hist,history.history)
+        #     self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),loss))
+        # else:
+        #     accum_hist(self.trainloss_hist,history.history)
             
         
         print("time elapsed, fitting: " + str(end - start) )
+        self.trained_epochs += epochs
         
         ### validation
         if len(valid_ids) > 0:
@@ -1068,18 +1148,17 @@ class PatchWorkModel(Model):
             res = self.evaluate(c.getInputData(),c.getTargetData(),
                   verbose=2)                
 
-            if isinstance(self.validloss_hist,list):
-                self.validloss_hist = self.validloss_hist + [(self.trained_epochs,res)]
+            if isinstance(self.myhist.validloss_hist,list):
+                self.myhist.validloss_hist =self.myhist.validloss_hist + [(self.trained_epochs,res)]
             else:    
                 tmp = {}
                 for k in range(len(res)):
                     tmp['validloss_' + str(k)] = [res[k]]
-                accum_hist(self.validloss_hist,tmp)
+                self.myhist.accum('valid',tmp,epochs)
             
             c = None
             res = None
             
-        self.trained_epochs += epochs
             
             
 
@@ -1092,7 +1171,7 @@ class PatchWorkModel(Model):
                self.save(self.modelname)
 
         if showplot:
-            self.show_train_stat()
+            self.myhist.show_train_stat()
             
             
 #%%
