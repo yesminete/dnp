@@ -97,6 +97,87 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
 
 
 
+def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
+                  padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
+
+  if nD == 3:
+      _conv = layers.Conv3D
+      _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
+      _maxpool = lambda: layers.MaxPooling3D(pool_size=(2,2,2))
+  elif nD == 2:
+      _conv = layers.Conv2D
+      _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=(2,2))
+      _maxpool = lambda: layers.MaxPooling2D(pool_size=(2,2))
+  
+  def BNrelu():
+      return [layers.BatchNormalization(), layers.LeakyReLU()]
+  
+  if padding == 'VALID':
+      def conv_down(fdim):
+           return _conv(fdim,3,padding='VALID') 
+      def conv_up(fdim,even):
+           return _convT(fdim,4+even,padding='VALID' )
+      def conv(outK):
+           return _conv(outK,4,padding='SAME') 
+      offs = [0,1,0,0,0,0,0]
+  else:
+      def conv_down(fdim):
+           return _conv(fdim,3,padding='SAME') 
+      def conv_up(fdim,even):
+           return _convT(fdim,3,padding='SAME' )
+      def conv(outK):
+           return _conv(outK,3,padding='SAME') 
+      offs = [0,0,0,0,0,0]
+      
+  if not isinstance(feature_dim,list):
+      fdims=[]
+      for z in range(depth):
+          fdims.append(feature_dim*(1+z))     
+  else:
+      fdims = feature_dim
+
+
+  theLayers = {}
+  for z in range(depth):
+      
+    if input_shape is not None:
+        for r in range(len(input_shape)):
+            input_shape[r] = input_shape[r]/2
+      
+    fdim = fdims[z]
+    id_d = str(1000 + z+1)
+    id_u = str(2000 + depth-z+1)
+    if noBridge:
+        theLayers[id_d+"0_conv"] =  [conv_down(fdim) ]+BNrelu()
+    else:
+        theLayers[id_d+"0_conv"] = [{'f': [conv_down(fdim)]+BNrelu() } , {'f': conv(fdim), 'dest':id_u+"5_relu" }  ]
+                
+    for k in range(multiplicity-1):
+        theLayers[id_d+"1_conv"+str(k+1)] = [conv(fdim)] + BNrelu()
+    theLayers[id_d+"2_relu"] = [{'f':_maxpool() } , {'f':identity(), 'maxadd':id_u+"5_relu"}]
+#    theLayers[id_d+"2_relu"] = _maxpool() 
+     
+    if centralDense is not None:
+        if z == depth-1:
+            theLayers[id_d+"3_central_0"] = layers.Flatten()
+            for k in range(len(centralDense['feature_dim'])):
+                theLayers[id_d+"3_central_1_"+str(k)] = [layers.Dense(centralDense['feature_dim'][k])]+BNrelu()
+            theLayers[id_d+"3_central_2"] = 'reshape_' + str(centralDense['out'])
+    
+    
+    
+    theLayers[id_u+"4_conv"] = conv_up(fdim,offs[z])
+    for k in range(multiplicity-1):
+        if k == multiplicity-1:
+            theLayers[id_u+"4_conv"+str(k+1)] = [conv(fdim)] 
+        else:
+            theLayers[id_u+"4_conv"+str(k+1)] = [conv(fdim)] + BNrelu()
+            
+    theLayers[id_u+"5_relu"] = BNrelu()
+  theLayers["9_final"] =  [layers.Dropout(rate=0.5), conv(outK)]
+  return patchwork.CNNblock(theLayers,verbose=verbose)
+
+
 
 def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False):
 
@@ -197,6 +278,14 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
 
 
 
+class identity(layers.Layer):
+
+  def __init__(self,**kwargs):
+    super().__init__(**kwargs)
+  def call(self, image):         
+      return image
+  
+custom_layers['identity'] = identity
 
 
 class sigmoid_softmax(layers.Layer):

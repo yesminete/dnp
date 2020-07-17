@@ -84,8 +84,10 @@ class CNNblock(layers.Layer):
     x = inputs
     nD = len(inputs.shape)-2 
     cats = {}
+    maxadds = {}
     for l in self.theLayers:
         cats[l] = []
+        maxadds[l] = []
 
     if self.verbose:
         print("----------------------")
@@ -98,8 +100,9 @@ class CNNblock(layers.Layer):
           print("metalayer: " + l)
         
       # this gathers all inputs that might have been forwarded from other layers
-      forwarded = cats[l]
-      for r in forwarded:
+      for r in maxadds[l]:
+          x = x+r
+      for r in cats[l]:
         if x is None:
           x = r
         else:
@@ -138,6 +141,11 @@ class CNNblock(layers.Layer):
               if self.verbose:
                   print("          dest:"+dest)
               cats[dest].append(res)  
+            if 'maxadd' in d:
+              if self.verbose:
+                  print("          dest:"+d['maxadd'])
+              themaxs = tf.reduce_max(res,axis=list(range(1,nD+1)),keepdims=True)
+              maxadds[d['maxadd']].append(themaxs)  
             else:            
               y = res
           x = y
