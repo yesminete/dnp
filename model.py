@@ -1102,7 +1102,6 @@ class PatchWorkModel(Model):
 class patchworkModelEncoder(json.JSONEncoder):
     def default(self, obj):
         name = obj.__class__.__name__
-        print(name)
 
         if name == "PatchWorkModel":
            return obj.serialize_()

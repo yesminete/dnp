@@ -775,6 +775,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         img = tf.convert_to_tensor(img,dtype=ftype)
                         labs.append(img)
                 else:
+                    notfound = False
                     print("missing label " + str(j) + " for subject " + k + ", extending with zeros")
                     img = tf.zeros(imgs[0].shape,dtype=ftype)
                     labs.append(img)
