@@ -737,7 +737,17 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                 if notfound:
                                     break
                             if not notfound:       
-                                classes[k] = thisclass
+                                if one_hot_index_list is not None:
+                                    thisclass_index_rep = []
+                                    for j in one_hot_index_list:
+                                        if thisclass[0] == j:
+                                            thisclass_index_rep.append(1)
+                                        else:
+                                            thisclass_index_rep.append(0)                                            
+                                    classes[k] = tf.convert_to_tensor(thisclass_index_rep,dtype=ftype)
+
+                                else:
+                                    classes[k] = thisclass
                             
     
     
