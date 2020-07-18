@@ -146,8 +146,11 @@ class CNNblock(layers.Layer):
                   print("          dest:"+d['maxadd'])
               themaxs = tf.reduce_max(res,axis=list(range(1,nD+1)),keepdims=True)
               maxadds[d['maxadd']].append(themaxs)  
-            else:            
+            
+            if 'dest' not in d and 'maxadd' not in d:
               y = res
+              
+              
           x = y
         else:
           for f in a:
