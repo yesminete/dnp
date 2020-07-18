@@ -232,17 +232,17 @@ plt.imshow(tf.squeeze(res[30,:,:]))
 
 #%% 2D
 nD=2
-cgen = patchwork.CropGenerator(patch_size = (256,128) ,
+cgen = patchwork.CropGenerator(patch_size = (128,128) ,
                   scale_fac =  0.8,
                   scale_fac_ref = 'min',
-                  init_scale = [128,256],
+                  init_scale = '140mm,140mm',
                   #smoothfac_data=['boxcar',0.5],
                   ndim=nD,
                   interp_type = 'NN',
                   keepAspect=True,
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
-                  depth=2)
+                  depth=1)
 
 
 
@@ -280,13 +280,13 @@ model = patchwork.PatchWorkModel(cgen,
 #                      )
 
 res = model.apply_full(trainset[0][0:1,:,:,...],resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=100,dphi=0.1,verbose=True,scale_to_original=True,testIT=False)
+                       generate_type='tree',jitter=0,   repetitions=1,dphi=0.1,verbose=True,scale_to_original=True,testIT=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 #                       generate_type='random',jitter=0.05,   repetitions=20,dphi=0.9,verbose=True,scale_to_original=False)
 
 print(res.shape)
-#plt.imshow(tf.squeeze(res[:,:,0]))
-#plt.pause(0.001)
+plt.imshow(tf.squeeze(res))
+plt.pause(0.001)
 #print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)inverse_rot
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 

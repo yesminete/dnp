@@ -693,6 +693,8 @@ class CropGenerator():
       for k in range(nD):
         delta = bbox_sz[nD+k]-bbox_sz[k]
         nums[k] = np.floor(1/delta)+1+overlap
+        if nums[k] < 2:
+            nums[k] = 2
         delta_small= (1-delta)/(nums[k]-1) -0.000001
         frac = nums[k]*delta-1
         centers[k] = tf.cast(tf.range(nums[k]),dtype=self.ftype)*delta_small + delta*0.5
