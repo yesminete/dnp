@@ -320,6 +320,7 @@ class PatchWorkModel(Model):
     self.cls_intermediate_out = cls_intermediate_out
     self.num_classes=num_classes
     self.classifier_train=classifier_train
+    self.classifier_train_deprecated = False
     self.spatial_train=spatial_train or spatial_max_train
     self.spatial_max_train=spatial_max_train
 
@@ -341,13 +342,13 @@ class PatchWorkModel(Model):
         self.block_out = []
         for k in range(self.cropper.depth-1): 
           self.block_out.append(num_labels+intermediate_out)
-        if self.spatial_train:
+        if self.spatial_train or self.classifier_train:
           self.block_out.append(num_labels)
         
     
     for k in range(self.cropper.depth-1): 
       self.blocks.append(blockCreator(level=k, outK=self.block_out[k]))
-    if self.spatial_train :
+    if self.spatial_train or self.classifier_train:
       self.blocks.append(blockCreator(level=cropper.depth-1, outK=self.block_out[cropper.depth-1]))
 
     if preprocCreator is not None:
@@ -519,16 +520,16 @@ class PatchWorkModel(Model):
       if len(self.classifiers) > 0:
          if k < len(self.classifiers):
              res_nonspatial = self.classifiers[k](inp,res_nonspatial,training=training) 
-         if k < len(self.classifiers) and self.classifier_train:
+         if k < len(self.classifiers) and self.classifier_train_deprecated:
              current_output.append(res_nonspatial[:,0:self.num_classes])
       
       # the spatial/segmentation part
-      if self.spatial_train or  k < self.cropper.depth-1:
+      if self.spatial_train or  k < self.cropper.depth-1  or self.classifier_train:
           if testIT:
               res=inp
           else:
               res = self.blocks[k](inp,res_nonspatial,training=training)      
-      if self.spatial_train:
+      if self.spatial_train or self.classifier_train:
           if testIT:
               current_output.append(res)
           else:
@@ -537,7 +538,7 @@ class PatchWorkModel(Model):
       output = output + current_output
     
     if not testIT:
-        if self.finalBlock is not None and self.spatial_train:
+        if self.finalBlock is not None:
             lo = output.pop()
             if isinstance(self.finalBlock,list):
                 for fb in self.finalBlock:
@@ -559,7 +560,7 @@ class PatchWorkModel(Model):
             output[k] = tf.reduce_max(output[k],axis=list(range(1,nD+1)))
             
     if not self.intermediate_loss:
-      if self.spatial_train and self.classifier_train:
+      if self.spatial_train and self.classifier_train_deprecated:
          return [output[-2], output[-1]]
       else:
          return [output[-1]]          

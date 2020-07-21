@@ -204,7 +204,8 @@ model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      spatial_train=True,
+                      classifier_train=True,
+                      spatial_train=False,
                       intermediate_loss=False,
                       #block_out=[4,1],
 
@@ -213,7 +214,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  cls_intermediate_loss=True,
                     #  classifier_train=True,
                       
-                      finalBlock= customLayers.sigmoid_softmax(),
+                      finalBlock=customLayers.simpleClassifier(3,nD=nD),
                      # forward_typinverse_rote='simple',
                       num_labels = 1,
 #                      num_classes = 1                      
@@ -225,7 +226,7 @@ model = patchwork.PatchWorkModel(cgen,
 #                      )
 
 res = model.apply_full(trainset[0],resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=500,dphi=0.05,verbose=True,scale_to_original=False)
+                       generate_type='random',jitter=0,   repetitions=50,dphi=0.05,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 
 plt.imshow(tf.squeeze(res[30,:,:]))
@@ -258,20 +259,22 @@ cgen = patchwork.CropGenerator(patch_size = (128,128) ,
 model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : customLayers.createUnet_bi(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      spatial_train=True,
+                      classifier_train=True,
+                      spatial_train=False,
                       intermediate_loss=False,
                       #block_out=[4,1],
-                          
-                    #  classifierCreator= lambda level,outK : customLayers.simpleClassifier(outK=outK,nD=nD),
+
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
                     #  cls_intermediate_out=2,
                     #  cls_intermediate_loss=True,
-                     # classifier_train=True,
+                    #  classifier_train=True,
+                      
+                      finalBlock=customLayers.simpleClassifier(outK=7,nD=nD),
                       
                     #  finalBlock= customLayers.sigmoid_softmax(),
                      # forward_typinverse_rote='simple',
-                      #num_labels = 4,
-                       num_classes = 4                      
+                       num_labels = 1,
+                       num_classes = 1           
                       )
 # #%
 # x = model.apply_full(trainset[0][0:1,...],resolution=resolutions[0],
@@ -280,7 +283,7 @@ model = patchwork.PatchWorkModel(cgen,
 #                      )
 
 res = model.apply_full(trainset[0][0:1,:,:,...],resolution=resolutions[0],
-                       generate_type='tree',jitter=0,   repetitions=1,dphi=0.1,verbose=True,scale_to_original=True,testIT=False)
+                       generate_type='random',jitter=0,   repetitions=5,dphi=0.1,verbose=True,scale_to_original=True,testIT=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 #                       generate_type='random',jitter=0.05,   repetitions=20,dphi=0.9,verbose=True,scale_to_original=False)
 
