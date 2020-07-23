@@ -704,10 +704,13 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             
                             delim='.'
                             sizefac=1
+                            normalize=False
                             if 'delim' in annotations_selector:
                                 delim = annotations_selector['delim']
                             if 'sizefac' in annotations_selector:
                                 sizefac = annotations_selector['sizefac']
+                            if 'normalize' in annotations_selector:
+                                normalize = annotations_selector['normalize']
                             for spec in sel:
                                 points = []
                                 for i in spec:
@@ -735,7 +738,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                     notfound=True
                                     break
                                 print('rendering ' + str(len(points)) + ' markers')
-                                img = renderpoints(points, header,ftype)
+                                img = renderpoints(points, header,ftype,normalize)
                                 img = crop_spatial(img)
                             
                                 img = np.expand_dims(img,0)
@@ -877,11 +880,15 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     if labels is not None:
         return trainset,labelset,resolutions,subjects_names;
 
-def renderpoints(points,header,ftype):
+def renderpoints(points,header,ftype,normalize=False):
     nD = len(points[0])-1
 
     sz =header['dim'][1:nD+1]
     A = header.get_best_affine()
+    if not normalize:
+        img = tf.zeros(sz,dtype=tf.bool)
+    else:
+        img = tf.zeros(sz,dtype=ftype)
     
     if nD==2:
         X,Y = np.meshgrid(np.arange(0,sz[0]),np.arange(0,sz[1]),indexing='ij')
@@ -889,10 +896,14 @@ def renderpoints(points,header,ftype):
         Y = tf.cast(Y,dtype=ftype)
         X_ = A[0][0]*X + A[0][1]*Y +  A[0][3]
         Y_ = A[1][0]*X + A[1][1]*Y +  A[1][3]
-        img = tf.zeros(sz,dtype=tf.bool)
         for p in points:
             R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1]) 
-            img = tf.math.logical_or(img, R2 < p[2]*p[2])
+            tmp = R2 < p[2]*p[2]
+            if not normalize:
+                img = tf.math.logical_or(img,tmp)
+            else:
+                tmp = tf.cast(tmp,dtype=ftype)
+                img = img + tmp /tf.reduce_sum(tmp)
         return tf.cast(img,dtype=ftype)
     if nD==3:
         X,Y,Z = np.meshgrid(np.arange(0,sz[0]),np.arange(0,sz[1]),np.arange(0,sz[2]),indexing='ij')
@@ -902,10 +913,14 @@ def renderpoints(points,header,ftype):
         X_ = A[0][0]*X + A[0][1]*Y + A[0][2]*Z + A[0][3]
         Y_ = A[1][0]*X + A[1][1]*Y + A[1][2]*Z + A[1][3]
         Z_ = A[2][0]*X + A[2][1]*Y + A[2][2]*Z + A[2][3]
-        img = tf.zeros(sz,dtype=tf.bool)
         for p in points:
             R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1])  + (Z_-p[2])*(Z_-p[2]) 
-            img = tf.math.logical_or(img, R2 < p[3]*p[3])
+            tmp = R2 < p[3]*p[3]
+            if not normalize:
+                img = tf.math.logical_or(img,tmp)
+            else:
+                tmp = tf.cast(tmp,dtype=ftype)
+                img = img + tmp /tf.reduce_sum(tmp)
         return tf.cast(img,dtype=ftype)
 
 
