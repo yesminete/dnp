@@ -410,16 +410,27 @@ class CropGenerator():
             if verbose:
                 print(' Gaussian smooth: ', sigmas)
             data_smoothed =  conv_gauss(data_parent,tf.constant(sigmas,dtype=self.ftype))
-        elif smoothfac == 'boxcar':
-            if self.ndim == 2:
-                  conv_box = conv_boxcar2D
-            elif self.ndim == 3:
-                  conv_box = conv_boxcar3D                            
+        elif smoothfac == 'boxcar' or smoothfac == 'max' or smoothfac == 'mixture':
+            if smoothfac == 'boxcar':
+                if self.ndim == 2:
+                      conv_box = conv_boxcar2D
+                elif self.ndim == 3:
+                      conv_box = conv_boxcar3D                            
+            if smoothfac == 'mixture':
+                if self.ndim == 2:
+                      conv_box = mixture_boxcar2D
+                elif self.ndim == 3:
+                      conv_box = mixture_boxcar3D                            
+            if smoothfac == 'max':
+                if self.ndim == 2:
+                      conv_box = poolmax_boxcar2D
+                elif self.ndim == 3:
+                      conv_box = poolmax_boxcar3D                            
             sz = np.round(resolution)
             sz[sz<1] = 1
             if np.max(sz) > 1:        
                 if verbose:
-                    print(' Box smooth: ', sz)
+                    print(' Box smooth ('+smoothfac+'): ', sz)
                 data_smoothed =  conv_box(data_parent,sz)
             else:
                 data_smoothed =  data_parent
@@ -591,41 +602,64 @@ class CropGenerator():
             L = np.amax(L,nD)
             sz = L.shape
             cnt=0
-            points = []
-            if N < M:
-                N = M # num drawn samples per round
-            for j in range(numrounds):
-                R = np.random.uniform(low=0,high=1,size=(N,nD))
-                for i in range(nD):            
-                    R[:,i] = np.floor(R[:,i]*sz[i])
-                Q = tf.gather_nd(L,tf.convert_to_tensor(R,dtype=tf.int32))
-                pos = tf.reduce_sum(Q)
-                neg = N-pos
-                if  pos-N*ratio > -0.01:
-                    print("warning: cannot achieve desired sample ratio, taking uniform")
-                    P = Q*0+1
-                else:
-                    background_p = (1-ratio)*pos/(N*ratio-pos)
-                    P = (Q + background_p)
-                    P = P / tf.reduce_max(P)
 
-
-                idx = np.argwhere( (P > np.random.uniform(low=0,high=1,size=(N))))
-                R = tf.gather(R,idx[:,0],axis=0)
-                R = R + np.random.uniform(low=0,high=1,size=R.shape)
-                R = R/sz
-                points.append(R)
-                cnt = cnt + R.shape[0]
-                if cnt >= M:
-                    break
-
-            if cnt < M:
-                print("warning: cannot achieve desired sample ratio, taking uniform (2)")
-               
-                return None
+            numvx = np.prod(sz)
+            pos = tf.reduce_sum(L)
+            neg = numvx-pos
+            
+            if  pos-numvx*ratio > -0.01:
+                print("warning: cannot achieve desired sample ratio, taking uniform")
+                P = L*0+1
+            else:
+                background_p = (1-ratio)*pos/(numvx*ratio-pos)
+                P = (L + background_p)
                 
-            points = tf.concat(points,0)
-            points = points[0:M,:]
+            p = tf.reshape(P,[numvx])
+            p = tf.cast(p,dtype=tf.float64)
+            p = p/tf.reduce_sum(p)
+            idx = np.random.choice(numvx,M,p=p)
+            R = np.transpose(np.unravel_index(idx,sz))
+            R = R + np.random.uniform(low=0,high=1,size=R.shape)
+            points = R/sz
+      
+
+
+            # points = []
+            # if N < M:
+            #     N = M # num drawn samples per round
+            # for j in range(numrounds):
+            #     R = np.random.uniform(low=0,high=1,size=(N,nD))
+            #     for i in range(nD):            
+            #         R[:,i] = np.floor(R[:,i]*sz[i])
+            #     Q = tf.gather_nd(L,tf.convert_to_tensor(R,dtype=tf.int32))
+            #     pos = tf.reduce_sum(Q)
+            #     neg = N-pos
+            #     if  pos-N*ratio > -0.01:
+            #         print("warning: cannot achieve desired sample ratio, taking uniform")
+            #         P = Q*0+1
+            #     else:
+            #         background_p = (1-ratio)*pos/(N*ratio-pos)
+            #         P = (Q + background_p)
+            #         P = P / tf.reduce_max(P)
+
+
+            #     idx = np.argwhere( (P > np.random.uniform(low=0,high=1,size=(N))))
+            #     R = tf.gather(R,idx[:,0],axis=0)
+            #     R = R + np.random.uniform(low=0,high=1,size=R.shape)
+            #     R = R/sz
+            #     points.append(R)
+            #     cnt = cnt + R.shape[0]
+            #     if cnt >= M:
+            #         break
+            # if cnt < M:
+            #     print("warning: cannot achieve desired sample ratio, taking uniform (2)")               
+            #     return None
+                
+            # points = tf.concat(points,0)
+            # points = points[0:M,:]
+            
+            
+            
             points_tot.append(points)
         
         centers = tf.concat(points_tot,0)            
