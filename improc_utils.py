@@ -159,6 +159,25 @@ def conv_boxcar3D(img,std):
   r = tf.concat(r,4)
   return r
 
+def poolmax_boxcar3D(img,std):
+  r = []
+  if len(img.shape) < 5:
+      img = tf.expand_dims(img,4)
+  r = tf.nn.max_pool3d(img,ksize=std,strides=[1,1,1],padding='SAME')
+  return r
+
+def mixture_boxcar3D(img,std):
+  r = tf.concat([conv_boxcar3D(img,std),
+                 poolmax_boxcar3D(img,std),
+                 -poolmax_boxcar3D(-img,std)],4)
+  return r
+
+def poolmax_boxcar2D(img,std):
+  r = []
+  if len(img.shape) < 4:
+      img = tf.expand_dims(img,3)
+  r = tf.nn.max_pool2d(img,ksize=std,strides=[1,1],padding='SAME')
+  return r
 
   # to get a nice shape which dividable by divisor 
 def getClosestDivisable(x,divisor):
@@ -666,9 +685,22 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         else:
                             jsobj = item
     
-                        if 'annotations' in jsobj and annotations_selector is not None :                    
-                            annos = loadAnnotation(jsobj['annotations'],asdict=True)
-                            sel = annotations_selector['labels']   
+                        if  annotations_selector is not None :       
+                            
+                            if 'keyseq' in annotations_selector:
+                                for n in annotations_selector['keyseq']:
+                                    jsobj = jsobj[n]
+                                if not isinstance(jsobj,list):
+                                    jsobj = [jsobj]
+                            else:
+                                jsobj = jsobj['annotations']
+                            
+                            annos = loadAnnotation(jsobj,asdict=True)
+                            if 'labels' not in annotations_selector:
+                                sel = [annos.keys()]
+                            else:
+                                sel = annotations_selector['labels']   
+                                
                             
                             delim='.'
                             sizefac=1
@@ -683,18 +715,26 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                     if key[0] not in annos:
                                         notfound = True
                                         break
-                                    if key[1] in annos[key[0]]:
-                                        a = annos[key[0]][key[1]]
-                                        p = a['coords'][0:nD]
-                                        p.append(a['size']*sizefac)
-                                        points.append(p)
+                                    if len(key) == 1:
+                                        for z in annos[key[0]]:
+                                            a = annos[key[0]][z]
+                                            p = a['coords'][0:nD]
+                                            p.append(a['size']*sizefac)
+                                            points.append(p)                                        
                                     else:
-                                        print(key[1] + ' not present for ' + fname)
+                                        if key[1] in annos[key[0]]:
+                                            a = annos[key[0]][key[1]]
+                                            p = a['coords'][0:nD]
+                                            p.append(a['size']*sizefac)
+                                            points.append(p)
+                                        else:
+                                            print(key[1] + ' not present for ' + fname)
                                 if notfound:
                                     break
                                 if len(points) == 0:
                                     notfound=True
                                     break
+                                print('rendering ' + str(len(points)) + ' markers')
                                 img = renderpoints(points, header,ftype)
                                 img = crop_spatial(img)
                             
@@ -881,8 +921,29 @@ def loadAnnotation(annos,asdict=True):
                 for ss in aa['points']:
                     key = ss['name']
                     key = key.replace('<br>','')
-                    x[key] = ss
-                adict[aa['name']] = x
+                    if key in x:
+                        cnt = 1
+                        while True:
+                            newkey = key + str(cnt)
+                            if newkey not in x:
+                                x[newkey] = ss
+                                break
+                            else:
+                                cnt = cnt + 1                        
+                    else:
+                        x[key] = ss
+                name = aa['name']
+                if name in adict:
+                    cnt = 1
+                    while True:
+                        newname = name + str(cnt)
+                        if newname not in adict:
+                            adict[newname] = x
+                            break
+                        else:
+                            cnt = cnt + 1
+                else:
+                    adict[name] = x
             return adict
                     
                 
