@@ -309,6 +309,10 @@ res = model.apply_full(trainset[0][0:1,...],jitter=0.05,   repetitions=1,verbose
 #l = lambda x,y: tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
 #l = tf.keras.losses.mean_squared_error
 
+
+def l(g,p):
+    return tf.keras.losses.binary_crossentropy(g>0, p)*tf.reduce_max(g,axis=-1)
+#%%
 def cc(x,y):
     sx = tf.reduce_sum(x,axis=-1,keepdims=True)
     sx = tf.concat([x,1-sx],len(sx.shape)-1)
@@ -316,7 +320,10 @@ def cc(x,y):
     sy = tf.concat([y,1-sy],len(sx.shape)-1)
     return tf.keras.losses.categorical_crossentropy(x,y,from_logits=False)
     
-    
+
+
+
+
 l = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False)
 l_logits = lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True)
 loss = [l_logits,l]
