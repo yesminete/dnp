@@ -332,7 +332,7 @@ class CropGenerator():
                     label_range = tf.cast(balance['label_range'],dtype=tf.int32)
                     labs = tf.gather(labs,label_range,axis=self.ndim+1)                            
               indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
-              indicator = tf.cast(indicator>0.5,dtype=tf.float32)    
+              indicator = tf.cast(indicator>0,dtype=tf.float32)    
               cur_ratio = tf.math.reduce_mean(indicator,axis=0)        
               print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
 
@@ -600,6 +600,7 @@ class CropGenerator():
             if label_weight is not None:
                 L = L*label_weight
             L = np.amax(L,nD)
+            L = 1.0*(L>0)
             sz = L.shape
             cnt=0
 
@@ -607,7 +608,7 @@ class CropGenerator():
             pos = tf.reduce_sum(L)
             neg = numvx-pos
             
-            if  pos-numvx*ratio > -0.01:
+            if  pos == 0 or pos-numvx*ratio > -0.01:
                 print("warning: cannot achieve desired sample ratio, taking uniform")
                 P = L*0+1
             else:
@@ -616,6 +617,7 @@ class CropGenerator():
                 
             p = tf.reshape(P,[numvx])
             p = tf.cast(p,dtype=tf.float64)
+                
             p = p/tf.reduce_sum(p)
             idx = np.random.choice(numvx,M,p=p)
             R = np.transpose(np.unravel_index(idx,sz))

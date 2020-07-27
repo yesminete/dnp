@@ -686,20 +686,28 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             jsobj = item
     
                         if  annotations_selector is not None :       
-                            
+                            notfound = False
                             if 'keyseq' in annotations_selector:
                                 for n in annotations_selector['keyseq']:
-                                    jsobj = jsobj[n]
+                                    if n in jsobj:                                        
+                                        jsobj = jsobj[n]
+                                    else:
+                                        notfound = True
+                                        break
+                                        
                                 if not isinstance(jsobj,list):
                                     jsobj = [jsobj]
                             else:
                                 jsobj = jsobj['annotations']
                             
-                            annos = loadAnnotation(jsobj,asdict=True)
-                            if 'labels' not in annotations_selector:
-                                sel = [annos.keys()]
+                            if notfound:
+                                sel = ['empty']
                             else:
-                                sel = annotations_selector['labels']   
+                                annos = loadAnnotation(jsobj,asdict=True)
+                                if 'labels' not in annotations_selector:
+                                    sel = [annos.keys()]
+                                else:
+                                    sel = annotations_selector['labels']   
                                 
                             
                             delim='.'
@@ -713,32 +721,34 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                 normalize = annotations_selector['normalize']
                             for spec in sel:
                                 points = []
-                                for i in spec:
-                                    key = i.split(delim)
-                                    if key[0] not in annos:
-                                        notfound = True
-                                        break
-                                    if len(key) == 1:
-                                        for z in annos[key[0]]:
-                                            a = annos[key[0]][z]
-                                            p = a['coords'][0:nD]
-                                            p.append(a['size']*sizefac)
-                                            points.append(p)                                        
-                                    else:
-                                        if key[1] in annos[key[0]]:
-                                            a = annos[key[0]][key[1]]
-                                            p = a['coords'][0:nD]
-                                            p.append(a['size']*sizefac)
-                                            points.append(p)
+                                notfound = False                                
+                                if spec != 'empty':
+                                    for i in spec:
+                                        key = i.split(delim)
+                                        if key[0] not in annos:
+                                            notfound = True
+                                            break
+                                        if len(key) == 1:
+                                            for z in annos[key[0]]:
+                                                a = annos[key[0]][z]
+                                                p = a['coords'][0:nD]
+                                                p.append(a['size']*sizefac)
+                                                points.append(p)                                        
                                         else:
-                                            print(key[1] + ' not present for ' + fname)
-                                if notfound:
-                                    break
-                                if len(points) == 0:
-                                    notfound=True
-                                    break
+                                            if key[1] in annos[key[0]]:
+                                                a = annos[key[0]][key[1]]
+                                                p = a['coords'][0:nD]
+                                                p.append(a['size']*sizefac)
+                                                points.append(p)
+                                            else:
+                                                print(key[1] + ' not present for ' + fname)
+                                    if notfound:
+                                        break
+                                    if len(points) == 0:
+                                        notfound=True
+                                        break
                                 print('rendering ' + str(len(points)) + ' markers')
-                                img = renderpoints(points, header,ftype,normalize)
+                                img = renderpoints(points, header,ftype,nD,normalize)
                                 img = crop_spatial(img)
                             
                                 img = np.expand_dims(img,0)
@@ -880,8 +890,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     if labels is not None:
         return trainset,labelset,resolutions,subjects_names;
 
-def renderpoints(points,header,ftype,normalize=False):
-    nD = len(points[0])-1
+def renderpoints(points,header,ftype,nD,normalize=False):
 
     sz =header['dim'][1:nD+1]
     A = header.get_best_affine()
