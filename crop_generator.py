@@ -53,19 +53,33 @@ class CropInstance:
       return x
 
   # get input training data 
-  def getInputData(self,batchdim2=-1):                    
+  def getInputData(self,sampletyp=None):                    
+    if sampletyp == None:
+        sampletyp = [None,-1]
+    batchdim2 = sampletyp[1]
     cnt = 0
     inp = {}
     for x in self.scales:
       inp['input'+str(cnt)] = self.extb2dim(x['data_cropped'],batchdim2)
       inp['cropcoords'+str(cnt)] = self.extb2dim(x['local_box_index'],batchdim2)
       cnt = cnt + 1
+
+    if sampletyp[0] is not None:      
+        cnt = 0
+        for x in self.scales:
+          inp['input'+str(cnt)] = tf.gather(inp['input'+str(cnt)] ,sampletyp[0],axis=0)
+          inp['cropcoords'+str(cnt)] = tf.gather(inp['cropcoords'+str(cnt)],sampletyp[0],axis=0)
+          cnt = cnt + 1
+
     return inp
 
   # get target training data 
-  def getTargetData(self,batchdim2=-1):
-    out = []
-    
+  def getTargetData(self,sampletyp=None):
+    if sampletyp == None:
+        sampletyp = [None,-1]
+    batchdim2 = sampletyp[1]
+        
+    out = []    
     create_indicator_classlabels = self.cropper.create_indicator_classlabels
     classifier_train = self.cropper.model.classifier_train
     spatial_train = self.cropper.model.spatial_train
@@ -88,6 +102,10 @@ class CropInstance:
         for k in range(len(out)):
             out[k] = self.extb2dim(out[k],batchdim2)
             out[k] = tf.reduce_max(out[k],axis=1)
+
+    if sampletyp[0] is not None:      
+        for k in range(len(out)):
+            out[k] = tf.gather(out[k],sampletyp[0],axis=0)
         
     return out
 
@@ -440,15 +458,35 @@ class CropGenerator():
       else:
         data_smoothed =  data_parent
       ds0 = data_smoothed.shape[0]
-      for k in range(repfac):
+      
+      
+      if interp_type == 'NN':      
+
+           # for k in range(repfac):              
+           #    tmp = tf.gather_nd(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...],batch_dims=1) 
+           #    res_data.append(tmp)
+           # res_data = tf.concat(res_data,0)
+
+
+           _parent_box_index = []
+         
+           bdidx = tf.range(ds0)
+           for i in range(self.ndim+1):
+               bdidx = tf.expand_dims(bdidx,1)
+           bdidx = tf.tile(bdidx,[1] + parent_box_index.shape[1:-1]+ [1])
           
-          if interp_type == 'NN':
-              tmp = tf.gather_nd(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...],batch_dims=1) 
-          else:              
-              tmp = self.lin_interp(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...])
-          res_data.append(tmp)
+           for k in range(repfac):
+              tmp = parent_box_index[ds0*k:ds0*(k+1),...]
+              tmp = tf.concat([bdidx, tmp],self.ndim+1)
+              _parent_box_index.append(tmp)
+           _parent_box_index = tf.concat(_parent_box_index,0)
+           res_data = tf.gather_nd(data_smoothed, _parent_box_index,batch_dims=0) 
+      else:         
+          for k in range(repfac):              
+             tmp = self.lin_interp(data_smoothed, parent_box_index[ds0*k:ds0*(k+1),...])
+             res_data.append(tmp)
+          res_data = tf.concat(res_data,0)
               
-      res_data = tf.concat(res_data,0)
       return res_data
 
   def lin_interp(self,data,x):

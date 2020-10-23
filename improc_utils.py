@@ -565,6 +565,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
+                           crop_only_nonzero=False,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
 
@@ -615,6 +616,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     for k in subjs:
         print("loading: " + k)
 
+        crop_idx = []
 
         if exclude_incomplete_labels:
             incomplete = False
@@ -643,6 +645,14 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             header = img.header
             if template_nii is None:
                 template_nii = img
+            else:
+                if nD == 3:
+                    sz1 = img.header.get_data_shape()
+                    sz2 = template_nii.header.get_data_shape()
+                    if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
+                        img= resample_from_to(img, template_nii,order=3)
+                
+                
             img = np.squeeze(img.get_fdata())
             if crop_fdim is not None:
                 if len(img.shape) > nD:
@@ -658,7 +668,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         if labels is not None:
             
             labs = []
-            for j in range(len(labels)):
+            for j in range(len(labels)): # over 
                 if k in labels[j]:
                     item = labels[j][k]
                     if isinstance(item,dict):
@@ -816,17 +826,23 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if crop_fdim_labels is not None:
                             if len(img.shape) > nD:
                                 img = img[...,crop_fdim_labels]
-    
-    
-                        img = np.expand_dims(np.squeeze(img),0)
-                        if len(img.shape) == nD+1:
-                            img = np.expand_dims(img,nD+1)
-    
+
+
                         if threshold is not None and one_hot_index_list is not None:
                              assert 0,"not possible to use threshold and one_hot_index_list"
                             
                         if threshold is not None:
                             img = (img>threshold)*1
+
+    
+                        if crop_only_nonzero:
+                            crop_idx.append(tf.expand_dims(tf.reduce_max(img,axis=list(range(0,nD))),1))
+                            
+    
+                        img = np.expand_dims(np.squeeze(img),0)
+                        if len(img.shape) == nD+1:
+                            img = np.expand_dims(img,nD+1)
+    
                             
                         if one_hot_index_list is not None:
                             r = []
@@ -865,8 +881,28 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                 labs.append(inv)
                 
                     
+        if crop_only_nonzero:
+            crop_idx = tf.squeeze(tf.where(tf.reduce_min(tf.concat(crop_idx,1),1)))
+            if len(crop_idx.shape) == 0:
+                crop_idx = tf.reshape(crop_idx,[1])
                 
                 
+            imgs_ = []
+            labs_ = []
+            if nD==2:
+                perm = [3,1,2,0]
+            else:
+                perm = [4,1,2,3,0]
+            for j in imgs:
+                imgs_.append(tf.transpose(tf.gather(j,crop_idx,axis=nD+1),perm))
+            for j in labs:
+                labs_.append(tf.transpose(tf.gather(j,crop_idx,axis=nD+1),perm))
+            print('cropped ' + str(crop_idx.shape[0]) + ' nonzero labels')
+            imgs = imgs_
+            labs = labs_
+            
+            
+        
                 
         imgs = tf.concat(imgs,nD+1)        
         trainset.append(imgs)
@@ -996,10 +1032,12 @@ def align_to_physical_coords(im):
     idxinv = [0]*3
     for k in range(3):
         idxinv[idx[k]] = k
-    
+        print(np.abs(aff[0:3,0:3]))
+    print(idx)
     if len(im.shape) > 3:
         for k in range(len(im.shape)-3):
             idxinv.append(k+3)
+    
     
     d = np.transpose(d,idxinv)
     

@@ -25,6 +25,10 @@ from os import path
 import nibabel as nib
 import json
 import warnings
+import time
+
+from random import sample 
+
 
 from .crop_generator import *
 from .improc_utils import *
@@ -836,12 +840,12 @@ class PatchWorkModel(Model):
       if ofname is not None:
     
           if isinstance(ofname,list):
-             if len(res.shape) == 5:
+             #if len(res.shape) == 5:
                   for s in range(len(ofname)):
-                      res_ = res[:,:,:,:,s]
+                      res_ = res[...,s]
                       img1.header.set_data_shape(res_.shape)
                       pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
-                      pred_nii.header.set_slope_inter(1/fac,0.0000000)
+                      pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
                       pred_nii.header['cal_max'] = 1
                       pred_nii.header['cal_min'] = 0
                       pred_nii.header['glmax'] = 1
@@ -851,7 +855,7 @@ class PatchWorkModel(Model):
      
           else:
              pred_nii = nib.Nifti1Image(res*fac, newaffine, img1.header)
-             pred_nii.header.set_slope_inter(1/fac,0.0000000)
+             pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
              pred_nii.header['cal_max'] = 1
              pred_nii.header['cal_min'] = 0
              pred_nii.header['glmax'] = 1
@@ -929,7 +933,16 @@ class PatchWorkModel(Model):
                            classifierCreator=clsCreator, 
                            preprocCreator=preprocCreator,
                            finalBlock=finalBlock,**x)
-    model.load_weights(name + ".tf")
+    # max_tries=10
+    # for k in range(max_tries):
+    #     try: 
+    #         model.load_weights(name + ".tf")            
+    #     except:
+    #         print("problem during loading, retrieing...")
+    #         time.sleep(2)            
+
+    model.load_weights(name + ".tf")            
+
     model.modelname = name
     
     if show_history:
@@ -1043,6 +1056,7 @@ class PatchWorkModel(Model):
             autosave=True,
             augment=None,
             max_agglomerative=False,
+            sample_cache=None,
             rot_intrinsic=0,
             loss=None,
             optimizer=None
@@ -1083,38 +1097,47 @@ class PatchWorkModel(Model):
         print("compiling ...")
         self.compile(loss=loss, optimizer=optimizer)
 
-              
+    trainidx = list(range(len(trainset)))
+    trainidx = [item for item in trainidx if item not in valid_ids]
+
+    if sample_cache is not None:
+        print("sampling patches for training")
+        start = timer()
+        c = getSample(trainidx)      
+        end = timer()
+        print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
+                     
             
     for i in range(num_its):
         print("======================================================================================")
         print("iteration:" + str(i))
         print("======================================================================================")
 
-        trainidx = list(range(len(trainset)))
-        trainidx = [item for item in trainidx if item not in valid_ids]
         
-        ### sampling
-        print("sampling patches for training")
-        start = timer()
-        if num_samples_per_epoch == -1:          
-           subset = trainidx
-        else:            
-           subset = sample(trainidx,num_samples_per_epoch)
-        c = getSample(subset)      
+        if sample_cache is None:
+            ### sampling
+            print("sampling patches for training")
+            start = timer()
+            if num_samples_per_epoch == -1:          
+               subset = trainidx
+            else:            
+               subset = sample(trainidx,num_samples_per_epoch)
+            c = getSample(subset)      
+            end = timer()
+            print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
 
-        # print(c.scales[0].keys())
-        end = timer()
-        print("time elapsed, sampling: " + str(end - start) )
-      
+        
         ### fitting
         history = History()
       
-        b2dim = -1
+        sampletyp = [None, -1]
         if max_agglomerative:
-            b2dim = num_patches
+            sampletyp[1] = num_patches
+        if sample_cache is not None:
+            sampletyp[0] = sample(range(len(trainidx)*num_patches),sample_cache)
         
-        inputdata = c.getInputData(b2dim)
-        targetdata = c.getTargetData(b2dim)
+        inputdata = c.getInputData(sampletyp)
+        targetdata = c.getTargetData(sampletyp)
         print("starting training")
         start = timer()
         self.fit(inputdata,targetdata,
@@ -1125,10 +1148,11 @@ class PatchWorkModel(Model):
                   callbacks=[history])
         end = timer()
         
-        c.scales=None
-        c=None
-        inputdata=None
-        targetdata=None
+        if sample_cache is None:
+            c.scales=None
+            c=None
+            inputdata=None
+            targetdata=None
 
         self.myhist.accum('train',history.history,epochs)
 
