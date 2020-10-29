@@ -599,11 +599,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     subjs.sort()
     
     
-    if max_num_data is not None:
+    goingtoload = str(len(subjs))
+    if max_num_data is not None:        
         if max_num_data < len(subjs):
+            goingtoload = str(max_num_data)
             p = np.random.uniform(size=(len(subjs)))
             idx = np.argsort(p)
-            idx = idx[0:max_num_data]
             subjs = [subjs[i] for i in idx] 
                 
     
@@ -612,7 +613,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     classset = []
     resolutions = []
     subjects_names = []
-    print("going to load " + str(len(subjs)) + " items")
+    
+    print("going to load " + goingtoload + " items")
     for k in subjs:
         print("loading: " + k)
 
@@ -622,7 +624,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             incomplete = False
             for j in range(len(labels)):
                 if not k in labels[j]:
-                    print("missing label " + str(j) + " for subject " + k + ", skipping")
+                    print("  missing label " + str(j) + " for subject " + k + ", skipping")
                     incomplete = True
                     break
             if incomplete:
@@ -816,6 +818,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     
                     else:
                         img = load_nifti(fname)   
+                        print("   load file:" + fname)
                         if nD == 3:
                             sz1 = img.header.get_data_shape()
                             sz2 = template_nii.header.get_data_shape()
@@ -855,7 +858,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         labs.append(img)
                 else:
                     notfound = False
-                    print("missing label " + str(j) + " for subject " + k + ", extending with zeros")
+                    print("  missing label " + str(j) + " for subject " + k + ", extending with zeros")
                     img = tf.zeros(imgs[0].shape,dtype=ftype)
                     labs.append(img)
             
@@ -917,6 +920,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
 
         resolutions.append(resolution)
         subjects_names.append(k)
+        
+        if max_num_data is not None and len(trainset) >= max_num_data:
+            break
         
     if classes is not None and labels is not None and len(labelset) > 0:
         return trainset,labelset,classset,resolutions,subjects_names;
@@ -1032,8 +1038,6 @@ def align_to_physical_coords(im):
     idxinv = [0]*3
     for k in range(3):
         idxinv[idx[k]] = k
-        print(np.abs(aff[0:3,0:3]))
-    print(idx)
     if len(im.shape) > 3:
         for k in range(len(im.shape)-3):
             idxinv.append(k+3)

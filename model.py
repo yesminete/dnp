@@ -228,51 +228,61 @@ class myHistory :
     
   def show_train_stat(self):
 
-    import matplotlib.pyplot as plt
-    
-    if isinstance(self.trainloss_hist,list):
+    try: 
         
-        l = len(self.trainloss_hist[0][1])
-        cols = 'rbymck'
-        for k  in range(l):        
-            x = [ i for i, j in self.trainloss_hist ]
-            y = [ j[k] for i, j in self.trainloss_hist ]
-            if k==0:
-                plt.semilogy(x,y,cols[k],label="total train loss ")
-            else:
-                plt.semilogy(x,y,cols[k],label="train loss " + str(k))
-        if len(self.validloss_hist) > 0:
-            x = [ i for i, j in self.validloss_hist ]
-            y = [ j for i, j in self.validloss_hist ]
-            plt.semilogy(x,y,'g',label="valid loss")
-        plt.legend(fontsize=10)
-        plt.grid()
-        plt.title(self.model.modelname)
-        plt.pause(0.001)
+        import matplotlib.pyplot as plt
         
-    else:
-#%%
-        loss_hist = self.trainloss_hist
-        
-        def plothist(loss_hist,txt):
-            cols = 'rbymck'   
-            cnt = 0
-            for k in sorted(loss_hist):
-                x = [ i for i, j in loss_hist[k] ]
-                y = [ j for i, j in loss_hist[k] ]
-                if txt == "":                     
-                    plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
+        if isinstance(self.trainloss_hist,list):
+            
+            l = len(self.trainloss_hist[0][1])
+            cols = 'rbymck'
+            for k  in range(l):        
+                x = [ i for i, j in self.trainloss_hist ]
+                y = [ j[k] for i, j in self.trainloss_hist ]
+                if k==0:
+                    plt.semilogy(x,y,cols[k],label="total train loss ")
                 else:
-                    plt.semilogy(x,y,cols[cnt],label=txt+k)
-                cnt+=1
-        plothist(self.trainloss_hist,'train_')
-        plothist(self.validloss_hist,'')
-        plt.legend()
-        plt.grid()
-        plt.title(self.model.modelname)
-        plt.pause(0.001)  
-
-
+                    plt.semilogy(x,y,cols[k],label="train loss " + str(k))
+            if len(self.validloss_hist) > 0:
+                x = [ i for i, j in self.validloss_hist ]
+                y = [ j for i, j in self.validloss_hist ]
+                plt.semilogy(x,y,'g',label="valid loss")
+            plt.legend(fontsize=10)
+            plt.grid()
+            plt.title(self.model.modelname)
+            plt.pause(0.001)
+            
+        else:
+    #%%
+            loss_hist = self.trainloss_hist
+            plt.cla()
+            def plothist(loss_hist,txt):
+                cols = 'rbymck'   
+                cnt = 0
+                for k in sorted(loss_hist):
+                    x = [ i for i, j in loss_hist[k] ]
+                    y = [ j for i, j in loss_hist[k] ]
+                    if txt == "":                     
+                        plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
+                    else:
+                        plt.semilogy(x,y,cols[cnt],label=txt+k)
+                    cnt+=1
+            plothist(self.trainloss_hist,'train_')
+            plothist(self.validloss_hist,'')
+            plt.legend()
+            plt.grid()
+            ps = os.path.split(self.model.modelname)
+            tit = os.path.split(ps[0])[1] + "/" + ps[1];
+            plt.title(tit)
+            plt.pause(0.001)  
+            plt.savefig(self.model.modelname + ".png")
+    except:
+        if 'DISPLAY' in os.environ:
+            print("problems during plotting. Wrong Display?? (DISPLAY="+os.environ['DISPLAY']+")")
+        else:                                                                                       
+            print("problems during plotting. No DISPLAY set!")
+            
+    
 
 
 class PatchWorkModel(Model):
@@ -953,50 +963,6 @@ class PatchWorkModel(Model):
     
   def show_train_stat(self):
       self.myhist.show_train_stat()
-
-#     import matplotlib.pyplot as plt
-    
-#     if isinstance(self.trainloss_hist,list):
-        
-#         l = len(self.trainloss_hist[0][1])
-#         cols = 'rbymck'
-#         for k  in range(l):        
-#             x = [ i for i, j in self.trainloss_hist ]
-#             y = [ j[k] for i, j in self.trainloss_hist ]
-#             if k==0:
-#                 plt.semilogy(x,y,cols[k],label="total train loss ")
-#             else:
-#                 plt.semilogy(x,y,cols[k],label="train loss " + str(k))
-#         if len(self.validloss_hist) > 0:
-#             x = [ i for i, j in self.validloss_hist ]
-#             y = [ j for i, j in self.validloss_hist ]
-#             plt.semilogy(x,y,'g',label="valid loss")
-#         plt.legend(fontsize=10)
-#         plt.grid()
-#         plt.title(self.modelname)
-#         plt.pause(0.001)
-        
-#     else:
-# #%%
-#         loss_hist = self.trainloss_hist
-        
-#         def plothist(loss_hist,txt):
-#             cols = 'rbymck'   
-#             cnt = 0
-#             for k in sorted(loss_hist):
-#                 x = [ i for i, j in loss_hist[k] ]
-#                 y = [ j for i, j in loss_hist[k] ]
-#                 if txt == "":                     
-#                     plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
-#                 else:
-#                     plt.semilogy(x,y,cols[cnt],label=txt+k)
-#                 cnt+=1
-#         plothist(self.trainloss_hist,'train_')
-#         plothist(self.validloss_hist,'')
-#         plt.legend()
-#         plt.grid()
-#         plt.title(self.modelname)
-#         plt.pause(0.001)  
             
 #%%        
 
@@ -1059,7 +1025,8 @@ class PatchWorkModel(Model):
             sample_cache=None,
             rot_intrinsic=0,
             loss=None,
-            optimizer=None
+            optimizer=None,
+            callback=None
             ):
       
       
@@ -1196,7 +1163,8 @@ class PatchWorkModel(Model):
             res = None
             
             
-            
+        if callback is not None:
+            callback(i)
 
         
         
