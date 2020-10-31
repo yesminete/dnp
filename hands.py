@@ -205,8 +205,8 @@ model = patchwork.PatchWorkModel(cgen,
                       #blockCreator= lambda level,outK : createBlock_(name='block'+str(level),outK=outK),
                       blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      classifier_train=True,
-                      spatial_train=False,
+                      #classifier_train=True,
+                      spatial_train=True,
                       intermediate_loss=False,
                       #block_out=[4,1],
 
@@ -215,9 +215,9 @@ model = patchwork.PatchWorkModel(cgen,
                     #  cls_intermediate_loss=True,
                     #  classifier_train=True,
                       
-                      finalBlock=customLayers.simpleClassifier(3,nD=nD),
+                     #finalBlock=customLayers.simpleClassifier(3,nD=nD),
                      # forward_typinverse_rote='simple',
-                      num_labels = 1,
+                      num_labels = 2,
 #                      num_classes = 1                      
                       )
 # #%
@@ -230,7 +230,7 @@ res = model.apply_full(trainset[0],resolution=resolutions[0],
                        generate_type='random',jitter=0,   repetitions=50,dphi=0.05,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 
-plt.imshow(tf.squeeze(res[30,:,:]))
+#plt.imshow(tf.squeeze(res[30,:,:]))
 
 #%% 2D
 nD=2
@@ -339,7 +339,7 @@ augment = patchwork.Augmenter(    morph_width = 150
 
 
 #%%
-#model.modelname = "models/test"
+model.modelname = "models/test2"
 
 model.train(trainset,labelset,
             resolutions=resolutions,
@@ -347,8 +347,8 @@ model.train(trainset,labelset,
             valid_ids = [],
             augment=None,
             #balance={'ratio':0.3,'label_range':range(2),'label_weight':[1,0.2]},
-            num_patches=10,
-            epochs=5)
+            num_patches=3,
+            epochs=1)
 
 
 

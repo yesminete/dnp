@@ -301,9 +301,9 @@ class CropGenerator():
       trainset_ = trainset[j]
       
       if self.normalize_input == 'max':
-         trainset_ = trainset_/tf.reduce_max(trainset_,axis=range(1,len(trainset_.shape)))   
+         trainset_ = trainset_/tf.reduce_max(trainset_,keepdims=True,axis=range(1,len(trainset_.shape)))   
       if self.normalize_input == 'mean':
-         trainset_ = trainset_/tf.reduce_mean(trainset_,axis=range(1,len(trainset_.shape)))   
+         trainset_ = trainset_/tf.reduce_mean(trainset_,keepdims=True,axis=range(1,len(trainset_.shape)))   
       
       # if resolutions are also passed
       resolution_ = None

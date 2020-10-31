@@ -310,7 +310,8 @@ class PatchWorkModel(Model):
                trainloss_hist = None,
                validloss_hist = None,
                trained_epochs = 0,
-               modelname = None
+               modelname = None,
+               input_fdim = None
                ):
     super().__init__()
     self.preprocessor = []
@@ -347,6 +348,7 @@ class PatchWorkModel(Model):
     
     self.trained_epochs = trained_epochs
     self.modelname = modelname
+    self.input_fdim = input_fdim
     
     if modelname is not None and path.exists(modelname + ".json"):
          warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
@@ -400,7 +402,8 @@ class PatchWorkModel(Model):
                'finalBlock':self.finalBlock,
                'trainloss_hist':self.myhist.trainloss_hist,
                'validloss_hist':self.myhist.validloss_hist,
-               'trained_epochs':self.trained_epochs
+               'trained_epochs':self.trained_epochs,
+               'input_fdim':self.input_fdim
             }
 
 
@@ -589,7 +592,7 @@ class PatchWorkModel(Model):
                  jitter=0.05,
                  jitter_border_fix = False,
                  overlap=0,
-                 repetitions=5,           
+                 repetitions=1,           
                  dphi=0,
                  branch_factor=1,
                  scale_to_original=True,
@@ -606,6 +609,8 @@ class PatchWorkModel(Model):
      start_total = timer()
 
      nD = self.cropper.ndim
+     
+     self.input_fdim = data.shape[-1]
 
      zipper = lambda a,b,f : list(map(lambda pair: f(pair[0],pair[1]) , list(zip(a, b))))
 
@@ -891,12 +896,9 @@ class PatchWorkModel(Model):
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects={},show_history=False):
+  def load(name,custom_objects={},show_history=False,immediate_init=True):
 
     custom_objects = custom_layers
-    # custom_objects['biConvolution'] = biConvolution
-    # custom_objects['normalizedConvolution'] = normalizedConvolution
-    # custom_objects['squeezeLayer'] = squeezeLayer
 
     fname = name + ".json"
     with open(fname) as f:
@@ -931,27 +933,42 @@ class PatchWorkModel(Model):
     if fb is not None:
         finalBlock = createCNNBlockFromObj(fb, custom_objects=custom_objects)
     
-  #  del x['trainloss_hist']
-  #  del x['validloss_hist']
-  
-    # for k in x['trainloss_hist']:
-    #     for j in range(len(x['trainloss_hist'][k])):
-    #        x['trainloss_hist'][k][j] = list(x['trainloss_hist'][k][j])
         
   
     model = PatchWorkModel(cropper, blkCreator,
                            classifierCreator=clsCreator, 
                            preprocCreator=preprocCreator,
                            finalBlock=finalBlock,**x)
-    # max_tries=10
-    # for k in range(max_tries):
-    #     try: 
-    #         model.load_weights(name + ".tf")            
-    #     except:
-    #         print("problem during loading, retrieing...")
-    #         time.sleep(2)            
 
-    model.load_weights(name + ".tf")            
+
+
+    if immediate_init and model.input_fdim is not None: 
+
+        # import tempfile
+        # import shutil
+        # import glob
+        # import os
+        
+        # tmpdir = tempfile.mkdtemp()
+        # for filename in glob.glob(name + ".*"):
+        #    shutil.copy(filename, tmpdir)
+        # head_tail = os.path.split(name) 
+        # loading_name_tmp = os.path.join(tmpdir, head_tail[1])
+        # model.load_weights(loading_name_tmp + ".tf")            
+        
+        model.load_weights(name + ".tf")   
+        if model.cropper.ndim == 3:
+            initdat = tf.ones([1,32,32,32, model.input_fdim])
+        else:
+            initdat = tf.ones([1,32,32, model.input_fdim])            
+        print("----------------- load/init network by minimal application")
+        dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=False,scale_to_original=False,generate_type='random',repetitions=1)        
+        print("----------------- model and weights loaded")
+        
+        #shutil.rmtree(tmpdir)
+    else:        
+        model.load_weights(name + ".tf")   
+
 
     model.modelname = name
     
