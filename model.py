@@ -360,12 +360,18 @@ class PatchWorkModel(Model):
           self.block_out.append(num_labels+intermediate_out)
         if self.spatial_train or self.classifier_train:
           self.block_out.append(num_labels)
+
+    blkCreator = lambda level,outK:  blockCreator(level=level,outK=outK)
+
+    import inspect
+    signature = inspect.signature(blockCreator)
+    if 'input_shape' in signature.parameters:
+        blkCreator = lambda level,outK:  blockCreator(level=level,outK=outK,input_shape=cropper.get_patchsize(level))   
         
-    
     for k in range(self.cropper.depth-1): 
-      self.blocks.append(blockCreator(level=k, outK=self.block_out[k]))
+      self.blocks.append(blkCreator(k, self.block_out[k]))
     if self.spatial_train or self.classifier_train:
-      self.blocks.append(blockCreator(level=cropper.depth-1, outK=self.block_out[cropper.depth-1]))
+      self.blocks.append(blkCreator(cropper.depth-1, self.block_out[cropper.depth-1]))
 
     if preprocCreator is not None:
        for k in range(self.cropper.depth): 

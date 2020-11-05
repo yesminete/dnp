@@ -101,12 +101,14 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
                   padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
 
   if nD == 3:
+      strides = [2,2,2]
       _conv = layers.Conv3D
-      _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
-      _maxpool = lambda: layers.MaxPooling3D(pool_size=(2,2,2))
+      _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=strides)
+      _maxpool = lambda: layers.MaxPooling3D(pool_size=strides)
   elif nD == 2:
+      strides = [2,2]
       _conv = layers.Conv2D
-      _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=(2,2))
+      _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=strides)
       _maxpool = lambda: layers.MaxPooling2D(pool_size=(2,2))
   
   def BNrelu():
@@ -136,13 +138,15 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
   else:
       fdims = feature_dim
 
-
+  if input_shape is not None:
+     tmp = input_shape
+     input_shape = []
+     input_shape.extend(tmp)
+      
+      
   theLayers = {}
   for z in range(depth):
       
-    if input_shape is not None:
-        for r in range(len(input_shape)):
-            input_shape[r] = input_shape[r]/2
       
     fdim = fdims[z]
     id_d = str(1000 + z+1)
@@ -174,6 +178,15 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
             theLayers[id_u+"4_conv"+str(k+1)] = [conv(fdim)] + BNrelu()
             
     theLayers[id_u+"5_relu"] = BNrelu()
+    
+    if input_shape is not None:
+        for r in range(len(input_shape)):
+            input_shape[r] = input_shape[r]//strides[r]
+            if input_shape[r] == 1:
+                strides[r] = 1
+                
+    
+    
   theLayers["9_final"] =  [layers.Dropout(rate=0.5), conv(outK)]
   return patchwork.CNNblock(theLayers,verbose=verbose)
 

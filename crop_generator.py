@@ -10,6 +10,7 @@ import tensorflow as tf
 from . improc_utils import *
 from timeit import default_timer as timer
 from collections.abc import Iterable
+import math
 
 ########## Cropmodel ##########################################
 
@@ -187,6 +188,7 @@ class CropGenerator():
                     init_scale = -1,       # a) if init_scale = -1, already first layer consists of patches, 
                                            # b) if init_scale = sfac, it's the scale factor which the full image is scaled to
                                            # c) if init_scale = [sx,sy], it's the shape the full image is scaled to
+                    auto_patch = None,
                     keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
@@ -213,6 +215,43 @@ class CropGenerator():
     self.depth = depth
     self.ndim = ndim
     self.ftype=ftype
+
+    if auto_patch is not None:    
+
+        psize = 32
+        factor_thres = 0.75
+        dest_factor = 1
+        if "psize" in auto_patch:
+            psize = auto_patch['psize']
+        if "factor_thres" in auto_patch:
+            factor_thres = auto_patch['factor_thres']
+        if "dest_factor" in auto_patch:
+            dest_factor =auto_patch['dest_factor']
+        shape = auto_patch['shape']
+        scfacs = []
+        patch_size = []
+        for k in range(0,ndim):
+            p = psize
+            f = math.pow(dest_factor*p/shape[k],1/depth)
+            while f > factor_thres and p>4:
+                p = p//2
+                f = math.pow(dest_factor*p/shape[k],1/depth)
+                
+            scfacs.append(f)
+            patch_size.append(p)
+            
+        self.scale_fac = {}
+        for k in range(0,depth):
+            self.scale_fac['level'+str(k)] = scfacs
+        self.patch_size = patch_size
+        self.depth = depth
+        self.init_scale = -1
+        self.scale_fac_ref =  "perdim"
+
+
+
+
+
 
 
   def serialize_(self):
@@ -831,6 +870,13 @@ class CropGenerator():
       return qwq, qwq.shape[0];
 
 
+  def get_patchsize(self,level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
+      if isinstance(self.patch_size[0],Iterable):
+          return self.patch_size[level]
+      else: 
+          return self.patch_size
+
+
   def createCropsLocal(self,data_parent,labels_parent,crops,
       level,
       generate_type,test,
@@ -842,13 +888,6 @@ class CropGenerator():
       patch_size_factor=1,
       overlap=0,resolution=None,balance=None,verbose=True):
       
-      
-      
-      def get_patchsize(level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
-            if isinstance(self.patch_size[0],Iterable):
-                return self.patch_size[level]
-            else: 
-                return self.patch_size
               
     
       def get_scalefac(level,abssz):  # either a float, or a list of floats where each entry corresponds to a different depth level,
@@ -954,7 +993,7 @@ class CropGenerator():
           forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
       else:                                  # the first layer is already patched                
 
-        patch_size_=get_patchsize(level)
+        patch_size_=self.get_patchsize(level)
         
         patch_size = [0]*nD
         for k in range(len(patch_size)):
@@ -990,16 +1029,18 @@ class CropGenerator():
             for d in range(nD):
                 asp.append(sz[d+1]/patch_size[d]*this_scale_fac[d]*0.5)
             if self.scale_fac_ref == 'max':
-                asp = max(asp)
+                asp = [max(asp)]*nD
             elif self.scale_fac_ref == 'min':
-                asp = min(asp)
+                asp = [min(asp)]*nD
+            elif self.scale_fac_ref == 'perdim':
+                asp = asp
             else:
-                asp = asp[self.scale_fac_ref]
+                asp = [asp[self.scale_fac_ref]]*nD
                 
             bbox_sz = [0] * (nD*2)
             for d in range(nD):
-                bbox_sz[d]   = -asp*patch_size[d]/sz[d+1]* aspect_correction[d]
-                bbox_sz[d+nD] = asp*patch_size[d]/sz[d+1] *aspect_correction[d]
+                bbox_sz[d]   = -asp[d]*patch_size[d]/sz[d+1]* aspect_correction[d]
+                bbox_sz[d+nD] = asp[d]*patch_size[d]/sz[d+1] *aspect_correction[d]
 
 
         if generate_type == 'random':     
