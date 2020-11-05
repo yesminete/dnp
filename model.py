@@ -900,6 +900,7 @@ class PatchWorkModel(Model):
 
     custom_objects = custom_layers
 
+    name = name.replace(".json","")
     fname = name + ".json"
     with open(fname) as f:
         x = json.load(f)
