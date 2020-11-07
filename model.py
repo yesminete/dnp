@@ -594,7 +594,7 @@ class PatchWorkModel(Model):
   def apply_full(self, data,
                  resolution=None,
                  level=-1,
-                 generate_type='tree',
+                 generate_type='random',
                  jitter=0.05,
                  jitter_border_fix = False,
                  overlap=0,
@@ -1050,10 +1050,15 @@ class PatchWorkModel(Model):
             rot_intrinsic=0,
             loss=None,
             optimizer=None,
+            patch_on_cpu=True,
             callback=None
             ):
       
-      
+    if patch_on_cpu:
+        DEVCPU = "/cpu:0"
+    else:
+        DEVCPU = "/gpu:0"
+        
       
     def getSample(subset,valid=False):
         tset = [trainset[i] for i in subset]
@@ -1067,15 +1072,17 @@ class PatchWorkModel(Model):
         if resolutions is not None:
             rset = [resolutions[i] for i in subset]      
             
-        if traintype == 'random':
-            np = num_patches
-            if valid:
-                np = valid_num_patches
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
-                                    num_patches=np,augment=augment,balance=balance,dphi=dphi)
-        elif traintype == 'tree':
-            c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
-                                    jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=dphi)
+        with tf.device(DEVCPU):    
+    
+            if traintype == 'random':
+                np = num_patches
+                if valid:
+                    np = valid_num_patches
+                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
+                                        num_patches=np,augment=augment,balance=balance,dphi=dphi)
+            elif traintype == 'tree':
+                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
+                                        jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=dphi)
         return c
     
     
@@ -1126,9 +1133,10 @@ class PatchWorkModel(Model):
             sampletyp[1] = num_patches
         if sample_cache is not None:
             sampletyp[0] = sample(range(len(trainidx)*num_patches),sample_cache)
-        
-        inputdata = c.getInputData(sampletyp)
-        targetdata = c.getTargetData(sampletyp)
+
+        with tf.device(DEVCPU):            
+            inputdata = c.getInputData(sampletyp)
+            targetdata = c.getTargetData(sampletyp)
         print("starting training")
         start = timer()
         self.fit(inputdata,targetdata,
