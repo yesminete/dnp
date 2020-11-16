@@ -419,7 +419,7 @@ class PatchWorkModel(Model):
 
 
 
-  def call(self, inputs, training=False, lazyEval=None, testIT=False):
+  def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, testIT=False):
 
     def subsel(inp,idx,w):
       sz = inp.shape
@@ -442,12 +442,13 @@ class PatchWorkModel(Model):
     if not callable(inputs) and len(inputs['input0'].shape) > nD+2:
         original_shape = inputs['input0'].shape[1]
         for k in inputs:
-            sz = inputs[k].shape
-            if nD == 2:            
-                newsz = [-1, sz[2], sz[3], sz[4]]
-            else:
-                newsz = [-1, sz[2], sz[3], sz[4], sz[5]]
-            inputs[k] = tf.reshape(inputs[k],newsz)
+            if k != "dest_full_size" and k != 'parent_box_scatter_index':
+                sz = inputs[k].shape
+                if nD == 2:            
+                    newsz = [-1, sz[2], sz[3], sz[4]]
+                else:
+                    newsz = [-1, sz[2], sz[3], sz[4], sz[5]]
+                inputs[k] = tf.reshape(inputs[k],newsz)
 
     
     output = []
@@ -569,15 +570,22 @@ class PatchWorkModel(Model):
             else:                    
                 output.append(self.finalBlock(lo,training=training))
 
-    ## undo the sequueze of potential batch_dim2 and reduce via max
+    ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
     if original_shape is not None:
-        for k in range(len(output)):
-            sz = output[k].shape
-            newsz = [-1,original_shape]
-            for j in range(len(sz)-1):
-                newsz.append(sz[j+1])
-            output[k] = tf.reshape(output[k],newsz)
-            output[k] = tf.reduce_max(output[k],axis=1)
+        
+        if stitch_immediate> 1:                               
+               stitched = stitchResult_withstride(output,-1,[inputs],'NN',stitch_immediate)
+               output = [stitched]
+        else:
+            for k in range(len(output)):
+                sz = output[k].shape
+                newsz = [-1,original_shape]
+                for j in range(len(sz)-1):
+                    newsz.append(sz[j+1])
+                output[k] = tf.reshape(output[k],newsz)
+                output[k] = tf.reduce_max(output[k],axis=1)
+                
+                
     if self.spatial_max_train:
         for k in range(len(output)):
             output[k] = tf.reduce_max(output[k],axis=list(range(1,nD+1)))
@@ -608,6 +616,7 @@ class PatchWorkModel(Model):
                  lazyEval = None,
                  max_patching=False,
                  patch_stats= False,
+                 stitch_immediate=False,
                  testIT=False
                  ):
 
@@ -669,7 +678,20 @@ class PatchWorkModel(Model):
                                     patch_size_factor=patch_size_factor,
                                     lazyEval=lazyEval,
                                     verbose=verbose)
-            data_ = x.getInputData()
+            
+            if stitch_immediate:
+                stitch_immediate = reps
+            else:
+                stitch_immediate = -1
+            if stitch_immediate>1:
+                data_ = x.getInputData([None,reps])
+                data_['parent_box_scatter_index'] = x.scales[-1]['parent_box_scatter_index']
+                data_['dest_full_size'] = x.scales[-1]['dest_full_size']
+            else:
+                data_ = x.getInputData()
+            
+            
+            
             if lazyEval is None:             
                 print(">>> time elapsed, sampling: " + str(timer() - start) )
 
@@ -681,10 +703,9 @@ class PatchWorkModel(Model):
                 if not isinstance(r,list):
                     r = [r]
             # otherwise use ordinary apply
-            else:
-                r = self(data_,lazyEval=lazyEval,testIT=testIT)
+            else:                
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT)
             print(">>> time elapsed, network application: " + str(timer() - start) )
-                
             if max_patching:
                 
                 for k in level:
@@ -715,21 +736,26 @@ class PatchWorkModel(Model):
                         for t in pstats[k]:
                             pstats[k][t] = tf.concat([pstats[k][t],stat[t]],0)
                     
-                    
-            print(">>> stitching result")
-            start = timer()
-            if (self.spatial_train or max_patching) and not self.spatial_max_train:
-                for k in level:            
-                  a,b = x.stitchResult(r,k)
-                  pred[k] += a
-                  sumpred[k] += b                
-            print(">>> time elapsed, stitching: " + str(timer() - start) )
+            if not stitch_immediate>1:
+                print(">>> stitching result")
+                start = timer()
+                if (self.spatial_train or max_patching) and not self.spatial_max_train:
+                    for k in level:            
+                      a,b = x.stitchResult(r,k)
+                      pred[k] += a
+                      sumpred[k] += b                
+                print(">>> time elapsed, stitching: " + str(timer() - start) )
                   
          if (np.amin(sumpred[-1])) > 0:
              break
+
               
      if (self.spatial_train  or max_patching)  and not self.spatial_max_train:
-         res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
+         if stitch_immediate>1:
+             res = r
+             res[0] = tf.reduce_mean(res[0],axis=0)
+         else:
+             res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
