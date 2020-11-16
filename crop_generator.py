@@ -128,6 +128,32 @@ def stitchResult(r,level, scales,scatter_type):
     else:
         return scatter_interp(pbox_index,qq,sha)
 
+def stitchResult_withstride(r,level, scales,scatter_type,stride):
+    qq = r[level]
+    numlabels = qq.shape[-1]
+    sc = scales[level]
+    pbox_index = sc['parent_box_scatter_index']
+    sha = list(sc['dest_full_size'])
+    sha.append(numlabels)
+    
+    sz = pbox_index.shape
+    pbox_index = tf.reshape(pbox_index,tf.TensorShape([sz[0]//stride,stride]).concatenate(sz[1:]) )
+    sz = qq.shape
+    qq = tf.reshape(qq,tf.TensorShape([sz[0]//stride,stride]).concatenate(sz[1:]) )
+
+    sha[0] = sz[0]//stride
+    
+    
+    idx = tf.range(0,sha[0])
+    for k in range(0,len(sha)):
+        idx = tf.expand_dims(idx,1)
+    idx = tf.tile(idx,tf.TensorShape([1]).concatenate(pbox_index.shape[1:-1]).concatenate(1))
+    pbox_index = tf.concat([idx,pbox_index],len(sha))
+    
+    if scatter_type=='NN':        
+        return tf.scatter_nd(pbox_index,qq,sha)/(0.000001+tf.scatter_nd(pbox_index,qq*0+1,sha))
+    else:
+        assert 'not yet implemented'
 
 def scatter_interp(x,data,sz):
     
