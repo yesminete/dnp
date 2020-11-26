@@ -27,7 +27,7 @@ from patchwork.improc_utils import *
 
 from DPX_core import *
 from DPX_improc import *
-import customLayers
+from patchwork import *
 
 
 #%%
@@ -300,6 +300,39 @@ plt.pause(0.001)
 # model.apply_full(trainset[0][0:1,:,:,:],jitter=0.05,   repetitions=1)
 
 #cgen.testtree(labelset[0][0:1,:,:,5:6])
+
+
+
+
+
+
+
+
+#%% 3D
+nD=3
+cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
+                  auto_patch = { "shape" : trainset[0].shape[1:-1],
+                                "initial_scale":0.95
+                      },
+                  ndim=3,
+                  depth=4)
+
+
+
+model = patchwork.PatchWorkModel(cgen,
+                      blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
+                      spatial_train=True,
+                      intermediate_loss=False,
+                      num_labels = 1,
+                      )
+
+res = model.apply_full(trainset[0],resolution=resolutions[0],
+                       generate_type='random',jitter=0,   repetitions=1,dphi=0.05,verbose=True,scale_to_original=False)
+#res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
+
+#plt.imshow(tf.squeeze(res[30,:,:]))
+
+
 
 #model = patchwork.PatchWorkModel.load('models/test')
 #%%

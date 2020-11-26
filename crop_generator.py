@@ -247,28 +247,46 @@ class CropGenerator():
         psize = 32
         factor_thres = 0.75
         dest_factor = 1
+        initial_scale = None
         if "psize" in auto_patch:
             psize = auto_patch['psize']
         if "factor_thres" in auto_patch:
             factor_thres = auto_patch['factor_thres']
         if "dest_factor" in auto_patch:
             dest_factor =auto_patch['dest_factor']
+        if "initial_scale" in auto_patch:
+            initial_scale = auto_patch['initial_scale']
+            
         shape = auto_patch['shape']
         scfacs = []
         patch_size = []
+        
+        
+        cf = lambda p,k : math.pow(dest_factor*p/shape[k],1/depth)            
+        if initial_scale is not None:
+            cf = lambda p,k : math.pow(dest_factor*p/shape[k]/initial_scale,1/(depth-1))
+
         for k in range(0,ndim):
             p = psize
-            f = math.pow(dest_factor*p/shape[k],1/depth)
+            f = cf(p,k)
             while f > factor_thres and p>4:
                 p = p//2
-                f = math.pow(dest_factor*p/shape[k],1/depth)
-                
+                f = cf(p,k)                    
             scfacs.append(f)
             patch_size.append(p)
+
             
         self.scale_fac = {}
-        for k in range(0,depth):
-            self.scale_fac['level'+str(k)] = scfacs
+ 
+        if initial_scale is not None:
+            self.scale_fac['level0'] = [initial_scale]*ndim
+            for k in range(1,depth):
+                self.scale_fac['level'+str(k)] = scfacs
+        else:
+            for k in range(0,depth):
+                self.scale_fac['level'+str(k)] = scfacs
+            
+        print(self.scale_fac)
         self.patch_size = patch_size
         self.depth = depth
         self.init_scale = -1
