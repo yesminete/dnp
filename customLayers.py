@@ -8,8 +8,11 @@ Created on Mon Apr 13 11:37:27 2020
 
 from tensorflow.keras import layers
 import tensorflow as tf
+import numpy as np
 
 import patchwork
+
+
 
 custom_layers = {}
 
@@ -480,6 +483,171 @@ custom_layers['biConvolution'] = biConvolution
 
 
 
+
+#%%###############################################################################################
+
+## A CNN wrapper to allow easy layer references and stacking
+
+class CNNblock(layers.Layer):
+  def __init__(self,theLayers=None,name=None,verbose=False):
+    super().__init__(name=name)
+    
+    self.verbose = verbose
+    if theLayers is None:
+        self.theLayers = {}
+    else:
+        self.theLayers = theLayers
+
+  def add(self,*args):
+      if len(args) > 1:
+        l = [];
+        for a in args:
+           if hasattr(a,'dest') and a.dest is not None:
+               l.append({'f':a,'dest':a.dest})
+           else:
+               l.append({'f':a})
+        self.theLayers[l[0]['f'].name] =l
+      else:     
+        if isinstance(args[0],list):
+            self.theLayers[args[0][0].name] = list(args[0])
+        else:
+            self.theLayers[args[0].name] = args[0]
+            
+          
+   
+
+
+  def call(self, inputs, alphas=None, training=False):
+    
+    def apply_fun(f,x):
+                
+        
+        if len(x.shape) == nD+2:
+            self.last_spatial_shape = x.shape        
+        if self.verbose:
+            print("  " + f.name , "input_shape: " ,  x.shape)
+        if hasattr(f,'isBi') and f.isBi:
+            if self.verbose:
+                if alphas is not None:
+                    print("  " + f.name , "(bi) input_shape: " ,  alphas.shape)
+            return f(x,alphas,training=training)
+        else:
+            return f(x,training=training)
+        
+    
+    x = inputs
+    nD = len(inputs.shape)-2 
+    cats = {}
+    maxadds = {}
+    for l in self.theLayers:
+        cats[l] = []
+        maxadds[l] = []
+
+    if self.verbose:
+        print("----------------------")
+        if alphas is not None:
+            print("with alphas: " , alphas.shape)
+
+    for l in sorted(self.theLayers):
+      
+      if self.verbose:
+          print("metalayer: " + l)
+        
+      # this gathers all inputs that might have been forwarded from other layers
+      for r in maxadds[l]:
+          x = x+r
+      for r in cats[l]:
+        if x is None:
+          x = r
+        else:
+          x = tf.concat([x,r],nD+1)
+
+
+      if isinstance(self.theLayers[l],str) and self.theLayers[l][0:7]  == 'reshape':
+          prodsz = np.prod(self.last_spatial_shape[1:-1])
+          outfdim = int(self.theLayers[l][8:])
+          self.theLayers[l] = [layers.Dense(prodsz*outfdim),
+                               layers.Reshape(self.last_spatial_shape[1:-1] + [outfdim])]
+
+
+      a = self.theLayers[l]      
+      
+          
+      
+      if isinstance(a,list):
+        if isinstance(a[0],dict):
+          y = None
+          for j in range(0,len(a)):
+            d = a[j]
+            fun = d['f'] 
+            res = x
+            if isinstance(fun,list):
+              for f in fun:
+                  res = apply_fun(f,res)
+                  #res = f(res,training=training)
+            else:
+                res = apply_fun(fun,res)
+                #res = fun(res,training=training)
+              
+
+            if 'dest' in d:
+              dest = d['dest']
+              if self.verbose:
+                  print("          dest:"+dest)
+              cats[dest].append(res)  
+            if 'maxadd' in d:
+              if self.verbose:
+                  print("          dest:"+d['maxadd'])
+              themaxs = tf.reduce_max(res,axis=list(range(1,nD+1)),keepdims=True)
+              maxadds[d['maxadd']].append(themaxs)  
+            
+            if 'dest' not in d and 'maxadd' not in d:
+              y = res
+              
+              
+          x = y
+        else:
+          for f in a:
+            #x = f(x,training=training)
+            x = apply_fun(f,x)
+      else:
+        #x = a(x,training=training)
+        x = apply_fun(a,x)
+
+    return x
+
+
+
+def createCNNBlockFromObj(obj,custom_objects=None):
+
+  def tolayer(x):
+      if isinstance(x,dict):
+          if 'keras_layer' in x:
+              return layers.deserialize({'class_name':x['name'],'config':x['keras_layer']},
+                                        custom_objects=custom_objects)
+          if 'CNNblock' in x:
+              return createCNNBlockFromObj(x['CNNblock'],custom_objects=custom_objects)            
+          for k in x:
+              x[k] = tolayer(x[k])
+          return x
+      if isinstance(x,list):
+          for k in range(len(x)):
+              x[k] = tolayer(x[k])
+          return x
+          
+      return x
+                                  
+  theLayers = tolayer(obj)
+  if isinstance(theLayers,layers.Layer):
+      return theLayers
+  if isinstance(theLayers,list):
+      res = []
+      for l in theLayers:
+          res.append(createCNNBlockFromObj(l,custom_objects=custom_objects))
+      return res
+  else:
+      return CNNblock(theLayers)
+      
 
 
 

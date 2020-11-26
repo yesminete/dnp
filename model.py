@@ -34,171 +34,6 @@ from .crop_generator import *
 from .improc_utils import *
 from .customLayers import *
 
-#%%###############################################################################################
-
-## A CNN wrapper to allow easy layer references and stacking
-
-class CNNblock(layers.Layer):
-  def __init__(self,theLayers=None,name=None,verbose=False):
-    super().__init__(name=name)
-    
-    self.verbose = verbose
-    if theLayers is None:
-        self.theLayers = {}
-    else:
-        self.theLayers = theLayers
-
-  def add(self,*args):
-      if len(args) > 1:
-        l = [];
-        for a in args:
-           if hasattr(a,'dest') and a.dest is not None:
-               l.append({'f':a,'dest':a.dest})
-           else:
-               l.append({'f':a})
-        self.theLayers[l[0]['f'].name] =l
-      else:     
-        if isinstance(args[0],list):
-            self.theLayers[args[0][0].name] = list(args[0])
-        else:
-            self.theLayers[args[0].name] = args[0]
-            
-          
-   
-
-
-  def call(self, inputs, alphas=None, training=False):
-    
-    def apply_fun(f,x):
-                
-        
-        if len(x.shape) == nD+2:
-            self.last_spatial_shape = x.shape        
-        if self.verbose:
-            print("  " + f.name , "input_shape: " ,  x.shape)
-        if hasattr(f,'isBi') and f.isBi:
-            if self.verbose:
-                if alphas is not None:
-                    print("  " + f.name , "(bi) input_shape: " ,  alphas.shape)
-            return f(x,alphas,training=training)
-        else:
-            return f(x,training=training)
-        
-    
-    x = inputs
-    nD = len(inputs.shape)-2 
-    cats = {}
-    maxadds = {}
-    for l in self.theLayers:
-        cats[l] = []
-        maxadds[l] = []
-
-    if self.verbose:
-        print("----------------------")
-        if alphas is not None:
-            print("with alphas: " , alphas.shape)
-
-    for l in sorted(self.theLayers):
-      
-      if self.verbose:
-          print("metalayer: " + l)
-        
-      # this gathers all inputs that might have been forwarded from other layers
-      for r in maxadds[l]:
-          x = x+r
-      for r in cats[l]:
-        if x is None:
-          x = r
-        else:
-          x = tf.concat([x,r],nD+1)
-
-
-      if isinstance(self.theLayers[l],str) and self.theLayers[l][0:7]  == 'reshape':
-          prodsz = np.prod(self.last_spatial_shape[1:-1])
-          outfdim = int(self.theLayers[l][8:])
-          self.theLayers[l] = [layers.Dense(prodsz*outfdim),
-                               layers.Reshape(self.last_spatial_shape[1:-1] + [outfdim])]
-
-
-      a = self.theLayers[l]      
-      
-          
-      
-      if isinstance(a,list):
-        if isinstance(a[0],dict):
-          y = None
-          for j in range(0,len(a)):
-            d = a[j]
-            fun = d['f'] 
-            res = x
-            if isinstance(fun,list):
-              for f in fun:
-                  res = apply_fun(f,res)
-                  #res = f(res,training=training)
-            else:
-                res = apply_fun(fun,res)
-                #res = fun(res,training=training)
-              
-
-            if 'dest' in d:
-              dest = d['dest']
-              if self.verbose:
-                  print("          dest:"+dest)
-              cats[dest].append(res)  
-            if 'maxadd' in d:
-              if self.verbose:
-                  print("          dest:"+d['maxadd'])
-              themaxs = tf.reduce_max(res,axis=list(range(1,nD+1)),keepdims=True)
-              maxadds[d['maxadd']].append(themaxs)  
-            
-            if 'dest' not in d and 'maxadd' not in d:
-              y = res
-              
-              
-          x = y
-        else:
-          for f in a:
-            #x = f(x,training=training)
-            x = apply_fun(f,x)
-      else:
-        #x = a(x,training=training)
-        x = apply_fun(a,x)
-
-    return x
-
-
-
-def createCNNBlockFromObj(obj,custom_objects=None):
-
-  def tolayer(x):
-      if isinstance(x,dict):
-          if 'keras_layer' in x:
-              return layers.deserialize({'class_name':x['name'],'config':x['keras_layer']},
-                                        custom_objects=custom_objects)
-          if 'CNNblock' in x:
-              return createCNNBlockFromObj(x['CNNblock'],custom_objects=custom_objects)            
-          for k in x:
-              x[k] = tolayer(x[k])
-          return x
-      if isinstance(x,list):
-          for k in range(len(x)):
-              x[k] = tolayer(x[k])
-          return x
-          
-      return x
-                                  
-  theLayers = tolayer(obj)
-  if isinstance(theLayers,layers.Layer):
-      return theLayers
-  if isinstance(theLayers,list):
-      res = []
-      for l in theLayers:
-          res.append(createCNNBlockFromObj(l,custom_objects=custom_objects))
-      return res
-  else:
-      return CNNblock(theLayers)
-      
-
 ############################ The definition of the Patchwork model
 
 class myHistory :
@@ -679,7 +514,7 @@ class PatchWorkModel(Model):
                                     lazyEval=lazyEval,
                                     verbose=verbose)
             
-            if stitch_immediate:
+            if stitch_immediate == True:
                 stitch_immediate = reps
             else:
                 stitch_immediate = -1
@@ -928,7 +763,7 @@ class PatchWorkModel(Model):
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects={},show_history=False,immediate_init=True):
+  def load(name,custom_objects={},show_history=False,immediate_init=True,notmpfile=False):
 
     custom_objects = custom_layers
 
@@ -977,28 +812,39 @@ class PatchWorkModel(Model):
 
     if immediate_init and model.input_fdim is not None: 
 
-        # import tempfile
-        # import shutil
-        # import glob
-        # import os
-        
-        # tmpdir = tempfile.mkdtemp()
-        # for filename in glob.glob(name + ".*"):
-        #    shutil.copy(filename, tmpdir)
-        # head_tail = os.path.split(name) 
-        # loading_name_tmp = os.path.join(tmpdir, head_tail[1])
-        # model.load_weights(loading_name_tmp + ".tf")            
-        
-        model.load_weights(name + ".tf")   
-        if model.cropper.ndim == 3:
-            initdat = tf.ones([1,32,32,32, model.input_fdim])
+        if notmpfile:
+            model.load_weights(name + ".tf")   
         else:
-            initdat = tf.ones([1,32,32, model.input_fdim])            
-        print("----------------- load/init network by minimal application")
-        dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=False,scale_to_original=False,generate_type='random',repetitions=1)        
-        print("----------------- model and weights loaded")
+                
+            import tempfile
+            import shutil
+            import glob
+            import os
+            
+            tmpdir = tempfile.mkdtemp()
+            for filename in glob.glob(name + ".*"):
+                if os.path.isfile(filename):
+                   shutil.copy(filename, tmpdir)
+            head_tail = os.path.split(name) 
+            loading_name_tmp = os.path.join(tmpdir, head_tail[1])
+            model.load_weights(loading_name_tmp + ".tf")            
         
-        #shutil.rmtree(tmpdir)
+        
+        try:
+            if model.cropper.ndim == 3:
+                initdat = tf.ones([1,32,32,32, model.input_fdim])
+            else:
+                initdat = tf.ones([1,32,32, model.input_fdim])    
+            print("----------------- load/init network by minimal application")
+            dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=False,scale_to_original=False,generate_type='random',repetitions=1)        
+            print("----------------- model and weights loaded")
+        except:
+            if not notmpfile:
+                shutil.rmtree(tmpdir)
+            raise 
+        
+        if not notmpfile:
+            shutil.rmtree(tmpdir)
     else:        
         model.load_weights(name + ".tf")   
 
@@ -1085,7 +931,7 @@ class PatchWorkModel(Model):
     else:
         DEVCPU = "/gpu:0"
         
-      
+
     def getSample(subset,valid=False):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
@@ -1157,9 +1003,10 @@ class PatchWorkModel(Model):
         if sample_cache is not None:
             sampletyp[0] = sample(range(len(trainidx)*num_patches),sample_cache)
 
-        with tf.device(DEVCPU):            
-            inputdata = c.getInputData(sampletyp)
-            targetdata = c.getTargetData(sampletyp)
+        inputdata = c.getInputData(sampletyp)
+        targetdata = c.getTargetData(sampletyp)
+            
+            
         print("starting training")
         start = timer()
         self.fit(inputdata,targetdata,
@@ -1257,150 +1104,3 @@ class patchworkModelEncoder(json.JSONEncoder):
            return obj.tolist()
         return json.dumps(obj,cls=patchworkModelEncoder)
         
-
-
-def Augmenter( morph_width = 150,
-                morph_strength=0.25,
-                rotation_dphi=0.1,
-                flip = None ,
-                scaling = None,
-                normal_noise=0,
-                repetitions=1,
-                include_original=True):
-                
-
-    def augment(data,labels):
-        
-            sz = data.shape
-            if len(sz) == 4:
-                nD = 2
-            if len(sz) == 5:
-                nD = 3
-    
-            if not include_original:
-                data_res = []
-                if labels is not None:
-                    labels_res = []
-            else:
-                data_res = [data]
-                if labels is not None:
-                    labels_res = [labels]
-    
-            for k in range(repetitions):            
-                if nD == 2:
-                    X,Y = sampleDefField_2D(sz)                    
-                    data_ = interp2lin(data,Y,X)        
-                    if labels is not None:
-                        labels_ = interp2lin(labels,Y,X)            
-                if nD == 3:
-                    X,Y,Z = sampleDefField_3D(sz)
-                    data_ = interp3lin(data,X,Y,Z)        
-                    if labels is not None:                
-                        labels_ = interp3lin(labels,X,Y,Z)            
-                
-                if normal_noise > 0:
-                    data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
-                
-                if flip is not None:
-                    for j in range(nD):
-                        if flip[j]:
-                            if np.random.uniform() > 0.5:
-                                data_ = np.flip(data_,j+1)
-                                if labels is not None:
-                                    labels_ = np.flip(labels_,j+1)
-                                
-                
-                
-                data_res.append(data_)
-                if labels is not None:            
-                    labels_res.append(labels_)
-            data_res = tf.concat(data_res,0)
-            
-            if labels is not None:            
-                labels_res = tf.concat(labels_res,0)
-                return data_res,labels_res
-            else:            
-                return data_res,None
-            
-    
-
-
-    def sampleDefField_2D(sz):
-        
-        X,Y = np.meshgrid(np.arange(0,sz[2]),np.arange(0,sz[1]))
-        
-        phi = np.random.uniform(low=-rotation_dphi,high=rotation_dphi)
-        
-        wid = morph_width/4
-        s = wid*wid*morph_strength
-        dx = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
-        dx = np.squeeze(dx)
-        dy = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
-        dy = np.squeeze(dy)
-        
-        scfacs = [1,1]
-        if scaling is not None:
-            if isinstance(scaling,list):
-                scfacs = [1+np.random.uniform(-1,1)*scaling[0],1+np.random.uniform(-1,1)*scaling[1]]
-            else:
-                sciso = scaling*np.random.uniform(-1,1)
-                scfacs = [1+sciso,1+sciso]
-        
-        
-        cx = 0.5*sz[2]
-        cy = 0.5*sz[1]
-        nX = scfacs[0]*tf.math.cos(phi)*(X-cx) - scfacs[0]*tf.math.sin(phi)*(Y-cy) + cx + s*dx
-        nY = scfacs[1]*tf.math.sin(phi)*(X-cx) + scfacs[1]*tf.math.cos(phi)*(Y-cy) + cy + s*dy
-        #dY = np.random.normal(0,s,X.shape)
-        
-        return nX,nY        
-    
-
-    def sampleDefField_3D(sz):
-        
-        X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
-        
-        
-        wid = morph_width/4
-        s = wid*wid*morph_strength
-        dx = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dx = np.squeeze(dx)
-        dy = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dy = np.squeeze(dy)
-        dz = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dz = np.squeeze(dz)
-        
-        
-        scfacs = [1,1,1]
-        if scaling is not None:
-            if isinstance(scaling,list):
-                scfacs = [1+np.random.uniform(-1,1)*scaling[0],1+np.random.uniform(-1,1)*scaling[1],1+np.random.uniform(-1,1)*scaling[2]]
-            else:
-                sciso = scaling*np.random.uniform(-1,1)
-                scfacs = [1+sciso,1+sciso,1+sciso]
-        
-        
-        cx = 0.5*sz[1]
-        cy = 0.5*sz[2]
-        cz = 0.5*sz[3]
-        
-        u, _, vh = np.linalg.svd(np.eye(3) + rotation_dphi*np.random.normal(0,1,[3,3]), full_matrices=True)
-        R = np.dot(u[:, :6] , vh)
-        
-        dx = s*dx
-        dy = s*dy
-        dz = s*dz
-        
-        nX = scfacs[0]*R[0,0]*(X-cx) + scfacs[0]*R[0,1]*(Y-cy) + scfacs[0]*R[0,2]*(Z-cz) + cx + dx
-        nY = scfacs[1]*R[1,0]*(X-cx) + scfacs[1]*R[1,1]*(Y-cy) + scfacs[1]*R[1,2]*(Z-cz) + cy + dy
-        nZ = scfacs[2]*R[2,0]*(X-cx) + scfacs[2]*R[2,1]*(Y-cy) + scfacs[2]*R[2,2]*(Z-cz) + cz + dz
-        
-        return nX,nY,nZ
-    
-
-    return augment
-
-
-
-
-
