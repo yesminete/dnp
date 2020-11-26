@@ -7,6 +7,7 @@ Created on Mon Apr 13 12:19:36 2020
 """
 
 from .model import *
+from .modelAUN import *
 from .crop_generator import *
 from .improc_utils import *
 from .customLayers import *
