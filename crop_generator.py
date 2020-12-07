@@ -248,6 +248,7 @@ class CropGenerator():
         factor_thres = 0.75
         dest_factor = 1
         initial_scale = None
+        voxsize = None
         if "psize" in auto_patch:
             psize = auto_patch['psize']
         if "factor_thres" in auto_patch:
@@ -256,6 +257,8 @@ class CropGenerator():
             dest_factor =auto_patch['dest_factor']
         if "initial_scale" in auto_patch:
             initial_scale = auto_patch['initial_scale']
+        if "voxsize" in auto_patch:
+            voxsize = auto_patch['voxsize']
             
         shape = auto_patch['shape']
         scfacs = []
@@ -286,12 +289,17 @@ class CropGenerator():
             for k in range(0,depth):
                 self.scale_fac['level'+str(k)] = scfacs
             
-        print(self.scale_fac)
+            
         self.patch_size = patch_size
         self.depth = depth
         self.init_scale = -1
         self.scale_fac_ref =  "perdim"
 
+        if voxsize is not None:
+            first = [""]*ndim
+            for k in range(0,ndim):
+                first[k] = self.scale_fac['level0'][k]*shape[k]*voxsize[k]
+            self.init_scale = ",".join(map(lambda x: str(x)+"mm",first))
 
 
 
@@ -1053,10 +1061,10 @@ class CropGenerator():
                 assert (resolution is not None), "for absolute init_scale you have to pass resolution"
                 if init_scale.find('cm') != -1:
                     sizes_mm = init_scale.replace("cm","").split(",")
-                    sizes_mm = list(map(lambda x: int(x)*10, sizes_mm))
+                    sizes_mm = list(map(lambda x: float(x)*10, sizes_mm))
                 else:
                     sizes_mm = init_scale.replace("mm","").split(",")
-                    sizes_mm = list(map(int, sizes_mm))
+                    sizes_mm = list(map(float, sizes_mm))
                 for d in range(nD):
                     sfac = patch_size_factor*sizes_mm[d]/resolution[d]/sz[d+1]
                     bbox_sz[d]    = -sfac*0.5

@@ -312,10 +312,11 @@ plt.pause(0.001)
 nD=3
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
                   auto_patch = { "shape" : trainset[0].shape[1:-1],
-                                "initial_scale":0.95
+                                "initial_scale":0.95,
+                                "voxsize":[2,2,2]
                       },
                   ndim=3,
-                  depth=4)
+                  depth=3)
 
 
 
@@ -325,8 +326,10 @@ model = patchwork.PatchWorkModel(cgen,
                       intermediate_loss=False,
                       num_labels = 1,
                       )
-
-res = model.apply_full(trainset[0],resolution=resolutions[0],
+#%%
+ini = trainset[0]
+#ini = xx
+res = model.apply_full(ini,resolution=resolutions[0],
                        generate_type='random',jitter=0,   repetitions=1,dphi=0.05,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 
