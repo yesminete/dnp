@@ -630,20 +630,31 @@ class PatchWorkModel(Model):
                  crop_sdim=None,
                  lazyEval = None):
 
-      def crop_spatial(img):
-         if crop_sdim is not None:
+      def crop_spatial(img,c):
+        if crop_sdim is not None:
+            if c == None:
+                c = crop_sdim
+                if crop_sdim == 'minbox':
+                    c = bbox3(img);
             if nD == 2:
-                img = img[crop_sdim[0],...]
-                img = img[:,crop_sdim[1],...]
+                img = img[c[0],...]
+                img = img[:,c[1],...]
             if nD == 3:
-                img = img[crop_sdim[0],...]
-                img = img[:,crop_sdim[1],...]
-                img = img[:,:,crop_sdim[2],...]
-         return img
+                img = img[c[0],...]
+                img = img[:,c[1],...]
+                img = img[:,:,c[2],...]
+            return img,c
+        else:
+            return img,None
+    
+        
+      scrop = None
+     
       nD = self.cropper.ndim
       if not isinstance(fname,list):
           fname = [fname]
       ims = []
+      
       for f in fname:          
           img1 = nib.load(f)        
           if align_physical:
@@ -657,7 +668,7 @@ class PatchWorkModel(Model):
                 a = a[...,crop_fdim]
 
         
-          a = crop_spatial(a)
+          a,scrop = crop_spatial(a,scrop)
       
           a = np.expand_dims(np.squeeze(a),0)
           if len(a.shape) < nD+2:
@@ -707,9 +718,13 @@ class PatchWorkModel(Model):
       fac = 32000/maxi
       
       newaffine = img1.affine
+      if scrop is not None:
+          offset = np.matmul(newaffine,(np.array([scrop[0][0],scrop[1][0],scrop[2][0],1])))
+          newaffine[:,3] = newaffine[:,3] + offset
+          
       
       if not scale_to_original:
-          sz = img1.header.get_data_shape()
+          sz = a.shape[1:nD+1]
           facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],res.shape[2]/sz[2]]
           img1.header.set_data_shape(res.shape)
           newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,0],[0,1/facs[1],0,0],[0,0,1/facs[2],0],[0,0,0,1]]))
@@ -1018,10 +1033,14 @@ class PatchWorkModel(Model):
         end = timer()
         
         if sample_cache is None:
-            c.scales=None
-            c=None
-            inputdata=None
-            targetdata=None
+            del c.scales
+            del c
+            del inputdata
+            del targetdata
+            # c.scales=None
+            # c=None
+            # inputdata=None
+            # targetdata=None
 
         self.myhist.accum('train',history.history,epochs)
 

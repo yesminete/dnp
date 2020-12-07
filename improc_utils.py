@@ -556,6 +556,26 @@ def interp3lin(image,X,Y,Z):
 #
 
 
+def bbox2(img):
+    if len(img.shape) == 3:
+        img = np.max(img,axis=-1)
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    min0, max0 = np.where(rows)[0][[0, -1]]
+    min1, max1 = np.where(cols)[0][[0, -1]]    
+    return [range(min0,max0),range(min1,max1)]
+
+def bbox3(img):
+    if len(img.shape) == 4:
+        img = np.max(img,axis=-1)
+    rows = np.any(np.any(img, axis=1),axis=1)
+    cols = np.any(np.any(img, axis=2),axis=0)
+    deps = np.any(np.any(img, axis=0),axis=0)
+    min0, max0 = np.where(rows)[0][[0, -1]]
+    min1, max1 = np.where(cols)[0][[0, -1]]    
+    min2, max2 = np.where(deps)[0][[0, -1]]
+    return [range(min0,max0),range(min1,max1),range(min2,max2)]
+
 def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            annotations_selector=None, 
                            class_selector=None, 
@@ -570,16 +590,22 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            nD=3,ftype=tf.float32):
 
     
-    def crop_spatial(img):
+    def crop_spatial(img,c):
         if crop_sdim is not None:
+            if c == None:
+                c = crop_sdim
+                if crop_sdim == 'minbox':
+                    c = bbox3(img);
             if nD == 2:
-                img = img[crop_sdim[0],...]
-                img = img[:,crop_sdim[1],...]
+                img = img[c[0],...]
+                img = img[:,c[1],...]
             if nD == 3:
-                img = img[crop_sdim[0],...]
-                img = img[:,crop_sdim[1],...]
-                img = img[:,:,crop_sdim[2],...]
-        return img
+                img = img[c[0],...]
+                img = img[:,c[1],...]
+                img = img[:,:,c[2],...]
+            return img,c
+        else:
+            return img,None
     
     def load_nifti(fname):
         img = nib.load(fname)        
@@ -632,7 +658,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
 
         
        
-        
+        scrop = None
         imgs = []
         template_nii = None
         for j in range(len(contrasts)):
@@ -664,7 +690,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if crop_fdim is not None:
                 if len(img.shape) > nD:
                     img = img[...,crop_fdim]
-            img = crop_spatial(img)
+            img,scrop = crop_spatial(img,scrop)
+            
             img = np.expand_dims(np.squeeze(img),0)
             if len(img.shape) < nD+2:
                 img = np.expand_dims(img,nD+1)                
@@ -766,7 +793,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                         break
                                 print('rendering ' + str(len(points)) + ' markers')
                                 img = renderpoints(points, header,ftype,nD,normalize)
-                                img = crop_spatial(img)
+                                img,_ = crop_spatial(img,scrop)
                             
                                 img = np.expand_dims(img,0)
                                 img = np.expand_dims(img,nD+1)
@@ -831,7 +858,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             img= resample_from_to(img, (template_shape,template_affine),order=3)
                             
                         img = np.squeeze(img.get_fdata());
-                        img = crop_spatial(img)                        
+                        img,_ = crop_spatial(img,scrop)                        
                         if crop_fdim_labels is not None:
                             if len(img.shape) > nD:
                                 img = img[...,crop_fdim_labels]
