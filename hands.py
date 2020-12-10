@@ -330,7 +330,7 @@ model = patchwork.PatchWorkModel(cgen,
 ini = trainset[0]
 #ini = xx
 res = model.apply_full(ini,resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=1,dphi=0.05,verbose=True,scale_to_original=False)
+                       generate_type='random',jitter=0,  num_chunks=3, repetitions=1,dphi=0.05,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 
 #plt.imshow(tf.squeeze(res[30,:,:]))

@@ -459,6 +459,8 @@ class PatchWorkModel(Model):
      start_total = timer()
 
      nD = self.cropper.ndim
+     self.cropper.dest_full_size = [None]*self.cropper.depth
+
      
      self.input_fdim = data.shape[-1]
 
@@ -955,6 +957,9 @@ class PatchWorkModel(Model):
         dphi = rot_intrinsic
         if valid:
             dphi=0
+        
+        self.cropper.dest_full_size = [None]*self.cropper.depth
+
         
         if resolutions is not None:
             rset = [resolutions[i] for i in subset]      
