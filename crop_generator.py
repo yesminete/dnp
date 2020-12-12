@@ -1197,16 +1197,13 @@ class CropGenerator():
             #            centerX_+widX*widX_local*0.5,centerY_+widY*widY_local*0.5,phi+local_boxes[...,2*nD:]]
             #parent_boxes = tf.concat(toconcat,ccatdim)
             
-      if self.dest_full_size[level] is None:
-          
+      if self.dest_full_size[level] is None:          
           dest_full_size = [None]*(nD+1)
           for k in range(nD):
               dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(1/patch_size_factor*patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
-
           self.dest_full_size[level] = dest_full_size
       else:
           dest_full_size = self.dest_full_size[level]
-          print(dest_full_size)
 
       # compute the index suitable for gather_nd
       local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type,

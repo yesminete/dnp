@@ -127,6 +127,7 @@ class PatchWorkModel(Model):
                num_labels=1,
                intermediate_out=0,
                intermediate_loss=False,
+               identical_blocks=False,
                block_out=None,
                
                spatial_train=True,
@@ -164,6 +165,7 @@ class PatchWorkModel(Model):
 
     self.intermediate_loss = intermediate_loss
     self.intermediate_out = intermediate_out
+    self.identical_blocks = identical_blocks
         
     self.block_out = block_out
     self.cls_intermediate_loss = cls_intermediate_loss
@@ -173,6 +175,7 @@ class PatchWorkModel(Model):
     self.classifier_train_deprecated = False
     self.spatial_train=spatial_train or spatial_max_train
     self.spatial_max_train=spatial_max_train
+
 
 
     # for k in trainloss_hist:
@@ -185,6 +188,8 @@ class PatchWorkModel(Model):
     self.modelname = modelname
     self.input_fdim = input_fdim
     
+    
+    
     if modelname is not None and path.exists(modelname + ".json"):
          warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
         
@@ -196,17 +201,29 @@ class PatchWorkModel(Model):
         if self.spatial_train or self.classifier_train:
           self.block_out.append(num_labels)
 
-    blkCreator = lambda level,outK:  blockCreator(level=level,outK=outK)
+    blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level])
 
     import inspect
     signature = inspect.signature(blockCreator)
     if 'input_shape' in signature.parameters:
-        blkCreator = lambda level,outK:  blockCreator(level=level,outK=outK,input_shape=cropper.get_patchsize(level))   
+        blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level],input_shape=cropper.get_patchsize(level))   
+        
+    if not identical_blocks:
+        theBlockCreator = blkCreator
+    else:
+        btmp = [None]*2
+        def theBlockCreator(level):
+            level = level if level < 2 else 1
+            if btmp[level] is None:
+                btmp[level] = blkCreator(level)
+            return btmp[level]
+        
+        
         
     for k in range(self.cropper.depth-1): 
-      self.blocks.append(blkCreator(k, self.block_out[k]))
+      self.blocks.append(theBlockCreator(k))
     if self.spatial_train or self.classifier_train:
-      self.blocks.append(blkCreator(cropper.depth-1, self.block_out[cropper.depth-1]))
+      self.blocks.append(theBlockCreator(cropper.depth-1))
 
     if preprocCreator is not None:
        for k in range(self.cropper.depth): 
@@ -227,6 +244,7 @@ class PatchWorkModel(Model):
                'blocks':self.blocks,
                'intermediate_out':self.intermediate_out,
                'intermediate_loss':self.intermediate_loss,   
+               'identical_blocks':self.identical_blocks,   
                'block_out':self.block_out,   
                'spatial_train':self.spatial_train,
                'num_labels':self.num_labels,
@@ -795,6 +813,9 @@ class PatchWorkModel(Model):
     blocks = x['blocks']
     blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level],custom_objects=custom_objects)
     del x['blocks']
+
+
+
 
     clsCreator = None
     if 'classifiers' in x:

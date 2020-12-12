@@ -316,7 +316,7 @@ cgen = patchwork.CropGenerator(patch_size = (32,32,32),
                                 "voxsize":[2,2,2]
                       },
                   ndim=3,
-                  depth=3)
+                  depth=4)
 
 
 
@@ -324,18 +324,19 @@ model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : customLayers.createUnet_v1(3,outK=outK,nD=nD),
                       spatial_train=True,
                       intermediate_loss=False,
+                      identical_blocks=True,
                       num_labels = 1,
                       )
-#%%
+
 ini = trainset[0]
 #ini = xx
 res = model.apply_full(ini,resolution=resolutions[0],
-                       generate_type='random',jitter=0,  num_chunks=3, repetitions=1,dphi=0.05,verbose=True,scale_to_original=False)
+                       generate_type='random',jitter=0,  num_chunks=1, repetitions=2,dphi=0.05,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 
 #plt.imshow(tf.squeeze(res[30,:,:]))
 
-
+model.summary()
 
 #model = patchwork.PatchWorkModel.load('models/test')
 #%%
@@ -388,10 +389,10 @@ model.train(trainset,labelset,
 
 
 
+#%%
 
-
-
-
+#model.save(model.name)
+model = patchwork.PatchWorkModel.load('models/test2')
 
 #%%
 
