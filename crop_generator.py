@@ -446,8 +446,9 @@ class CropGenerator():
                     labs = tf.gather(labs,label_range,axis=self.ndim+1)                            
               indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
               indicator = tf.cast(indicator>0,dtype=tf.float32)    
-              cur_ratio = tf.math.reduce_mean(indicator,axis=0)        
-              print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
+              cur_ratio = tf.math.reduce_mean(indicator,axis=0)      
+              if verbose:
+                  print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
 
         
       # if we want to train in tree mode we have to complete the tree
@@ -742,7 +743,7 @@ class CropGenerator():
             neg = numvx-pos
             
             if  pos == 0 or pos-numvx*ratio > -0.01:
-                print("warning: cannot achieve desired sample ratio, taking uniform")
+           #     print("warning: cannot achieve desired sample ratio, taking uniform")
                 P = L*0+1
             else:
                 background_p = (1-ratio)*pos/(numvx*ratio-pos)
