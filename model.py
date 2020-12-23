@@ -655,7 +655,10 @@ class PatchWorkModel(Model):
             if c == None:
                 c = crop_sdim
                 if crop_sdim == 'minbox':
-                    c = bbox3(img);
+                    if nD == 2:
+                        c = bbox2(img);
+                    if nD == 3:
+                        c = bbox3(img);
             if nD == 2:
                 img = img[c[0],...]
                 img = img[:,c[1],...]
@@ -740,7 +743,7 @@ class PatchWorkModel(Model):
       newaffine = img1.affine
       if scrop is not None:
           offset = np.matmul(newaffine,(np.array([scrop[0][0],scrop[1][0],scrop[2][0],1])))
-          newaffine[:,3] = newaffine[:,3] + offset
+          newaffine[:,3] = offset
           
       
       if not scale_to_original:

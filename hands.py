@@ -333,6 +333,12 @@ ini = trainset[0]
 res = model.apply_full(ini,resolution=resolutions[0],
                        generate_type='random',jitter=0,  num_chunks=1, repetitions=2,dphi=0.05,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
+#%%
+
+res,a = model.apply_on_nifti('/home/reisertm/Downloads/train/data_10023/img.nii.gz',ofname='/tmp/xx.nii',
+                             crop_sdim='minbox',
+                       generate_type='random',jitter=0,  num_chunks=1, repetitions=2,dphi=0.05,scale_to_original=False)
+
 
 #plt.imshow(tf.squeeze(res[30,:,:]))
 
