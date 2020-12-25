@@ -43,12 +43,16 @@ class myHistory :
       self.validloss_hist = {}
       self.model = model
 
-  def accum(self,which,cur_hist,epochs):
+  def accum(self,which,cur_hist,epochs,tensors=False):
       
       if self.trainloss_hist is None:
           self.trainloss_hist = {}
       if self.validloss_hist is None:
           self.validloss_hist = {}
+          
+      if tensors:
+          for k in cur_hist:
+              cur_hist[k] = list(map(lambda x: x.numpy(),cur_hist[k]))
           
       if which == 'train':
           loss_hist = self.trainloss_hist
@@ -58,7 +62,8 @@ class myHistory :
          if k not in loss_hist:
             loss_hist[k] = []                    
       for k in loss_hist:
-         loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
+         if k in cur_hist:
+             loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
 
     
   def show_train_stat(self):
@@ -198,8 +203,7 @@ class PatchWorkModel(Model):
         self.block_out = []
         for k in range(self.cropper.depth-1): 
           self.block_out.append(num_labels+intermediate_out)
-        if self.spatial_train or self.classifier_train:
-          self.block_out.append(num_labels)
+        self.block_out.append(num_labels)
 
     blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level])
 
@@ -220,10 +224,8 @@ class PatchWorkModel(Model):
         
         
         
-    for k in range(self.cropper.depth-1): 
+    for k in range(self.cropper.depth): 
       self.blocks.append(theBlockCreator(k))
-    if self.spatial_train or self.classifier_train:
-      self.blocks.append(theBlockCreator(cropper.depth-1))
 
     if preprocCreator is not None:
        for k in range(self.cropper.depth): 
@@ -231,9 +233,7 @@ class PatchWorkModel(Model):
         
     if classifierCreator is not None:
        for k in range(self.cropper.depth): 
-         clsfier = classifierCreator(level=k,outK=num_classes+cls_intermediate_out)
-         if clsfier is None:
-             break
+         clsfier = classifierCreator(level=k,outK=num_classes)
          self.classifiers.append(clsfier)
         
         
@@ -274,23 +274,10 @@ class PatchWorkModel(Model):
 
   def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, testIT=False):
 
-    def subsel(inp,idx,w):
-      sz = inp.shape
-      nsz = [sz[0]/w,w]
-      for k in range(len(sz)-1):
-          nsz.append(sz[k+1])          
-      inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
-      inp = tf.gather(inp,tf.squeeze(idx),axis=1)
-      sz = inp.shape
-      nsz = [sz[0]*sz[1]]
-      for k in range(len(sz)-2):
-          nsz.append(sz[k+2])                
-      inp = tf.reshape(inp,tf.cast(nsz,dtype=tf.int32))
-      return inp
   
     nD = self.cropper.ndim
     
-    ## squeeze additional batch_dim if necearray
+    ## squeeze additional batch_dim if necearray (max_agglomerative=True is true)
     original_shape = None
     if not callable(inputs) and len(inputs['input0'].shape) > nD+2:
         original_shape = inputs['input0'].shape[1]
@@ -305,12 +292,11 @@ class PatchWorkModel(Model):
 
     
     output = []
-    res = None
+    output_nonspatial = []
+    res = None    
     res_nonspatial = None
     #################### main loop over depth
     for k in range(self.cropper.depth):
-
-
 
       # lazy Evaluation
       idx = None
@@ -335,6 +321,7 @@ class PatchWorkModel(Model):
            res_nonspatial = tf.gather(res_nonspatial,idx,axis=0)
 
 
+      ## this is output from the last scale
       last = res
 
       ## get data and cropcoords at currnet scale
@@ -344,36 +331,28 @@ class PatchWorkModel(Model):
           inp = inputs['input' + str(k)]
           coords = inputs['cropcoords' + str(k)]
 
-      inp_nonspatial = res_nonspatial
-      
-           
-      
-      if k > 0: # it's not the initial scale
+      if k > 0: # it's not the initial scale, so do cropping etc.
           
-         # get result from last scale
+         # in case tile results from last scale (for lazyeval or treemode)
          if last.shape[0] is not None and coords.shape[0] != last.shape[0]:         
             mtimes = coords.shape[0]//last.shape[0]
             multiples = [1]*(nD+2)
             multiples[0] = mtimes
             last = tf.tile(last,multiples)   
-            if inp_nonspatial is not None:
-                multiples = [1]*(2)
-                multiples[0] = mtimes
-                inp_nonspatial = tf.tile(inp_nonspatial,multiples)
         
-         # crop the relevant rgion
+         # crop the relevant region
          if self.cropper.interp_type == 'lin':
              last_cropped = tf.gather_nd(last,tf.cast(0.5+coords,dtype=tf.int32),batch_dims=1)
          else:
              last_cropped = tf.gather_nd(last,coords,batch_dims=1)
          
-         
+         # if there is a preprocessor defined, apply it
          if k < len(self.preprocessor) :
              inp = self.preprocessor[k](inp,training=training)
          
          # cat with total input
          if self.forward_type == 'simple':
-             if 0:#testIT:
+             if testIT:
                 inp = last_cropped
              else:
                 inp = tf.concat([inp,last_cropped],(nD+1))
@@ -390,42 +369,29 @@ class PatchWorkModel(Model):
              inp = self.preprocessor[k](inp,training=training)
           
 
-      ## now, apply the network at the current scale 
-      
-      # the classifier part
-      current_output = []
-      if len(self.classifiers) > 0:
+      ## now, apply the network at the current scale       
+      if testIT:
+         res=inp
+      else:
+         res = self.blocks[k](inp,training=training)      
          if k < len(self.classifiers):
-             res_nonspatial = self.classifiers[k](inp,res_nonspatial,training=training) 
-         if k < len(self.classifiers) and self.classifier_train_deprecated:
-             current_output.append(res_nonspatial[:,0:self.num_classes])
-      
-      # the spatial/segmentation part
-      if self.spatial_train or  k < self.cropper.depth-1  or self.classifier_train:
-          if testIT:
-              res=inp
-          else:
-              res = self.blocks[k](inp,res_nonspatial,training=training)      
-      if self.spatial_train or self.classifier_train:
-          if testIT:
-              current_output.append(res)
-          else:
-              current_output.append(res[...,0:self.num_labels])
-
-      output = output + current_output
-    
-    if not testIT:
-        if self.finalBlock is not None:
-            lo = output.pop()
+             res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
+             output_nonspatial.append(res_nonspatial)
+         res = res[...,0:self.num_labels]
+         
+         ## apply a finalBlock on the last spatial output    
+         if self.finalBlock is not None and k == depth-1:
             if isinstance(self.finalBlock,list):
                 for fb in self.finalBlock:
-                    output.append(fb(lo))
+                    output.append(fb(res))
             else:                    
-                output.append(self.finalBlock(lo,training=training))
+                output.append(self.finalBlock(res,training=training))
+         else:
+             output.append(res)
+         
 
     ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
-    if original_shape is not None:
-        
+    if original_shape is not None:        
         if stitch_immediate> 1:                               
                stitched = stitchResult_withstride(output,-1,[inputs],'NN',stitch_immediate)
                output = [stitched]
@@ -438,19 +404,19 @@ class PatchWorkModel(Model):
                 output[k] = tf.reshape(output[k],newsz)
                 output[k] = tf.reduce_max(output[k],axis=1)
                 
+    if not self.intermediate_loss:
+         output = [output[-1]]          
                 
     if self.spatial_max_train:
         for k in range(len(output)):
             output[k] = tf.reduce_max(output[k],axis=list(range(1,nD+1)))
             
-    if not self.intermediate_loss:
-      if self.spatial_train and self.classifier_train_deprecated:
-         return [output[-2], output[-1]]
-      else:
-         return [output[-1]]          
-    else:
-      return output
-  
+            
+    if len(output_nonspatial) > 0:
+        output_nonspatial = [tf.reduce_max(tf.concat(output_nonspatial,1),1)]
+            
+    return output_nonspatial + output 
+
 
   def apply_full(self, data,
                  resolution=None,
@@ -938,6 +904,37 @@ class PatchWorkModel(Model):
   #   a list of levels (see createCropsLocal for content)
 
 
+  
+  @tf.function
+  def train_step(self,images,lossfun,optimizer):
+
+    hist = {}
+    def addhist(key,val):
+        hist[key] = [val]
+      
+    data = images[0]
+    labels = images[1]
+    
+    trainvars = self.trainable_variables
+      
+    
+    with tf.GradientTape() as tape:
+      preds = self(data, training=True)
+
+      loss = 0
+      for k in range(len(labels)):
+          l = lossfun[k](labels[k],preds[k])
+          l = tf.reduce_mean(l)
+          addhist('loss_' + str(k),l)
+          loss += l
+      addhist('loss',loss)
+          
+    gradients = tape.gradient(loss,trainvars)
+    optimizer.apply_gradients(zip(gradients, trainvars))
+    return hist
+        
+    
+
 
   def train(self,
             trainset,labelset, 
@@ -948,7 +945,7 @@ class PatchWorkModel(Model):
             num_patches=10,
             valid_ids = [],
             valid_num_patches=None,
-            batch_size=None,
+            batch_size=32,
             verbose=1,
             steps_per_epoch=None,
             jitter=0,
@@ -964,6 +961,7 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None,
             patch_on_cpu=True,
+            fit_type='custom',
             callback=None
             ):
       
@@ -1004,10 +1002,12 @@ class PatchWorkModel(Model):
     
     if valid_num_patches is None:
         valid_num_patches = num_patches
-      
-    if loss is not None:
-        if optimizer is None:
-            optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+ 
+        
+    if optimizer is None:
+        optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+ 
+    if loss is not None and fit_type=='fit':
         print("compiling ...")
         self.compile(loss=loss, optimizer=optimizer)
 
@@ -1039,7 +1039,6 @@ class PatchWorkModel(Model):
 
         
         ### fitting
-        history = History()
       
         sampletyp = [None, -1]
         if max_agglomerative:
@@ -1049,16 +1048,43 @@ class PatchWorkModel(Model):
 
         inputdata = c.getInputData(sampletyp)
         targetdata = c.getTargetData(sampletyp)
-            
-            
+
+        
         print("starting training")
         start = timer()
-        self.fit(inputdata,targetdata,
-                  epochs=epochs,
-                  verbose=verbose,
-                  steps_per_epoch=steps_per_epoch,
-                  batch_size=batch_size,
-                  callbacks=[history])
+
+        if fit_type == 'custom':
+            targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
+            dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
+            dataset = dataset.batch(batch_size)
+            
+            numsamples = targetdata[0].shape[0]
+            for e in range(epochs):
+                print("Epoch " + str(e) + "/"+str(epochs),end='  ')
+                print('#samples: ' + str(numsamples))
+                sttime = timer()
+                for element in dataset:
+                    cur_hist = self.train_step(element,loss,optimizer)    
+                    print('.', end='')                
+                print('| ')                
+                self.myhist.accum('train',cur_hist,1,tensors=True)
+                self.trained_epochs+=1
+                end = timer()
+                print( str((end-sttime)/numsamples) + "/sample  ",end=' ')
+                for k in cur_hist:
+                    print(k + ":" + str(cur_hist[k][0]),end=" ")
+                print("")
+
+        else:
+            history = History()
+            self.fit(inputdata,targetdata,
+                      epochs=epochs,
+                      verbose=verbose,
+                      steps_per_epoch=steps_per_epoch,
+                      batch_size=batch_size,
+                      callbacks=[history])
+            self.myhist.accum('train',history.history,epochs)
+            self.trained_epochs += epochs
         end = timer()
         
         if sample_cache is None:
@@ -1066,32 +1092,10 @@ class PatchWorkModel(Model):
             del c
             del inputdata
             del targetdata
-            # c.scales=None
-            # c=None
-            # inputdata=None
-            # targetdata=None
 
-        self.myhist.accum('train',history.history,epochs)
-
-
-        # if isinstance( self.trainloss_hist,list):
-            
-        #     loss = [None]*len(history.history['loss'])
-        #     for k in range(len(history.history['loss'])):
-        #         loss[k] = []
-        #         loss[k].append(history.history['loss'][k])           
-        #         for j in range(5):
-        #             if ('output_'+str(j+1)+'_loss') not in history.history:
-        #                 break
-        #             loss[k].append(history.history['output_'+str(j+1)+'_loss'][k])
-            
-        #     self.trainloss_hist = self.trainloss_hist + list(zip( list(range(self.trained_epochs,self.trained_epochs+epochs)),loss))
-        # else:
-        #     accum_hist(self.trainloss_hist,history.history)
             
         
         print("time elapsed, fitting: " + str(end - start) )
-        self.trained_epochs += epochs
         
         ### validation
         if len(valid_ids) > 0:
