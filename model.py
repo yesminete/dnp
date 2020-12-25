@@ -377,17 +377,18 @@ class PatchWorkModel(Model):
          if k < len(self.classifiers):
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              output_nonspatial.append(res_nonspatial)
-         res = res[...,0:self.num_labels]
+         
+         outs = res[...,0:self.num_labels]
          
          ## apply a finalBlock on the last spatial output    
-         if self.finalBlock is not None and k == depth-1:
+         if self.finalBlock is not None and k == self.cropper.depth-1:
             if isinstance(self.finalBlock,list):
                 for fb in self.finalBlock:
-                    output.append(fb(res))
+                    output.append(fb(outs))
             else:                    
-                output.append(self.finalBlock(res,training=training))
+                output.append(self.finalBlock(outs,training=training))
          else:
-             output.append(res)
+             output.append(outs)
          
 
     ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
