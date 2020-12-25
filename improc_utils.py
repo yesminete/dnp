@@ -563,7 +563,7 @@ def bbox2(img):
     cols = np.any(img, axis=0)
     min0, max0 = np.where(rows)[0][[0, -1]]
     min1, max1 = np.where(cols)[0][[0, -1]]    
-    return [range(min0,max0),range(min1,max1)]
+    return [range(min0,max0+1),range(min1,max1+1)]
 
 def bbox3(img):
     if len(img.shape) == 4:
@@ -574,7 +574,7 @@ def bbox3(img):
     min0, max0 = np.where(rows)[0][[0, -1]]
     min1, max1 = np.where(cols)[0][[0, -1]]    
     min2, max2 = np.where(deps)[0][[0, -1]]
-    return [range(min0,max0),range(min1,max1),range(min2,max2)]
+    return [range(min0,max0+1),range(min1,max1+1),range(min2,max2+1)]
 
 def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            annotations_selector=None, 
@@ -595,7 +595,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if c == None:
                 c = crop_sdim
                 if crop_sdim == 'minbox':
-                    c = bbox3(img);
+                    if nD == 2:
+                        c = bbox2(img);
+                    if nD == 3:
+                        c = bbox3(img);
             if nD == 2:
                 img = img[c[0],...]
                 img = img[:,c[1],...]
