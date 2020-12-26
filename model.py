@@ -43,12 +43,22 @@ class myHistory :
       self.validloss_hist = {}
       self.model = model
 
-  def accum(self,which,cur_hist,epochs,tensors=False):
+  def accum(self,which,cur_hist,epochs,tensors=False,mean=False):
       
       if self.trainloss_hist is None:
           self.trainloss_hist = {}
       if self.validloss_hist is None:
           self.validloss_hist = {}
+          
+      if mean:
+          mhist = {}
+          for k in cur_hist[0]:
+              mhist[k] = 0
+              for j in range(len(cur_hist)):
+                  mhist[k] += cur_hist[j][k]
+              mhist[k] = [mhist[k]/len(cur_hist)]
+          cur_hist = mhist
+
           
       if tensors:
           for k in cur_hist:
@@ -64,7 +74,7 @@ class myHistory :
       for k in loss_hist:
          if k in cur_hist:
              loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
-
+      return cur_hist
     
   def show_train_stat(self):
 
@@ -97,7 +107,7 @@ class myHistory :
             loss_hist = self.trainloss_hist
             plt.cla()
             def plothist(loss_hist,txt):
-                cols = 'rbymck'   
+                cols = 'rbymckrbymck'   
                 cnt = 0
                 for k in sorted(loss_hist):
                     x = [ i for i, j in loss_hist[k] ]
@@ -111,18 +121,20 @@ class myHistory :
             plothist(self.validloss_hist,'')
             plt.legend()
             plt.grid()
-            ps = os.path.split(self.model.modelname)
-            tit = os.path.split(ps[0])[1] + "/" + ps[1];
-            plt.title(tit)
+            if self.model.modelname is not None:
+                ps = os.path.split(self.model.modelname)
+                tit = os.path.split(ps[0])[1] + "/" + ps[1];
+                plt.title(tit)
+                plt.pause(0.001)  
+                plt.savefig(self.model.modelname + ".png")
             plt.pause(0.001)  
-            plt.savefig(self.model.modelname + ".png")
     except:
         if 'DISPLAY' in os.environ:
             print("problems during plotting. Wrong Display?? (DISPLAY="+os.environ['DISPLAY']+")")
         else:                                                                                       
             print("problems during plotting. No DISPLAY set!")
             
-    
+    #%%
 
 
 class PatchWorkModel(Model):
@@ -904,40 +916,6 @@ class PatchWorkModel(Model):
   #   a list of levels (see createCropsLocal for content)
 
 
-  def trainstepfun(self):  
-
-      def train_step(images,lossfun,optimizer):
-
-          
-        def addhist(key,val):
-            self.hist[key] = [val]
-        
-        if not hasattr(self,'hist'):
-            self.hist = {}
-        
-        
-        data = images[0]
-        labels = images[1]
-        
-        trainvars = self.trainable_variables
-          
-        
-        with tf.GradientTape() as tape:
-          preds = self(data, training=True)
-    
-          loss = 0
-          for k in range(len(labels)):
-              l = lossfun[k](labels[k],preds[k])
-              l = tf.reduce_mean(l)
-              addhist('loss_' + str(k),l)
-              loss += l
-          addhist('loss',loss)
-              
-        gradients = tape.gradient(loss,trainvars)
-        optimizer.apply_gradients(zip(gradients, trainvars))
-        return self.hist
-      return train_step
-    
 
 
   def train(self,
@@ -969,11 +947,6 @@ class PatchWorkModel(Model):
             callback=None
             ):
       
-    if patch_on_cpu:
-        DEVCPU = "/cpu:0"
-    else:
-        DEVCPU = "/gpu:0"
-        
 
     def getSample(subset,valid=False):
         tset = [trainset[i] for i in subset]
@@ -1004,16 +977,56 @@ class PatchWorkModel(Model):
         return c
     
     
+    @tf.function
+    def train_step(images,lossfun):
+            
+      hist = {}
+      def addhist(key,val):
+          hist[key] = val
+      
+     # if not hasattr(self,'hist'):
+     #     self.hist = {}
+      
+      data = images[0]
+      labels = images[1]
+      
+      trainvars = self.trainable_variables
+        
+      
+      with tf.GradientTape() as tape:
+        preds = self(data, training=True)
+      
+        loss = 0
+        for k in range(len(labels)):
+            l = lossfun[k](labels[k],preds[k])
+            l = tf.reduce_mean(l)
+            addhist('loss_' + str(k),l)
+            loss += l
+        addhist('loss',loss)
+            
+      gradients = tape.gradient(loss,trainvars)
+      self.optimizer.apply_gradients(zip(gradients, trainvars))
+      return hist
+  
+    # ---------------------------------------------------------------------------
+    
+    if patch_on_cpu:
+        DEVCPU = "/cpu:0"
+    else:
+        DEVCPU = "/gpu:0"
+        
+    
     if valid_num_patches is None:
         valid_num_patches = num_patches
  
-        
-    if optimizer is None:
-        optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+    if not hasattr(self,'optimizer') or self.optimizer is None:    
+        if optimizer is None:
+            optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+        self.optimizer = optimizer            
  
     if loss is not None and fit_type=='fit':
         print("compiling ...")
-        self.compile(loss=loss, optimizer=optimizer)
+        self.compile(loss=loss, optimizer=self.optimizer)
 
     trainidx = list(range(len(trainset)))
     trainidx = [item for item in trainidx if item not in valid_ids]
@@ -1061,24 +1074,26 @@ class PatchWorkModel(Model):
             targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
             dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
             dataset = dataset.batch(batch_size)
-            if not hasattr(self,'this_trainstepfun'):
-                self.this_trainstepfun = self.trainstepfun()
+ #           if not hasattr(self,'this_trainstepfun'):
+ #               self.this_trainstepfun = self.trainstepfun()
             numsamples = targetdata[0].shape[0]
             for e in range(epochs):
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
                 print('#samples: ' + str(numsamples) + ", batchsize: " + str(batch_size) , end=',  ')
                 sttime = timer()
-                hist = {}
+                log = []
                 for element in dataset:
-                    cur_hist = self.this_trainstepfun(element,loss,optimizer)    
+                    #cur_hist = self.this_trainstepfun(element,loss,self.optimizer)    
+                    log.append(train_step(element,loss))
                     print('.', end='')                
                 print('| ')                
-                self.myhist.accum('train',cur_hist,1,tensors=True)
+                
+                log = self.myhist.accum('train',log,1,tensors=True,mean=True)
                 self.trained_epochs+=1
                 end = timer()
                 print( "  %.2f ms/sample,  " % (1000*(end-sttime)/numsamples),end=' ')
-                for k in cur_hist:
-                    print(k + ":" + str(cur_hist[k][0]),end=" ")
+                for k in log:
+                    print(k + ":" + str(log[k][0]),end=" ")
                 print("")
 
         else:
