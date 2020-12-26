@@ -905,14 +905,16 @@ class PatchWorkModel(Model):
 
 
   def trainstepfun(self):  
-      @tf.function
+
       def train_step(images,lossfun,optimizer):
 
           
         def addhist(key,val):
-            hist[key] = [val]
+            self.hist[key] = [val]
         
-        hist = {}    
+        if not hasattr(self,'hist'):
+            self.hist = {}
+        
         
         data = images[0]
         labels = images[1]
@@ -933,7 +935,7 @@ class PatchWorkModel(Model):
               
         gradients = tape.gradient(loss,trainvars)
         optimizer.apply_gradients(zip(gradients, trainvars))
-        return hist
+        return self.hist
       return train_step
     
 
@@ -1059,7 +1061,8 @@ class PatchWorkModel(Model):
             targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
             dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
             dataset = dataset.batch(batch_size)
-            this_trainstepfun = self.trainstepfun()
+            if not hasattr(self,'this_trainstepfun'):
+                self.this_trainstepfun = self.trainstepfun()
             numsamples = targetdata[0].shape[0]
             for e in range(epochs):
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
@@ -1067,7 +1070,7 @@ class PatchWorkModel(Model):
                 sttime = timer()
                 hist = {}
                 for element in dataset:
-                    cur_hist = this_trainstepfun(element,loss,optimizer)    
+                    cur_hist = self.this_trainstepfun(element,loss,optimizer)    
                     print('.', end='')                
                 print('| ')                
                 self.myhist.accum('train',cur_hist,1,tensors=True)
