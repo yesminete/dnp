@@ -909,7 +909,7 @@ class PatchWorkModel(Model):
   @tf.function
   def train_step(self,images,lossfun,optimizer):
 
-    hist = {}
+    hist = self.hist
     def addhist(key,val):
         hist[key] = [val]
       
@@ -1050,7 +1050,8 @@ class PatchWorkModel(Model):
         inputdata = c.getInputData(sampletyp)
         targetdata = c.getTargetData(sampletyp)
 
-        
+        self.hist = {}        
+
         print("starting training")
         start = timer()
 
@@ -1062,8 +1063,9 @@ class PatchWorkModel(Model):
             numsamples = targetdata[0].shape[0]
             for e in range(epochs):
                 print("Epoch " + str(e) + "/"+str(epochs),end='  ')
-                print('#samples: ' + str(numsamples))
+                print('#samples: ' + str(numsamples) + " batchsize: " + str(batch_size) , end='  ')
                 sttime = timer()
+                hist = {}
                 for element in dataset:
                     cur_hist = self.train_step(element,loss,optimizer)    
                     print('.', end='')                
@@ -1071,7 +1073,7 @@ class PatchWorkModel(Model):
                 self.myhist.accum('train',cur_hist,1,tensors=True)
                 self.trained_epochs+=1
                 end = timer()
-                print( str((end-sttime)/numsamples) + "/sample  ",end=' ')
+                print( "%.2f ms/sample,  " % (1000*(end-sttime)/numsamples),end=' ')
                 for k in cur_hist:
                     print(k + ":" + str(cur_hist[k][0]),end=" ")
                 print("")
