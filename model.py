@@ -194,7 +194,6 @@ class PatchWorkModel(Model):
     self.input_fdim = input_fdim
     
     
-    
     if modelname is not None and path.exists(modelname + ".json"):
          warnings.warn(modelname + ".json already exists!! Are you sure you want to override?")
         
@@ -905,35 +904,37 @@ class PatchWorkModel(Model):
   #   a list of levels (see createCropsLocal for content)
 
 
-  
-  @tf.function
-  def train_step(self,images,lossfun,optimizer):
+  def trainstepfun(self):  
+      @tf.function
+      def train_step(images,lossfun,optimizer):
 
-    hist = self.hist
-    def addhist(key,val):
-        hist[key] = [val]
-      
-    data = images[0]
-    labels = images[1]
-    
-    trainvars = self.trainable_variables
-      
-    
-    with tf.GradientTape() as tape:
-      preds = self(data, training=True)
-
-      loss = 0
-      for k in range(len(labels)):
-          l = lossfun[k](labels[k],preds[k])
-          l = tf.reduce_mean(l)
-          addhist('loss_' + str(k),l)
-          loss += l
-      addhist('loss',loss)
           
-    gradients = tape.gradient(loss,trainvars)
-    optimizer.apply_gradients(zip(gradients, trainvars))
-    return hist
+        def addhist(key,val):
+            hist[key] = [val]
         
+        hist = {}    
+        
+        data = images[0]
+        labels = images[1]
+        
+        trainvars = self.trainable_variables
+          
+        
+        with tf.GradientTape() as tape:
+          preds = self(data, training=True)
+    
+          loss = 0
+          for k in range(len(labels)):
+              l = lossfun[k](labels[k],preds[k])
+              l = tf.reduce_mean(l)
+              addhist('loss_' + str(k),l)
+              loss += l
+          addhist('loss',loss)
+              
+        gradients = tape.gradient(loss,trainvars)
+        optimizer.apply_gradients(zip(gradients, trainvars))
+        return hist
+      return train_step
     
 
 
@@ -1050,7 +1051,6 @@ class PatchWorkModel(Model):
         inputdata = c.getInputData(sampletyp)
         targetdata = c.getTargetData(sampletyp)
 
-        self.hist = {}        
 
         print("starting training")
         start = timer()
@@ -1059,21 +1059,21 @@ class PatchWorkModel(Model):
             targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
             dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
             dataset = dataset.batch(batch_size)
-            
+            this_trainstepfun = self.trainstepfun()
             numsamples = targetdata[0].shape[0]
             for e in range(epochs):
-                print("Epoch " + str(e) + "/"+str(epochs),end='  ')
-                print('#samples: ' + str(numsamples) + " batchsize: " + str(batch_size) , end='  ')
+                print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
+                print('#samples: ' + str(numsamples) + ", batchsize: " + str(batch_size) , end=',  ')
                 sttime = timer()
                 hist = {}
                 for element in dataset:
-                    cur_hist = self.train_step(element,loss,optimizer)    
+                    cur_hist = this_trainstepfun(element,loss,optimizer)    
                     print('.', end='')                
                 print('| ')                
                 self.myhist.accum('train',cur_hist,1,tensors=True)
                 self.trained_epochs+=1
                 end = timer()
-                print( "%.2f ms/sample,  " % (1000*(end-sttime)/numsamples),end=' ')
+                print( "  %.2f ms/sample,  " % (1000*(end-sttime)/numsamples),end=' ')
                 for k in cur_hist:
                     print(k + ":" + str(cur_hist[k][0]),end=" ")
                 print("")
