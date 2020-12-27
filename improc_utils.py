@@ -580,6 +580,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            annotations_selector=None, 
                            class_selector=None, 
                            exclude_incomplete_labels=True,
+                           use_unlabeled_data=False,
                            add_inverted_label=False,one_hot_index_list=None,max_num_data=None,
                            align_physical=True,
                            crop_fdim=None,
@@ -642,6 +643,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     classset = []
     resolutions = []
     subjects_names = []
+    if use_unlabeled_data:
+        classes = {}
+    
     
     print("going to load " + goingtoload + " items")
     for k in subjs:
@@ -649,7 +653,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
 
         crop_idx = []
 
-        if exclude_incomplete_labels:
+        if exclude_incomplete_labels and not use_unlabeled_data:
             incomplete = False
             for j in range(len(labels)):
                 if not k in labels[j]:
@@ -892,11 +896,18 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             
                         img = tf.convert_to_tensor(img,dtype=ftype)
                         labs.append(img)
+                        
+                    if use_unlabeled_data:
+                        classes[k] = 1
+                        
                 else:
                     notfound = False
                     print("  missing label " + str(j) + " for subject " + k + ", extending with zeros")
                     img = tf.zeros(imgs[0].shape,dtype=ftype)
                     labs.append(img)
+                    if use_unlabeled_data:
+                        classes[k] = 0
+                    
             
             if notfound:
                 continue

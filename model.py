@@ -427,7 +427,7 @@ class PatchWorkModel(Model):
     if len(output_nonspatial) > 0:
         output_nonspatial = [tf.reduce_max(tf.concat(output_nonspatial,1),1)]
             
-    return output_nonspatial + output 
+    return output + output_nonspatial
 
 
   def apply_full(self, data,
@@ -572,6 +572,7 @@ class PatchWorkModel(Model):
             if not stitch_immediate>1:
                 print(">>> stitching result")
                 start = timer()
+                r = r[0:self.cropper.depth]
                 if (self.spatial_train or max_patching) and not self.spatial_max_train:
                     for k in level:            
                       a,b = x.stitchResult(r,k)
@@ -904,9 +905,6 @@ class PatchWorkModel(Model):
   #   balance -  a dict {'ratio':r,'N':N,'numrounds':nr} , where r gives desired balance between
   #         positive and negative examples, N the number of tries per chunk and nr
   #         the number of chunks
-  #   num_samples_per_epoch - either -1 (all) or a the number of samples taken from 
-  #         trainset for patch generation (only possible if trainset is a list),
-  #         num_samples_per_epoch <= len(trainset)
   #   valid_ids a list of indices in trainset, corresponding to vaidation examples
   #         not used for training
   #   showplot - show loss info during training
@@ -925,6 +923,8 @@ class PatchWorkModel(Model):
             num_its=100,
             traintype='random',
             num_patches=10,
+            train_ids = None,
+            unlabeled_ids = [],
             valid_ids = [],
             valid_num_patches=None,
             batch_size=32,
@@ -933,12 +933,10 @@ class PatchWorkModel(Model):
             jitter=0,
             jitter_border_fix=False,
             balance=None,
-            num_samples_per_epoch=-1,
             showplot=True,
             autosave=True,
             augment=None,
             max_agglomerative=False,
-            sample_cache=None,
             rot_intrinsic=0,
             loss=None,
             optimizer=None,
@@ -977,22 +975,15 @@ class PatchWorkModel(Model):
         return c
     
     
-    @tf.function
-    def train_step(images,lossfun):
+    def train_step_supervised(images,lossfun):
             
       hist = {}
-      def addhist(key,val):
-          hist[key] = val
-      
-     # if not hasattr(self,'hist'):
-     #     self.hist = {}
       
       data = images[0]
       labels = images[1]
       
-      trainvars = self.trainable_variables
-        
-      
+      trainvars = self.block_variables
+              
       with tf.GradientTape() as tape:
         preds = self(data, training=True)
       
@@ -1000,14 +991,46 @@ class PatchWorkModel(Model):
         for k in range(len(labels)):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
-            addhist('loss_' + str(k),l)
+            #hist['loss_' + str(k)] = l
             loss += l
-        addhist('loss',loss)
+        hist['S_loss'] = loss
             
       gradients = tape.gradient(loss,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
       return hist
   
+    
+    def train_step_discriminator(labeled,unlabeled):
+      hist = {}
+
+      trainvars = self.disc_variables
+      
+      with tf.GradientTape() as tape:
+        pred_label = self(labeled, training=True)
+        pred_unlabel = self(unlabeled, training=True)
+        loss =  tf.keras.losses.binary_crossentropy(pred_label[-1],tf.ones_like(pred_label[-1]))
+        loss += tf.keras.losses.binary_crossentropy(pred_unlabel[-1],tf.zeros_like(pred_unlabel[-1]))
+        hist['D_loss'] = loss
+      gradients = tape.gradient(loss,trainvars)
+      self.optimizer.apply_gradients(zip(gradients, trainvars))
+
+      return hist
+        
+    def train_step_unsupervised(data):
+      hist = {}
+
+      trainvars = self.block_variables
+      
+      with tf.GradientTape() as tape:
+        pred = self(data, training=True)
+        loss =  tf.keras.losses.binary_crossentropy(pred[-1],tf.ones_like(pred[-1]))
+        hist['U_loss'] = loss
+
+      gradients = tape.gradient(loss,trainvars)
+      self.optimizer.apply_gradients(zip(gradients, trainvars))
+
+      return hist
+        
     # ---------------------------------------------------------------------------
     
     if patch_on_cpu:
@@ -1015,6 +1038,13 @@ class PatchWorkModel(Model):
     else:
         DEVCPU = "/gpu:0"
         
+    self.block_variables = list([])
+    for b in self.blocks:
+        self.block_variables += b.trainable_variables
+        
+    self.disc_variables = list([])
+    for b in self.classifiers:
+        self.disc_variables += b.trainable_variables
     
     if valid_num_patches is None:
         valid_num_patches = num_patches
@@ -1028,63 +1058,83 @@ class PatchWorkModel(Model):
         print("compiling ...")
         self.compile(loss=loss, optimizer=self.optimizer)
 
-    trainidx = list(range(len(trainset)))
+    if train_ids is not None:
+        trainidx = train_ids
+    else:
+        trainidx = list(range(len(trainset)))
     trainidx = [item for item in trainidx if item not in valid_ids]
+    trainidx = [item for item in trainidx if item not in unlabeled_ids]
 
-    if sample_cache is not None:
-        print("sampling patches for training")
-        start = timer()
-        c = getSample(trainidx)      
-        end = timer()
-        print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
-                     
+    GAN_train = len(unlabeled_ids) > 0
+               
             
     for i in range(num_its):
         print("----------------------------------------- iteration:" + str(i))
         
-        if sample_cache is None:
-            ### sampling
-            print("sampling patches for training")
+        ### sampling
+        print("sampling patches for training")
+        start = timer()
+        c_data = getSample(trainidx)      
+        end = timer()
+        print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
+        if GAN_train:
             start = timer()
-            if num_samples_per_epoch == -1:          
-               subset = trainidx
-            else:            
-               subset = sample(trainidx,num_samples_per_epoch)
-            c = getSample(subset)      
+            c_unlabeled_data = getSample(unlabeled_ids)              
             end = timer()
-            print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
+            print("time elapsed, sampling unlabeled data: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
 
         
         ### fitting
-      
         sampletyp = [None, -1]
         if max_agglomerative:
             sampletyp[1] = num_patches
-        if sample_cache is not None:
-            sampletyp[0] = sample(range(len(trainidx)*num_patches),sample_cache)
 
-        inputdata = c.getInputData(sampletyp)
-        targetdata = c.getTargetData(sampletyp)
-
+        inputdata = c_data.getInputData(sampletyp)
+        targetdata = c_data.getTargetData(sampletyp)
+        
+        if GAN_train:
+            unlabdata = c_unlabeled_data.getInputData(sampletyp)
 
         print("starting training")
         start = timer()
 
         if fit_type == 'custom':
+            
+            
             targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
             dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
             dataset = dataset.batch(batch_size)
- #           if not hasattr(self,'this_trainstepfun'):
- #               self.this_trainstepfun = self.trainstepfun()
+
+            if not hasattr(self,'train_step'):
+                self.train_step = tf.function(train_step_supervised)
+            
+            unlabset = []
+            if GAN_train:
+                unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).batch(batch_size)
+                if not hasattr(self,'train_step_discrim'):
+                    self.train_step_discrim = tf.function(train_step_discriminator)
+                    self.train_step_unsuper= tf.function(train_step_unsupervised)
+            
             numsamples = targetdata[0].shape[0]
             for e in range(epochs):
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
                 print('#samples: ' + str(numsamples) + ", batchsize: " + str(batch_size) , end=',  ')
                 sttime = timer()
                 log = []
-                for element in dataset:
-                    #cur_hist = self.this_trainstepfun(element,loss,self.optimizer)    
-                    log.append(train_step(element,loss))
+                diter = iter(dataset)
+                uiter = iter(unlabset)
+                while True:
+                    labeled_element = next(diter,None)
+                    if labeled_element is None:
+                        break                    
+                    losslog = self.train_step(labeled_element,loss)
+                    if GAN_train:    
+                        unlabeled_element = next(uiter,None)
+                        if unlabeled_element is not None:
+                            losslog.update( self.train_step_discrim(labeled_element[0],unlabeled_element) )
+                            losslog.update( self.train_step_unsuper(unlabeled_element) )
+                    
+                    log.append(losslog)
                     print('.', end='')                
                 print('| ')                
                 
@@ -1108,14 +1158,12 @@ class PatchWorkModel(Model):
             self.trained_epochs += epochs
         end = timer()
         
-        if sample_cache is None:
-            del c.scales
-            del c
-            del inputdata
-            del targetdata
+        del c_data.scales
+        del c_data
+        del inputdata
+        del targetdata
 
-            
-        
+                    
         print("time elapsed, fitting: " + str(end - start) )
         
         ### validation
