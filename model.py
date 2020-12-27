@@ -974,6 +974,23 @@ class PatchWorkModel(Model):
                                         jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=dphi)
         return c
     
+    @tf.function
+    def valid_step_supervised(images,lossfun):
+            
+      hist = {}
+      
+      data = images[0]
+      labels = images[1]
+      
+     
+      preds = self(data, training=False)
+      loss = 0
+      for k in range(len(labels)):          
+            l = lossfun[k](labels[k],preds[k])
+            l = tf.reduce_mean(l)
+            loss += l
+      hist['valid_S_loss'] = loss
+      return hist
     
     def train_step_supervised(images,lossfun):
             
@@ -1089,36 +1106,42 @@ class PatchWorkModel(Model):
         if max_agglomerative:
             sampletyp[1] = num_patches
 
-        inputdata = c_data.getInputData(sampletyp)
-        targetdata = c_data.getTargetData(sampletyp)
         
-        if GAN_train:
-            unlabdata = c_unlabeled_data.getInputData(sampletyp)
 
         print("starting training")
         start = timer()
 
         if fit_type == 'custom':
             
-            
+#            dataset = c_data.getDataset().batch(batch_size)
+            inputdata = c_data.getInputData(sampletyp)
+            targetdata = c_data.getTargetData(sampletyp)
             targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
             dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
             dataset = dataset.batch(batch_size)
+ 
 
             if not hasattr(self,'train_step'):
                 self.train_step = tf.function(train_step_supervised)
             
+            numsamples = tf.data.experimental.cardinality(dataset).numpy()
+            infostr = '#samples: ' + str(numsamples) 
+
             unlabset = []
+            numsamples_unl = 0
             if GAN_train:
+                unlabdata = c_unlabeled_data.getInputData(sampletyp)
                 unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).batch(batch_size)
+                numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy()
+                infostr = '#unlabeld_samples: ' + str(numsamples_unl) 
+
                 if not hasattr(self,'train_step_discrim'):
                     self.train_step_discrim = tf.function(train_step_discriminator)
                     self.train_step_unsuper= tf.function(train_step_unsupervised)
             
-            numsamples = targetdata[0].shape[0]
             for e in range(epochs):
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
-                print('#samples: ' + str(numsamples) + ", batchsize: " + str(batch_size) , end=',  ')
+                print(infostr + ", batchsize: " + str(batch_size) , end=',  ')
                 sttime = timer()
                 log = []
                 diter = iter(dataset)
@@ -1141,12 +1164,15 @@ class PatchWorkModel(Model):
                 log = self.myhist.accum('train',log,1,tensors=True,mean=True)
                 self.trained_epochs+=1
                 end = timer()
-                print( "  %.2f ms/sample,  " % (1000*(end-sttime)/numsamples),end=' ')
+                print( "  %.2f ms/sample,  " % (1000*(end-sttime)/(numsamples+numsamples_unl)),end=' ')
                 for k in log:
                     print(k + ":" + str(log[k][0]),end=" ")
                 print("")
 
         else:
+            inputdata = c_data.getInputData(sampletyp)
+            targetdata = c_data.getTargetData(sampletyp)
+            
             history = History()
             self.fit(inputdata,targetdata,
                       epochs=epochs,
@@ -1156,12 +1182,12 @@ class PatchWorkModel(Model):
                       callbacks=[history])
             self.myhist.accum('train',history.history,epochs)
             self.trained_epochs += epochs
+            del inputdata
+            del targetdata
         end = timer()
         
         del c_data.scales
         del c_data
-        del inputdata
-        del targetdata
 
                     
         print("time elapsed, fitting: " + str(end - start) )
@@ -1171,17 +1197,14 @@ class PatchWorkModel(Model):
             print("sampling patches for validation")
             c = getSample(valid_ids,True)    
             print("validating")
-            res = self.evaluate(c.getInputData(),c.getTargetData(),
-                  verbose=2)                
+            dataset = c.getDataset().batch(batch_size)
+            log = []
+            for images in dataset:
+                losslog = valid_step_supervised(images,loss)            
+                log.append(losslog)
+            log = self.myhist.accum('valid',log,1,tensors=True,mean=True)
 
-            if isinstance(self.myhist.validloss_hist,list):
-                self.myhist.validloss_hist =self.myhist.validloss_hist + [(self.trained_epochs,res)]
-            else:    
-                tmp = {}
-                for k in range(len(res)):
-                    tmp['validloss_' + str(k)] = [res[k]]
-                self.myhist.accum('valid',tmp,epochs)
-            
+
             c = None
             res = None
             

@@ -74,6 +74,13 @@ class CropInstance:
 
     return inp
 
+  def getDataset(self,sampletyp=None):                    
+      a = self.getInputData(sampletyp)
+      b = self.getTargetData(sampletyp)
+      targetset= tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,b)))
+      return tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(a),targetset))
+
+
   # get target training data 
   def getTargetData(self,sampletyp=None):
     if sampletyp == None:
