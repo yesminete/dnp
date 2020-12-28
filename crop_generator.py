@@ -274,7 +274,7 @@ class CropGenerator():
         
         
         cf = lambda p,k : math.pow(dest_factor*p/shape[k],1/depth)            
-        if initial_scale is not None:
+        if initial_scale is not None and depth > 1:
             cf = lambda p,k : math.pow(dest_factor*p/shape[k]/initial_scale,1/(depth-1))
 
         for k in range(0,ndim):
@@ -289,7 +289,7 @@ class CropGenerator():
             
         self.scale_fac = {}
  
-        if initial_scale is not None:
+        if initial_scale is not None and depth > 1:
             self.scale_fac['level0'] = [initial_scale]*ndim
             for k in range(1,depth):
                 self.scale_fac['level'+str(k)] = scfacs

@@ -54,9 +54,12 @@ class myHistory :
           mhist = {}
           for k in cur_hist[0]:
               mhist[k] = 0
+              cnt=0
               for j in range(len(cur_hist)):
-                  mhist[k] += cur_hist[j][k]
-              mhist[k] = [mhist[k]/len(cur_hist)]
+                  if k in cur_hist[j]:
+                     mhist[k] += cur_hist[j][k]
+                     cnt += 1
+              mhist[k] = [mhist[k]/cnt]
           cur_hist = mhist
 
           
@@ -941,7 +944,7 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None,
             patch_on_cpu=True,
-            fit_type='custom',
+            fit_type='fit',
             callback=None
             ):
       
@@ -1022,26 +1025,42 @@ class PatchWorkModel(Model):
 
       trainvars = self.disc_variables
       
+      # with tf.GradientTape() as tape:
+      #   pred_label = self(labeled, training=True)
+      #   pred_unlabel = self(unlabeled, training=True)
+      #   loss =  tf.keras.losses.binary_crossentropy(pred_label[-1],tf.ones_like(pred_label[-1]))
+      #   loss += tf.keras.losses.binary_crossentropy(pred_unlabel[-1],tf.zeros_like(pred_unlabel[-1]))
+      #   hist['D_loss'] = loss
+      # gradients = tape.gradient(loss,trainvars)
+      # self.optimizer.apply_gradients(zip(gradients, trainvars))
+
       with tf.GradientTape() as tape:
         pred_label = self(labeled, training=True)
-        pred_unlabel = self(unlabeled, training=True)
-        loss =  tf.keras.losses.binary_crossentropy(pred_label[-1],tf.ones_like(pred_label[-1]))
-        loss += tf.keras.losses.binary_crossentropy(pred_unlabel[-1],tf.zeros_like(pred_unlabel[-1]))
-        hist['D_loss'] = loss
-      gradients = tape.gradient(loss,trainvars)
+        loss1 =  tf.keras.losses.binary_crossentropy(tf.ones_like(pred_label[-1]),pred_label[-1])
+      gradients = tape.gradient(loss1,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
+
+      with tf.GradientTape() as tape:
+        pred_unlabel = self(unlabeled, training=True)
+        loss2 = tf.keras.losses.binary_crossentropy(tf.zeros_like(pred_unlabel[-1]),pred_unlabel[-1])
+      gradients = tape.gradient(loss2,trainvars)
+      self.optimizer.apply_gradients(zip(gradients, trainvars))
+
+      hist['D_loss'] = loss1+loss2
+
 
       return hist
         
-    def train_step_unsupervised(data):
+    def train_step_unsupervised(data,lam):
       hist = {}
 
       trainvars = self.block_variables
       
       with tf.GradientTape() as tape:
         pred = self(data, training=True)
-        loss =  tf.keras.losses.binary_crossentropy(pred[-1],tf.ones_like(pred[-1]))
+        loss =  tf.keras.losses.binary_crossentropy(tf.ones_like(pred[-1]),pred[-1])
         hist['U_loss'] = loss
+        loss = loss*lam
 
       gradients = tape.gradient(loss,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
@@ -1063,6 +1082,7 @@ class PatchWorkModel(Model):
     for b in self.classifiers:
         self.disc_variables += b.trainable_variables
     
+    
     if valid_num_patches is None:
         valid_num_patches = num_patches
  
@@ -1070,10 +1090,17 @@ class PatchWorkModel(Model):
         if optimizer is None:
             optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
         self.optimizer = optimizer            
- 
+
+    if loss is None:
+        loss = []
+        for k in range(self.cropper.depth-1):
+            loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
+        loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
+    
     if loss is not None and fit_type=='fit':
         print("compiling ...")
         self.compile(loss=loss, optimizer=self.optimizer)
+
 
     if train_ids is not None:
         trainidx = train_ids
@@ -1084,6 +1111,10 @@ class PatchWorkModel(Model):
 
     GAN_train = len(unlabeled_ids) > 0
                
+    print("labeled train imgs: "+ str(len(trainidx)))
+    if GAN_train:
+        print("unlabeled imgs: "+ str(len(unlabeled_ids)))        
+    print("validate imgs: "+ str(len(valid_ids)))
             
     for i in range(num_its):
         print("----------------------------------------- iteration:" + str(i))
@@ -1110,30 +1141,27 @@ class PatchWorkModel(Model):
 
         print("starting training")
         start = timer()
+        
+        lam = tf.convert_to_tensor(0.1)
+
 
         if fit_type == 'custom':
             
-#            dataset = c_data.getDataset().batch(batch_size)
-            inputdata = c_data.getInputData(sampletyp)
-            targetdata = c_data.getTargetData(sampletyp)
-            targetset = tf.data.Dataset.zip(tuple(map(tf.data.Dataset.from_tensor_slices,targetdata)))
-            dataset = tf.data.Dataset.zip((tf.data.Dataset.from_tensor_slices(inputdata),targetset))
-            dataset = dataset.batch(batch_size)
- 
+            dataset = c_data.getDataset().batch(batch_size,drop_remainder=True)
 
             if not hasattr(self,'train_step'):
                 self.train_step = tf.function(train_step_supervised)
             
-            numsamples = tf.data.experimental.cardinality(dataset).numpy()
+            numsamples = tf.data.experimental.cardinality(dataset).numpy() * batch_size
             infostr = '#samples: ' + str(numsamples) 
 
             unlabset = []
             numsamples_unl = 0
             if GAN_train:
                 unlabdata = c_unlabeled_data.getInputData(sampletyp)
-                unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).batch(batch_size)
-                numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy()
-                infostr = '#unlabeld_samples: ' + str(numsamples_unl) 
+                unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).batch(batch_size,drop_remainder=True)
+                numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy() * batch_size
+                infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
 
                 if not hasattr(self,'train_step_discrim'):
                     self.train_step_discrim = tf.function(train_step_discriminator)
@@ -1147,24 +1175,26 @@ class PatchWorkModel(Model):
                 diter = iter(dataset)
                 uiter = iter(unlabset)
                 while True:
+                    losslog = {}
                     labeled_element = next(diter,None)
-                    if labeled_element is None:
-                        break                    
-                    losslog = self.train_step(labeled_element,loss)
+                    if labeled_element is not None:
+                        losslog.update( self.train_step(labeled_element,loss) )
                     if GAN_train:    
                         unlabeled_element = next(uiter,None)
                         if unlabeled_element is not None:
-                            losslog.update( self.train_step_discrim(labeled_element[0],unlabeled_element) )
-                            losslog.update( self.train_step_unsuper(unlabeled_element) )
+                            if labeled_element is not None:                            
+                                losslog.update( self.train_step_discrim(labeled_element[0],unlabeled_element) )
+                            losslog.update( self.train_step_unsuper(unlabeled_element,lam) )
+                    if labeled_element is None and (not GAN_train or unlabeled_element is None):
+                        break
                     
                     log.append(losslog)
                     print('.', end='')                
-                print('| ')                
                 
                 log = self.myhist.accum('train',log,1,tensors=True,mean=True)
                 self.trained_epochs+=1
                 end = timer()
-                print( "  %.2f ms/sample,  " % (1000*(end-sttime)/(numsamples+numsamples_unl)),end=' ')
+                print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
                 for k in log:
                     print(k + ":" + str(log[k][0]),end=" ")
                 print("")
@@ -1202,7 +1232,13 @@ class PatchWorkModel(Model):
             for images in dataset:
                 losslog = valid_step_supervised(images,loss)            
                 log.append(losslog)
+                print('.', end='')                
+            print('| ')                
+                
             log = self.myhist.accum('valid',log,1,tensors=True,mean=True)
+            for k in log:
+                print(k + ":" + str(log[k][0]),end=" ")
+            print("")
 
 
             c = None
