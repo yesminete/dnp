@@ -451,6 +451,7 @@ class PatchWorkModel(Model):
                  branch_factor=1,
                  scale_to_original=True,
                  verbose=False,
+                 init=False,
                  num_chunks=1,
                  patch_size_factor=1,
                  lazyEval = None,
@@ -539,14 +540,7 @@ class PatchWorkModel(Model):
 
             print(">>> applying network -------------------------------------------------")
             start = timer()
-            # use predict only if batch_size is the same across patch levels
-            if False: #(generate_type == 'random' or generate_type == 'tree_full') and lazyEval is None and branch_factor==1:
-                r = self.predict(data_)
-                if not isinstance(r,list):
-                    r = [r]
-            # otherwise use ordinary apply
-            else:                
-                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT)
+            r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
             print(">>> time elapsed, network application: " + str(timer() - start) )
             if max_patching:
                 
@@ -881,7 +875,7 @@ class PatchWorkModel(Model):
             else:
                 initdat = tf.ones([1,32,32, model.input_fdim])    
             print("----------------- load/init network by minimal application")
-            dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=False,scale_to_original=False,generate_type='random',repetitions=1)        
+            dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=False,scale_to_original=False,generate_type='random',repetitions=1,init=True)        
             print("----------------- model and weights loaded")
         except:
             if not notmpfile:
