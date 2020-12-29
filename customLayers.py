@@ -17,7 +17,7 @@ import patchwork
 custom_layers = {}
 
 
-
+# https://stackoverflow.com/questions/61649083/tf-keras-how-to-reuse-resnet-layers-as-customize-layer-in-customize-model
 
 def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
                   padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):

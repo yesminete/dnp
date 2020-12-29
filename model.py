@@ -126,13 +126,15 @@ class myHistory :
             plt.grid()
             if self.model.modelname is not None:
                 ps = os.path.split(self.model.modelname)
-                tit = os.path.split(ps[0])[1] + "/" + ps[1];
+                tit = os.path.split(ps[0])[1] + "/" + ps[1] + " (" + str(self.model.train_cycle) + ")"
                 plt.title(tit)
                 plt.pause(0.001)  
                 plt.savefig(self.model.modelname + ".png")
-            plt.pause(0.001)  
-    except:
-        if 'DISPLAY' in os.environ:
+            else:
+                plt.pause(0.001)  
+    except Exception as e:
+        if 'DISPLAY' in os.environ:        
+            print("Exception:" + str(e))
             print("problems during plotting. Wrong Display?? (DISPLAY="+os.environ['DISPLAY']+")")
         else:                                                                                       
             print("problems during plotting. No DISPLAY set!")
@@ -167,6 +169,7 @@ class PatchWorkModel(Model):
                validloss_hist = None,
                trained_epochs = 0,
                modelname = None,
+               train_cycle = None,
                input_fdim = None
                ):
     super().__init__()
@@ -206,6 +209,7 @@ class PatchWorkModel(Model):
     
     self.trained_epochs = trained_epochs
     self.modelname = modelname
+    self.train_cycle = train_cycle
     self.input_fdim = input_fdim
     
     
@@ -276,6 +280,7 @@ class PatchWorkModel(Model):
                'trainloss_hist':self.myhist.trainloss_hist,
                'validloss_hist':self.myhist.validloss_hist,
                'trained_epochs':self.trained_epochs,
+               'train_cycle':self.train_cycle,
                'input_fdim':self.input_fdim
             }
 
@@ -779,11 +784,22 @@ class PatchWorkModel(Model):
      with open(outname,'w') as outfile:
          json.dump(self, outfile,cls=patchworkModelEncoder)
      
-     outname = fname + ".tf"        
+     if self.train_cycle is not None:         
+         import os
+         ps = list(os.path.split(fname))
+         ps[-1] = ps[-1] + ".weights"
+         outpath = "/".join(ps)
+         if not os.path.exists(outpath):
+             os.mkdir(outpath)
+         ps.append("data."+str(self.train_cycle)+".tf")
+         outname =  "/".join(ps)
+     else:         
+         outname = fname + ".tf"
      self.save_weights(outname,save_format='tf')
 
   @staticmethod
-  def load(name,custom_objects={},show_history=False,immediate_init=True,notmpfile=False):
+  def load(name,custom_objects={},show_history=False,immediate_init=True,notmpfile=False,train_cycle=-1,
+           clsCreator=None     ):
 
     custom_objects = custom_layers
 
@@ -799,10 +815,6 @@ class PatchWorkModel(Model):
     blkCreator = lambda level,outK=0 : createCNNBlockFromObj(blocks[level],custom_objects=custom_objects)
     del x['blocks']
 
-
-
-
-    clsCreator = None
     if 'classifiers' in x:
         classi = x['classifiers']
         del x['classifiers']
@@ -831,12 +843,20 @@ class PatchWorkModel(Model):
                            preprocCreator=preprocCreator,
                            finalBlock=finalBlock,**x)
 
+    weightspath = name + ".tf"
+    if train_cycle == -1:
+        if model.train_cycle is not None:
+            weightspath = name + ".weights/data."+str(model.train_cycle)+".tf"
+    elif train_cycle is not None:
+        weightspath = name + ".weights/data."+str(train_cycle)+".tf"
+        
+    print("loading weights from " + weightspath)
 
-
+    notmpfile = True
     if immediate_init and model.input_fdim is not None: 
 
         if notmpfile:
-            model.load_weights(name + ".tf")   
+            model.load_weights(weightspath)   
         else:
                 
             import tempfile
@@ -850,7 +870,8 @@ class PatchWorkModel(Model):
                    shutil.copy(filename, tmpdir)
             head_tail = os.path.split(name) 
             loading_name_tmp = os.path.join(tmpdir, head_tail[1])
-            model.load_weights(loading_name_tmp + ".tf")            
+                        
+            model.load_weights(loading_name_tmp + suffix)            
         
         
         try:
@@ -869,7 +890,7 @@ class PatchWorkModel(Model):
         if not notmpfile:
             shutil.rmtree(tmpdir)
     else:        
-        model.load_weights(name + ".tf")   
+        model.load_weights(weightspath)   
 
 
     model.modelname = name
@@ -933,6 +954,7 @@ class PatchWorkModel(Model):
             batch_size=32,
             verbose=1,
             steps_per_epoch=None,
+            inc_train_cycle=True,
             jitter=0,
             jitter_border_fix=False,
             balance=None,
@@ -944,7 +966,7 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None,
             patch_on_cpu=True,
-            fit_type='fit',
+            fit_type='keras',
             callback=None
             ):
       
@@ -1008,10 +1030,12 @@ class PatchWorkModel(Model):
         preds = self(data, training=True)
       
         loss = 0
-        for k in range(len(labels)):
+        depth = len(labels)
+        for k in range(depth):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
-            #hist['loss_' + str(k)] = l
+            if depth > 1:
+                hist['loss_' + str(k)] = l
             loss += l
         hist['S_loss'] = loss
             
@@ -1074,6 +1098,11 @@ class PatchWorkModel(Model):
     else:
         DEVCPU = "/gpu:0"
         
+    if self.train_cycle is None:
+       self.train_cycle = 0   
+    if inc_train_cycle:
+        self.train_cycle += 1
+        
     self.block_variables = list([])
     for b in self.blocks:
         self.block_variables += b.trainable_variables
@@ -1097,7 +1126,7 @@ class PatchWorkModel(Model):
             loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
         loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
     
-    if loss is not None and fit_type=='fit':
+    if loss is not None and fit_type=='keras':
         print("compiling ...")
         self.compile(loss=loss, optimizer=self.optimizer)
 
@@ -1124,12 +1153,18 @@ class PatchWorkModel(Model):
         start = timer()
         c_data = getSample(trainidx)      
         end = timer()
-        print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
+        total_numpatches = len(trainidx)*num_patches
+        if batch_size > total_numpatches:
+            batch_size = total_numpatches        
+        print("time elapsed, sampling: " + str(end - start) + " (for " + str(total_numpatches) + ")")
         if GAN_train:
             start = timer()
             c_unlabeled_data = getSample(unlabeled_ids)              
             end = timer()
-            print("time elapsed, sampling unlabeled data: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
+            total_unlabeled_numpatches = len(unlabeled_ids)*num_patches
+            if batch_size > total_unlabeled_numpatches:
+                batch_size = total_unlabeled_numpatches
+            print("time elapsed, sampling unlabeled data: " + str(end - start) + " (for " + str(total_unlabeled_numpatches) + ")")
 
         
         ### fitting
@@ -1137,7 +1172,8 @@ class PatchWorkModel(Model):
         if max_agglomerative:
             sampletyp[1] = num_patches
 
-        
+
+            
 
         print("starting training")
         start = timer()
@@ -1147,7 +1183,7 @@ class PatchWorkModel(Model):
 
         if fit_type == 'custom':
             
-            dataset = c_data.getDataset().batch(batch_size,drop_remainder=True)
+            dataset = c_data.getDataset().shuffle(total_numpatches).batch(batch_size,drop_remainder=True)
 
             if not hasattr(self,'train_step'):
                 self.train_step = tf.function(train_step_supervised)
@@ -1159,7 +1195,7 @@ class PatchWorkModel(Model):
             numsamples_unl = 0
             if GAN_train:
                 unlabdata = c_unlabeled_data.getInputData(sampletyp)
-                unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).batch(batch_size,drop_remainder=True)
+                unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).shuffle(total_unlabeled_numpatches).batch(batch_size,drop_remainder=True)
                 numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy() * batch_size
                 infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
 
