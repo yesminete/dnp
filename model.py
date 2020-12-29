@@ -393,7 +393,7 @@ class PatchWorkModel(Model):
          res=inp
       else:
          res = self.blocks[k](inp,training=training)      
-         if k < len(self.classifiers):
+         if k < len(self.classifiers) and training:
             # res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
