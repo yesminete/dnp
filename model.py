@@ -394,7 +394,8 @@ class PatchWorkModel(Model):
       else:
          res = self.blocks[k](inp,training=training)      
          if k < len(self.classifiers):
-             res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
+            # res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
+             res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
          
          outs = res[...,0:self.num_labels]
@@ -971,7 +972,7 @@ class PatchWorkModel(Model):
             ):
       
 
-    def getSample(subset,valid=False):
+    def getSample(subset,np,valid=False):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
         rset = None
@@ -989,9 +990,6 @@ class PatchWorkModel(Model):
         with tf.device(DEVCPU):    
     
             if traintype == 'random':
-                np = num_patches
-                if valid:
-                    np = valid_num_patches
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
                                         num_patches=np,augment=augment,balance=balance,dphi=dphi)
             elif traintype == 'tree':
@@ -1035,7 +1033,7 @@ class PatchWorkModel(Model):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
             if depth > 1:
-                hist['loss_' + str(k)] = l
+                hist['output_' + str(k) + '_loss'] = l
             loss += l
         hist['S_loss'] = loss
             
@@ -1151,17 +1149,21 @@ class PatchWorkModel(Model):
         ### sampling
         print("sampling patches for training")
         start = timer()
-        c_data = getSample(trainidx)      
+        c_data = getSample(trainidx,num_patches)      
         end = timer()
         total_numpatches = len(trainidx)*num_patches
         if batch_size > total_numpatches:
             batch_size = total_numpatches        
         print("time elapsed, sampling: " + str(end - start) + " (for " + str(total_numpatches) + ")")
         if GAN_train:
+            if total_numpatches == 0:
+                unlabeled_num_patches = num_patches
+            else:
+                unlabeled_num_patches = total_numpatches // len(unlabeled_ids)
             start = timer()
-            c_unlabeled_data = getSample(unlabeled_ids)              
+            c_unlabeled_data = getSample(unlabeled_ids,unlabeled_num_patches)              
             end = timer()
-            total_unlabeled_numpatches = len(unlabeled_ids)*num_patches
+            total_unlabeled_numpatches = len(unlabeled_ids)*unlabeled_num_patches
             if batch_size > total_unlabeled_numpatches:
                 batch_size = total_unlabeled_numpatches
             print("time elapsed, sampling unlabeled data: " + str(end - start) + " (for " + str(total_unlabeled_numpatches) + ")")
@@ -1261,7 +1263,7 @@ class PatchWorkModel(Model):
         ### validation
         if len(valid_ids) > 0:
             print("sampling patches for validation")
-            c = getSample(valid_ids,True)    
+            c = getSample(valid_ids,valid_num_patches,valid=True)    
             print("validating")
             dataset = c.getDataset().batch(batch_size)
             log = []
