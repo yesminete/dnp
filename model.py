@@ -962,6 +962,9 @@ class PatchWorkModel(Model):
             optimizer=None,
             patch_on_cpu=True,
             fit_type='keras',
+            train_S = True,
+            train_U = True,
+            train_D = True,
             callback=None
             ):
       
@@ -1001,6 +1004,7 @@ class PatchWorkModel(Model):
       
      
       preds = self(data, training=False)
+      print(">>>"+str(len(preds)))
       loss = 0
       for k in range(len(labels)):          
             l = lossfun[k](labels[k],preds[k])
@@ -1027,7 +1031,7 @@ class PatchWorkModel(Model):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
             if depth > 1:
-                hist['output_' + str(k) + '_loss'] = l
+                hist['output_' + str(k+1) + '_loss'] = l
             loss += l
         hist['S_loss'] = loss
             
@@ -1209,14 +1213,15 @@ class PatchWorkModel(Model):
                 while True:
                     losslog = {}
                     labeled_element = next(diter,None)
-                    if labeled_element is not None:
+                    if labeled_element is not None and train_S:
                         losslog.update( self.train_step(labeled_element,loss) )
                     if GAN_train:    
                         unlabeled_element = next(uiter,None)
                         if unlabeled_element is not None:
-                            if labeled_element is not None:                            
+                            if labeled_element is not None and train_D:                            
                                 losslog.update( self.train_step_discrim(labeled_element[0],unlabeled_element) )
-                            losslog.update( self.train_step_unsuper(unlabeled_element,lam) )
+                            if train_U:
+                                losslog.update( self.train_step_unsuper(unlabeled_element,lam) )
                     if labeled_element is None and (not GAN_train or unlabeled_element is None):
                         break
                     
