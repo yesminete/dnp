@@ -1004,7 +1004,6 @@ class PatchWorkModel(Model):
       
      
       preds = self(data, training=False)
-      print(">>>"+str(len(preds)))
       loss = 0
       for k in range(len(labels)):          
             l = lossfun[k](labels[k],preds[k])

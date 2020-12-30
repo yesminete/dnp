@@ -316,6 +316,19 @@ class sigmoid_softmax(layers.Layer):
 custom_layers['sigmoid_softmax'] = sigmoid_softmax
 
 
+class ct_preproc(layers.Layer):
+
+  def __init__(self,**kwargs):
+    super().__init__(**kwargs)
+  def call(self, image):       
+      x = tf.math.log(tf.math.maximum(image+200,0.001))
+      return tf.math.maximum(x-4,0)
+
+    
+custom_layers['ct_preproc'] = ct_preproc
+
+
+
 class normalizedConvolution(layers.Layer):
 
   def __init__(self, nD=3, out_n0=7,  ksize0=3, 
