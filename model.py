@@ -211,6 +211,8 @@ class PatchWorkModel(Model):
     self.modelname = modelname
     self.train_cycle = train_cycle
     self.input_fdim = input_fdim
+    self.compiled = {}
+    
     
     
     if modelname is not None and path.exists(modelname + ".json"):
@@ -1107,6 +1109,7 @@ class PatchWorkModel(Model):
         self.disc_variables += b.trainable_variables
     
     
+    
     if valid_num_patches is None:
         valid_num_patches = num_patches
  
@@ -1184,8 +1187,9 @@ class PatchWorkModel(Model):
             
             dataset = c_data.getDataset().shuffle(total_numpatches).batch(batch_size,drop_remainder=True)
 
-            if not hasattr(self,'train_step'):
-                self.train_step = tf.function(train_step_supervised)
+            if not "train_step" in self.compiled:
+                self.compiled["train_step"] = tf.function(train_step_supervised)
+                
             
             numsamples = tf.data.experimental.cardinality(dataset).numpy() * batch_size
             infostr = '#samples: ' + str(numsamples) 
@@ -1198,9 +1202,9 @@ class PatchWorkModel(Model):
                 numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy() * batch_size
                 infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
 
-                if not hasattr(self,'train_step_discrim'):
-                    self.train_step_discrim = tf.function(train_step_discriminator)
-                    self.train_step_unsuper= tf.function(train_step_unsupervised)
+            if not "train_step_discrim" in self.compiled:
+                    self.compiled["train_step_discrim"] = tf.function(train_step_discriminator)
+                    self.compiled["train_step_unsuper"] = tf.function(train_step_unsupervised)
             
             for e in range(epochs):
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
@@ -1213,14 +1217,14 @@ class PatchWorkModel(Model):
                     losslog = {}
                     labeled_element = next(diter,None)
                     if labeled_element is not None and train_S:
-                        losslog.update( self.train_step(labeled_element,loss) )
+                        losslog.update( self.compiled["train_step"](labeled_element,loss) )
                     if GAN_train:    
                         unlabeled_element = next(uiter,None)
                         if unlabeled_element is not None:
                             if labeled_element is not None and train_D:                            
-                                losslog.update( self.train_step_discrim(labeled_element[0],unlabeled_element) )
+                                losslog.update( self.compiled["train_step_discrim"](labeled_element[0],unlabeled_element) )
                             if train_U:
-                                losslog.update( self.train_step_unsuper(unlabeled_element,lam) )
+                                losslog.update( self.compiled["train_step_unsuper"](unlabeled_element,lam) )
                     if labeled_element is None and (not GAN_train or unlabeled_element is None):
                         break
                     
