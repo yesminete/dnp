@@ -1118,11 +1118,15 @@ class PatchWorkModel(Model):
             optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
         self.optimizer = optimizer            
 
-    if loss is None:
+    if loss is None and not hasattr(self,'loss'):
         loss = []
         for k in range(self.cropper.depth-1):
             loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
         loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
+        self.loss = loss
+    
+    loss = self.loss
+    
     
     if loss is not None and fit_type=='keras':
         print("compiling ...")
