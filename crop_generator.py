@@ -380,6 +380,8 @@ class CropGenerator():
     N = len(trainset)
 
     pool = []
+    
+    balances = [[]]*self.depth
 
     for j in range(N):
         
@@ -452,10 +454,11 @@ class CropGenerator():
                     label_range = tf.cast(balance['label_range'],dtype=tf.int32)
                     labs = tf.gather(labs,label_range,axis=self.ndim+1)                            
               indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
-              indicator = tf.cast(indicator>0,dtype=tf.float32)    
-              cur_ratio = tf.math.reduce_mean(indicator,axis=0)      
+              indicator = tf.cast(indicator>0,dtype=tf.float32)                                
+              cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
+              balances[k].append(cur_ratio)
               if verbose:
-                  print(' level: ' + str(k) + ' balance: ' + str(cur_ratio.numpy()) )
+                  print(' level: ' + str(k) + ' balance: ' + str(cur_ratio[0].numpy()) )
 
         
       # if we want to train in tree mode we have to complete the tree
@@ -491,6 +494,13 @@ class CropGenerator():
     intermediate_loss = True     # whether we save output of intermediate layers
     if self.model is not None:
       intermediate_loss = self.model.intermediate_loss
+      
+    if len(balances[0]) > 0:
+        for k in range(self.depth):
+            cur_ratio = tf.reduce_mean(tf.concat(balances[k],1),1)
+            print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
+        
+    
 
     return CropInstance(pool,self,intermediate_loss)
 
