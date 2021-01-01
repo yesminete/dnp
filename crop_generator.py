@@ -381,7 +381,9 @@ class CropGenerator():
 
     pool = []
     
-    balances = [[]]*self.depth
+    balances = [None]*self.depth
+    for k in range(self.depth):
+        balances[k] = []
 
     for j in range(N):
         
@@ -457,8 +459,8 @@ class CropGenerator():
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
               balances[k].append(cur_ratio)
-              if verbose:
-                  print(' level: ' + str(k) + ' balance: ' + str(cur_ratio[0].numpy()) )
+          if verbose:
+              print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
 
         
       # if we want to train in tree mode we have to complete the tree
