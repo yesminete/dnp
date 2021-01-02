@@ -160,7 +160,7 @@ def stitchResult_withstride(r,level, scales,scatter_type,stride):
     if scatter_type=='NN':        
         return tf.scatter_nd(pbox_index,qq,sha)/(0.000001+tf.scatter_nd(pbox_index,qq*0+1,sha))
     else:
-        assert 'not yet implemented'
+        assert False,'not yet implemented'
 
 def scatter_interp(x,data,sz):
     
@@ -406,11 +406,14 @@ class CropGenerator():
       if self.normalize_input == 'ct':
          trainset_ = tf.math.log(tf.math.maximum(trainset_+200,0.001))
          trainset_ = tf.math.maximum(trainset_-4,0)/10
-      if self.normalize_input == 'max':
+      elif self.normalize_input == 'max':
          trainset_ = trainset_/tf.reduce_max(trainset_,keepdims=True,axis=range(1,self.ndim+1))   
-      if self.normalize_input == 'mean':
+      elif self.normalize_input == 'mean':
          trainset_ = trainset_/tf.reduce_mean(trainset_,keepdims=True,axis=range(1,self.ndim+1))   
-      
+      elif self.normalize_input is not None:
+         assert False,'not valid normalize_input'
+          
+          
       # if resolutions are also passed
       resolution_ = None
       if resolutions is not None:
@@ -459,8 +462,8 @@ class CropGenerator():
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
               balances[k].append(cur_ratio)
-          if verbose:
-              print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
+              if verbose:
+                  print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
 
         
       # if we want to train in tree mode we have to complete the tree
@@ -1020,7 +1023,7 @@ class CropGenerator():
         elif generate_type == 'tree':     # 
           replicate_patches = 1
         else:
-          assert 'not valid generate_type'
+          assert False,'not valid generate_type'
       else:
         images = crops['data_cropped']
         if generate_type == 'random':     #
@@ -1028,7 +1031,7 @@ class CropGenerator():
         elif generate_type == 'tree':     # 
           replicate_patches = None
         else:
-          assert 'not valid generate_type'
+          assert False,'not valid generate_type'
       sz = images.shape
       bsize = sz[0] 
       
