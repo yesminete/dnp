@@ -980,6 +980,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         if max_num_data is not None and len(trainset) >= max_num_data:
             break
         
+    print("")
+        
     if classes is not None and labels is not None and len(labelset) > 0:
         return trainset,labelset,classset,resolutions,subjects_names;
         

@@ -116,7 +116,7 @@ class myHistory :
                     x = [ i for i, j in loss_hist[k] ]
                     y = [ j for i, j in loss_hist[k] ]
                     n = int(np.ceil(len(y)/20.0))
-                    y = np.convolve(y,np.ones([n]),mode='valid')
+                    y = np.convolve(y,np.ones([n])/n,mode='valid')
                     if n > 1:
                         y = np.concatenate([np.ones([n-1])*y[0],y],0)
                                         
