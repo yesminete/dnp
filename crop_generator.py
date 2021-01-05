@@ -406,7 +406,7 @@ class CropGenerator():
       if self.normalize_input == 'ct':
          trainset_ = tf.math.log(tf.math.maximum(trainset_+200,0.001))
          trainset_ = tf.math.maximum(trainset_-4,0)/10
-      if self.normalize_input == 'ct2':
+      elif self.normalize_input == 'ct2':
          trainset_ = tf.math.log(tf.math.maximum(trainset_+1000,0.001))
       elif self.normalize_input == 'max':
          trainset_ = trainset_/tf.reduce_max(trainset_,keepdims=True,axis=range(1,self.ndim+1))   
