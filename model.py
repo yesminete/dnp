@@ -115,6 +115,11 @@ class myHistory :
                 for k in sorted(loss_hist):
                     x = [ i for i, j in loss_hist[k] ]
                     y = [ j for i, j in loss_hist[k] ]
+                    n = int(np.ceil(len(y)/20.0))
+                    y = np.convolve(y,np.ones([n]),mode='valid')
+                    if n > 1:
+                        y = np.concatenate([np.ones([n-1])*y[0],y],0)
+                                        
                     if txt == "":                     
                         plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
                     else:

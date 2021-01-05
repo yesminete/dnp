@@ -587,6 +587,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
                            crop_only_nonzero=False,
+                           verbose=False,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
 
@@ -649,7 +650,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     
     print("going to load " + goingtoload + " items")
     for k in subjs:
-        print("loading: " + k)
+        if verbose:
+            print("loading: " + k)
+        else:
+            print(".",end="")
 
         crop_idx = []
 
@@ -657,7 +661,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             incomplete = False
             for j in range(len(labels)):
                 if not k in labels[j]:
-                    print("  missing label " + str(j) + " for subject " + k + ", skipping")
+                    if verbose:
+                        print("  missing label " + str(j) + " for subject " + k + ", skipping")
+                    else:
+                        print(".",end="")
                     incomplete = True
                     break
             if incomplete:
@@ -675,8 +682,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                 fname = item['FilePath']
             else:
                 fname = item
-            img = load_nifti(fname)        
-            print("   loading file:" + fname)           
+            img = load_nifti(fname)      
+            if verbose:            
+                    print("   loading file:" + fname)           
             resolution = img.header['pixdim'][1:4]
             header = img.header
             if template_nii is None:
@@ -857,7 +865,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     
                     else:
                         img = load_nifti(fname)   
-                        print("   loading file:" + fname)
+                        if verbose:
+                            print("   loading file:" + fname)
                         #if nD == 3:
                         sz1 = img.header.get_data_shape()
                         sz2 = template_nii.header.get_data_shape()
