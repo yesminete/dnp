@@ -304,6 +304,79 @@ class identity(layers.Layer):
 custom_layers['identity'] = identity
 
 
+
+class HistoMaker(layers.Layer):
+
+  def __init__(self,nD=2,out=4,scfac=0.2,init='ct',normalize=True,trainable=False,**kwargs):
+    super().__init__(**kwargs)
+
+    self.init = init
+    self.scfac = scfac
+    self.nD = nD
+    self.normalize = normalize
+    self.trainable = trainable
+    
+    if init is None:
+        if nD == 2:
+            self.conv = layers.Conv2D(out,1)
+        else:
+            self.conv = layers.Conv3D(out,1)
+    else:
+        if isinstance(init,str):
+            if init == 'ct':        
+                self.centers = np.array([-1000,-500,-100,-50,-25,0,25,50,100,500,1000])
+            else:
+                assert False, "init not defined for histolayer"
+        else:
+            self.centers = np.array(init)
+        width = np.convolve(self.centers,[-1,0,1],mode='valid')
+        self.width = np.abs(np.append(np.append([width[0]],width),[width[-1]]))*scfac
+        self.centers = -self.centers/self.width
+        out = len(self.centers)
+
+        def bias_initializer(shape,dtype):
+            bias = tf.cast(self.centers,dtype=dtype)
+            bias = tf.reshape(bias,shape)
+            return bias
+    
+        def kernel_initializer(shape,dtype):
+            sc = 1/tf.cast(self.width,dtype=dtype)
+            sc = tf.reshape(sc,shape)
+            return sc
+
+        if nD == 2:
+            self.conv = layers.Conv2D(out,1,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer)
+        else:
+            self.conv = layers.Conv3D(out,1,kernel_initializer=kernel_initializer,bias_initializer=bias_initializer)
+    
+    self.out = out
+    self.conv.trainable = trainable
+
+    
+    
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'scfac': self.scfac,
+            'normalize': self.normalize,            
+            'init': self.init,
+            'out': self.out,
+            'nD': self.nD,
+        } )    
+        return config                  
+      
+  def call(self, image):         
+      x = self.conv(image)
+      ch = 1/tf.math.cosh(x)
+      if self.normalize:
+          return ch / tf.reduce_sum(ch,axis=-1,keepdims=True)
+      else:
+          return ch
+
+custom_layers['HistoMaker'] = HistoMaker
+  
+
 class sigmoid_softmax(layers.Layer):
 
   def __init__(self,**kwargs):
