@@ -785,7 +785,7 @@ class PatchWorkModel(Model):
      outname = fname + ".json"
      with open(outname,'w') as outfile:
          json.dump(self, outfile,cls=patchworkModelEncoder)
-     
+     print(fname +" saved!")
      if self.train_cycle is not None:         
          import os
          ps = list(os.path.split(fname))
