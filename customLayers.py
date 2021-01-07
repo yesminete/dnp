@@ -100,7 +100,7 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
 
 
 
-def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
+def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False,
                   padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
 
   if nD == 3:
@@ -189,8 +189,11 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
                 strides[r] = 1
                 
     
-    
-  theLayers["9_final"] =  [layers.Dropout(rate=0.5), conv(outK)]
+  if dropout:
+      theLayers["9_final"] =  [layers.Dropout(rate=0.5), conv(outK)]
+  else:
+      theLayers["9_final"] =  conv(outK)
+      
   return patchwork.CNNblock(theLayers,verbose=verbose)
 
 
@@ -307,7 +310,7 @@ custom_layers['identity'] = identity
 
 class HistoMaker(layers.Layer):
 
-  def __init__(self,nD=2,out=4,scfac=0.2,init='ct',normalize=True,trainable=False,**kwargs):
+  def __init__(self,nD=2,out=4,scfac=0.2,scaling=1.0,init='ct',normalize=True,trainable=False,dropout=False,**kwargs):
     super().__init__(**kwargs)
 
     self.init = init
@@ -315,6 +318,13 @@ class HistoMaker(layers.Layer):
     self.nD = nD
     self.normalize = normalize
     self.trainable = trainable
+    self.dropout = dropout
+    self.scaling = scaling
+    
+    self.dropout_layer = None
+
+    if dropout >0:
+        self.dropout_layer = layers.Dropout(rate=dropout)
     
     if init is None:
         if nD == 2:
@@ -359,16 +369,21 @@ class HistoMaker(layers.Layer):
         config.update(
         {
             'scfac': self.scfac,
+            'scaling': self.scaling,
             'normalize': self.normalize,            
             'init': self.init,
             'out': self.out,
             'nD': self.nD,
+            'dropout':self.dropout
         } )    
         return config                  
       
-  def call(self, image):         
-      x = self.conv(image)
+  def call(self, image):    
+      x = image*self.scaling
+      x = self.conv(x)
       ch = 1/tf.math.cosh(x)
+      if self.dropout_layer is not None:
+          ch = self.dropout_layer(ch)
       if self.normalize:
           return ch / tf.reduce_sum(ch,axis=-1,keepdims=True)
       else:
