@@ -323,8 +323,9 @@ class HistoMaker(layers.Layer):
     
     self.dropout_layer = None
 
-    if dropout >0:
+    if dropout is not None or dropout >0:
         self.dropout_layer = layers.Dropout(rate=dropout)
+        self.normalize = False
     
     if init is None:
         if nD == 2:

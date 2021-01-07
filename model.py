@@ -100,7 +100,7 @@ class myHistory :
                 x = [ i for i, j in self.validloss_hist ]
                 y = [ j for i, j in self.validloss_hist ]
                 plt.semilogy(x,y,'g',label="valid loss")
-            plt.legend(fontsize=10)
+            plt.legend(fontsize=10,loc=3)
             plt.grid()
             plt.title(self.model.modelname)
             plt.pause(0.001)
@@ -127,7 +127,7 @@ class myHistory :
                     cnt+=1
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
-            plt.legend()
+            plt.legend(loc=3)
             plt.grid()
             if self.model.modelname is not None:
                 ps = os.path.split(self.model.modelname)
