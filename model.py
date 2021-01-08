@@ -1016,6 +1016,9 @@ class PatchWorkModel(Model):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
             loss += l
+            if len(labels) > 1:
+                if k == len(labels)-1:
+                    hist['valid_output_'+str(k+1)+'_loss'] = l
       hist['valid_S_loss'] = loss
       return hist
     
@@ -1037,7 +1040,8 @@ class PatchWorkModel(Model):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
             if depth > 1:
-                hist['output_' + str(k+1) + '_loss'] = l
+                if k == depth-1:
+                    hist['output_' + str(k+1) + '_loss'] = l
             loss += l
         hist['S_loss'] = loss
             
