@@ -182,7 +182,7 @@ def createClassifier(name=None,depth=4,outK=2):
 #%% 3D
 nD=3
 cgen = patchwork.CropGenerator(patch_size = (32,32,32), 
-                  scale_fac =  0.5, 
+                  scale_fac =  0.8, 
                   scale_fac_ref = 'max',
                   init_scale = -1,#'50mm,50mm,50mm',
                   #smoothfac_data=['boxcar',None],
@@ -191,7 +191,7 @@ cgen = patchwork.CropGenerator(patch_size = (32,32,32),
                   scatter_type = 'NN',
                   
                   #create_indicator_classlabels=True,
-                  depth=2)
+                  depth=4)
 
 
 
@@ -227,7 +227,7 @@ model = patchwork.PatchWorkModel(cgen,
 #                      )
 
 res = model.apply_full(trainset[0],resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=50,dphi=0.05,verbose=True,scale_to_original=False)
+                       generate_type='random',jitter=0,   repetitions=50,dphi=0.9,verbose=True,scale_to_original=False)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 
 #plt.imshow(tf.squeeze(res[30,:,:]))

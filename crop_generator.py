@@ -1370,7 +1370,12 @@ def quaternion2mat(q):
     x = q[...,0:1]
     y = q[...,1:2]
     z = q[...,2:3]
-                   
+    r = tf.math.sqrt(x*x+y*y+z*z)
+    rmod = r-tf.math.floor(r)
+    sq = rmod/(r+0.00001)
+    x = sq*x                   
+    y = sq*y
+    z = sq*z
     w = tf.math.sqrt(tf.maximum(0.0,1.0-(x*x+y*y+z*z)));
     Rxx = 1 - 2*(y*y + z*z);
     Rxy = 2*(x*y - z*w);
