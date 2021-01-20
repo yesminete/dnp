@@ -126,10 +126,7 @@ def stitchResult(r,level, scales,scatter_type):
     numlabels = qq.shape[-1]
     sc = scales[level]
     pbox_index = sc['parent_box_scatter_index']
-    sha = list(sc['dest_full_size'])
-    sha.append(numlabels)
-    sha = sha[1:]
-    
+    sha = tf.concat([sc['dest_full_size'],[numlabels]],0)
     if scatter_type=='NN':        
         return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
     else:
@@ -250,6 +247,10 @@ class CropGenerator():
     self.ftype=ftype
     self.dest_full_size = [None]*depth
 
+
+      
+            
+
     if auto_patch is not None:    
 
         psize = 32
@@ -312,6 +313,40 @@ class CropGenerator():
 
 
 
+
+
+
+  def get_patchsize(self,level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
+          if isinstance(self.patch_size[0],Iterable):
+              return self.patch_size[level]
+          else: 
+              return self.patch_size
+        
+  def get_scalefac(self,level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
+                                    # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
+            if isinstance(self.scale_fac,float) or isinstance(self.scale_fac,int):
+                return [self.scale_fac]*self.ndim
+            elif isinstance(self.scale_fac,dict):
+                if ('level' + str(level))  not in self.scale_fac:
+                    return None
+                tmp = self.scale_fac['level' + str(level)]
+                if isinstance(tmp,float) or isinstance(tmp,int):
+                    return [tmp]*self.ndim
+                else:
+                    return tmp
+            elif isinstance(self.scale_fac,Iterable):
+                return [self.scale_fac[level]]*self.ndim
+        
+  def get_smoothing(self,level,which):
+            if which == 'data':
+                sm = self.smoothfac_data
+            else:
+                sm = self.smoothfac_label
+            if isinstance(sm,list):
+                return sm[level]
+            else:
+                return sm
+              
 
 
   def serialize_(self):
@@ -420,6 +455,7 @@ class CropGenerator():
       resolution_ = None
       if resolutions is not None:
           resolution_ = resolutions[j]
+          resolution_ = resolution_[0:self.ndim]
       
       # if we use data augmentation during training
       if augment is not None:
@@ -428,20 +464,111 @@ class CropGenerator():
           print("augmenting done. ")
 
 
-      localCrop = lambda x,level : self.createCropsLocal(trainset_,labels_,x,
-                                                         level,
-                                                         generate_type,test,
-                                                           num_patches=num_patches,branch_factor=branch_factor,
-                                                           jitter=jitter,jitter_border_fix=jitter_border_fix,
-                                                           patch_size_factor=patch_size_factor,dphi=dphi,
-                                                           overlap=overlap,resolution=resolution_,balance=balance,verbose=verbose)
+
+      tensor = lambda a : tf.cast(a,dtype=self.ftype)
+      int32 = lambda a : tf.cast(a,dtype=tf.int32)
+
+
+
+
+      def getPatchingParams(input_width,input_shape,resolution,depth):
+
+          nD = len(resolution)
+          patch_shapes = []
+          for k in range(depth):
+             patch_shapes.append(self.get_patchsize(k))
+          patch_shapes = list(map(tensor,patch_shapes))
+          
+          init_scale = self.init_scale
+          depth = self.depth
+          if isinstance(init_scale,str) or init_scale == -1:
+             if isinstance(init_scale,str):
+                if init_scale.find('mm') != -1 or init_scale.find('cm') != -1:
+                    assert (resolution is not None), "for absolute init_scale you have to pass resolution"
+                    if init_scale.find('cm') != -1:
+                        sizes_mm = init_scale.replace("cm","").split(",")
+                        sizes_mm = list(map(lambda x: float(x)*10, sizes_mm))
+                    else:
+                        sizes_mm = init_scale.replace("mm","").split(",")
+                        sizes_mm = list(map(float, sizes_mm))                   
+                    patch_widths = [tensor(sizes_mm)]
+                else:
+                   assert False, "bug in init_scale"
+             else:
+                patch_widths = []
+            
+             shapes = [tensor(input_shape)] + patch_shapes
+             for k in range(len(patch_widths),depth):
+                asp = []
+                for d in range(nD):
+                    asp.append(shapes[k][d]/shapes[k+1][d]*self.get_scalefac(k)[d])
+                if self.scale_fac_ref == 'max':
+                    asp = [max(asp)]*nD
+                elif self.scale_fac_ref == 'min':
+                    asp = [min(asp)]*nD
+                elif self.scale_fac_ref == 'perdim':
+                    asp = asp
+                else:
+                    asp = [asp[self.scale_fac_ref]]*nD
+                if len(patch_widths) == 0:
+                    patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*input_width)
+                else:
+                    patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*patch_widths[-1])
+              
+                    
+          dest_edges = []
+          dest_shapes = []
+          for k in range(len(patch_shapes)):
+            w = patch_widths[k]/patch_shapes[k]*1
+            dest_edges.append(tf.expand_dims(tf.linalg.diag(tf.concat([w,[1]],0)),0))
+            dest_shapes.append(int32(input_width/w))
+
+          if verbose:
+            showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
+            for k in range(depth):
+               print("level "+str(k) + ":  shape:"+ showten(patch_shapes[k],0)+ "  width(mm):"+showten(patch_widths[k],1) )
+               print('  voxsize relative to input:' + showten((patch_widths[k]/patch_shapes[k])/(input_width/tensor(input_shape) ),2))
+               print('  dest_shape:' + showten(dest_shapes[k],0))
+            
+
+          return { 'patch_widths' : patch_widths,
+                  'patch_shapes' : patch_shapes,
+                  'dest_edges' : dest_edges,
+                  'dest_shapes' : dest_shapes,
+                  'depth' : self.depth,                  
+                  }
+
+      src_width =  tensor(trainset_.shape[1:-1])*tensor(resolution_)
+      src_boxes = tf.tile(tf.expand_dims(tf.linalg.diag(tensor(list(resolution_)+[1])),0),[trainset_.shape[0],1,1])
+
+      patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],resolution_,self.depth)
+
+    
+      localCrop = lambda x,level : self.createCropsLocal(trainset_,
+                         labels_,                         
+                         src_boxes,
+                         src_width,                         
+                         x, level,
+                         patching_params,
+                         generate_type=generate_type,
+                         jitter = jitter,
+                         overlap = overlap,
+                         dphi1=dphi,
+                         dphi2=dphi,
+                         flip=None,
+                         dscale = 0,
+                         pixel_noise = 0,
+                         balance=balance,
+                         num_patches=num_patches,
+                         branch_factor=branch_factor,
+                         verbose=verbose)
+
 
       # for lazy  prediction return just the function      
       if lazyEval is not None:
           return CropInstanceLazy(localCrop,self)      
           
-      
-      
+            
       # do the crop in the initial level
       x = localCrop(None,0)
       x['class_labels'] = extend_classlabels(x,class_labels_)
@@ -640,673 +767,380 @@ class CropGenerator():
       
       
 
-
-  # Converts normalized coordinates (as used in tf.crop_and_resize) in local_boxes 
-  # to actual pixel coordinates, it assumed that all boxes are of the same size!! 
-  #  local_boxes - normalized coordinates of shape [N,4] (2D) or [N,6] (3D), 
-  #  sz - abs. size of images from which crop is performed (list of size nD)
-  #  patch_size - size of patches (list of size nD) 
-  def convert_to_gatherND_index(self,local_boxes,sz,patch_size,interp_type='NN',aspects=None):
-      nD = self.ndim
-
-      if sz is None:             
-         sz = [None] * (nD+1)
-         for k in range(nD):
-           sz[k+1] = tf.math.round(patch_size[k]/(local_boxes[0,k+nD]-local_boxes[0,k]) )
-
-      rans = [None] * nD
-      center = [None] * nD
-      for k in range(nD):
-        wid = (local_boxes[0,(k+nD):(k+nD+1)]-local_boxes[0,k:k+1])
-        scfac = wid/patch_size[k]*sz[k+1]
-        rans[k] = tf.cast(tf.range(patch_size[k]),dtype=self.ftype)*scfac-patch_size[k]*0.5*scfac
-        center[k] = (local_boxes[:,k:(k+1)] + local_boxes[:,(k+nD):(k+nD+1)])*0.5 * sz[k+1]
-
-      center = tf.transpose(center,[1,0,2]);
-      res_shape = [1] * (nD+2)
-      res_shape[0] = local_boxes.shape[0]
-      res_shape[nD+1] = nD
-      center = tf.reshape(center,res_shape)
-      qwq = tf.expand_dims(rep_rans(rans,patch_size,nD),0)
-
-
-      if local_boxes.shape[1] > nD*2:
-            qwq = tf.tile(qwq,[local_boxes.shape[0]]+[1]*(nD+1))
-            phi = local_boxes[:,(2*nD):]
+    
+    
+  def createCropsLocal(self,
+                         src_data,
+                         src_labels,
+                         src_boxes,
+                         src_width,
+                         crops, 
+                         level,
+                         patching_params,
+                         generate_type='random',
+                         jitter = 0,
+                         overlap = 0,
+                         dphi1=0,
+                         dphi2=0,
+                         flip=None,
+                         dscale = 0,
+                         pixel_noise = 0,
+                         balance=None,
+                         num_patches=1,
+                         branch_factor=1 ,
+                         verbose=False):
+        
+        if balance is not None:
+            balance = balance.copy()
+            if 'label_range' in balance and balance['label_range'] is not None:
+                balance['label_range'] = tf.cast(balance['label_range'],dtype=tf.int32)
+            if 'label_weight' in balance  and balance['label_weight'] is not None:
+                balance['label_weight'] = tf.cast(balance['label_weight'],dtype=src_data.dtype)
+    
+        patch_widths = patching_params['patch_widths']
+        patch_shapes = patching_params['patch_shapes']
+        dest_edges = patching_params['dest_edges']
+        dest_shapes = patching_params['dest_shapes']
+        depth = patching_params['depth']
+        
+        tensor = lambda a : tf.cast(a,dtype=self.ftype)
+        
+        
+        def compindex(dbox,lbox,dshape,lshape,noise,interptyp,offs):        
+            e = tf.einsum('bxy,kbyz->kbxz',tf.linalg.inv(dbox,adjoint=False),lbox)
+            box_index = grid(e,lshape,noise)-offs*0.5
+            return clip(box_index,dshape,interptyp)
+    
+        
+        def grid(edges,shape,pixel_noise):
+            
+            old_shape = edges.shape
+            B = tf.reduce_prod(old_shape[0:-2])
+            edges = tf.reshape(edges,[B,old_shape[-2],old_shape[-1]])
+            
+            ex1 = lambda x: tf.expand_dims(x,1)
+        
+            nD = len(shape)
             if nD == 2:
-                phi = tf.expand_dims(local_boxes[:,(2*nD):],2)
-                a = tf.math.cos(phi)
-                b = tf.math.sin(phi)
-                R = tf.concat([tf.concat([a,b],1),
-                               tf.concat([-b,a],1)],2)
-            else:
-                R = quaternion2mat(phi)  
-                c=lambda x: tf.expand_dims(tf.concat(x,1),2)
-                R = tf.concat([c(R[0]),c(R[1]),c(R[2])],2)
-    
-            if aspects is not None:
-                aspects = tf.cast(aspects,dtype=self.ftype)
-                R = tf.einsum('bij,i,j->bij',R,aspects,1/aspects)
-                #f = aspects
-                #p = f[1]/f[0]
-                #R = tf.concat([tf.concat([a,b*p],1),
-                #               tf.concat([-b/p,a],1)],2)
-            if nD==2:
-                qwq = tf.einsum('bxyi,bij->bxyj',qwq,R)
-            else:
-                qwq = tf.einsum('bxyzi,bij->bxyzj',qwq,R)
-
-
-      local_box_index = center+qwq
-
-      if interp_type == 'NN': # cast index to int
-          local_box_index = tf.dtypes.cast(tf.floor(local_box_index+0.5),dtype=tf.int32)
-    
-          ## clip indices
-      lind = []
-      for k in range(nD):
-          tmp = local_box_index[...,k:(k+1)]
-          tmp = tf.math.maximum(tmp,0)
-          if interp_type == 'NN': 
-             tmp = tf.math.minimum(tmp,tf.cast(sz[k+1]-1,tf.int32))
-          else:
-             tmp = tf.math.minimum(tmp,sz[k+1]-2)
-          lind.append(tmp)
-      local_box_index = tf.concat(lind,nD+1)
-
-    
-
-
-
-      return local_box_index, sz;
-
-
-  # Computes normalized coordinates of random crops
-  #  bbox_sz - a list of size 4 (2D) or 6 (3D) representing the template of the box
-  #              with origin zero.
-  #  numboxes - number of boxes to be distributed
-  # returns boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) suitable as
-  #  input for convert_to_gatherND_index
-  def random_boxes(self,bbox_sz,labels, numboxes,balance,dphi=0):
-      
-          
-      
-      
-      def draw_rnd(label,M):        
-
-        ratio = balance['ratio']
-        N = 10000
-        numrounds = 1000
-        if 'N' in balance:
-            N = balance['N']
-        if 'numrounds' in balance:
-            numrounds = balance['numrounds']
-        label_range = None
-        label_weight = None
-        if 'label_range' in balance:
-            label_range = tf.cast(balance['label_range'],dtype=tf.int32)
-        if 'label_weight' in balance:
-            label_weight = tf.cast(balance['label_weight'],dtype=self.ftype)
+                A = tf.meshgrid(tf.range(0,shape[0],dtype=edges.dtype),tf.range(0,shape[1],dtype=edges.dtype),indexing='ij')
+            if nD == 3:
+                A = tf.meshgrid(tf.range(0,shape[0],dtype=edges.dtype),tf.range(0,shape[1],dtype=edges.dtype),tf.range(0,shape[2],dtype=edges.dtype),indexing='ij')
             for k in range(nD):
-                label_weight = tf.expand_dims(label_weight,0)
-          
-        points_tot = []
-        for k in range(label.shape[0]):
-            L = label[k,...]
-            if label_range is not None:
-                L = tf.gather(L,label_range,axis=nD)
-            if label_weight is not None:
-                L = L*label_weight
-            L = np.amax(L,nD)
-            L = 1.0*(L>0)
-            sz = L.shape
-            cnt=0
-
-            numvx = np.prod(sz)
-            pos = tf.reduce_sum(L)
-            neg = numvx-pos
-            
-            if  pos == 0 or pos-numvx*ratio > -0.01:
-           #     print("warning: cannot achieve desired sample ratio, taking uniform")
-                P = L*0+1
+                A[k] = A[k] + tf.random.normal(A[k].shape)*pixel_noise
+                A[k] = tf.expand_dims(tf.expand_dims(A[k],0),nD+1)
+            R = tf.concat(A,nD+1)
+            R = tf.tile(R, [edges.shape[0]] + [1]*(nD+1) )
+            R = tf.einsum('bxy,b...y->b...x',edges[...,0:nD,0:nD],R) 
+            if nD == 2:
+                R = R+ex1(ex1(edges[:,0:nD,-1]))
             else:
-                background_p = (1-ratio)*pos/(numvx*ratio-pos)
-                P = (L + background_p)
-                
-            p = tf.reshape(P,[numvx])
-            p = tf.cast(p,dtype=tf.float64)
-                
-            p = p/tf.reduce_sum(p)
-            idx = np.random.choice(numvx,M,p=p)
-            R = np.transpose(np.unravel_index(idx,sz))
-            R = R + np.random.uniform(low=0,high=1,size=R.shape)
-            points = R/sz
-      
-
-
-            # points = []
-            # if N < M:
-            #     N = M # num drawn samples per round
-            # for j in range(numrounds):
-            #     R = np.random.uniform(low=0,high=1,size=(N,nD))
-            #     for i in range(nD):            
-            #         R[:,i] = np.floor(R[:,i]*sz[i])
-            #     Q = tf.gather_nd(L,tf.convert_to_tensor(R,dtype=tf.int32))
-            #     pos = tf.reduce_sum(Q)
-            #     neg = N-pos
-            #     if  pos-N*ratio > -0.01:
-            #         print("warning: cannot achieve desired sample ratio, taking uniform")
-            #         P = Q*0+1
-            #     else:
-            #         background_p = (1-ratio)*pos/(N*ratio-pos)
-            #         P = (Q + background_p)
-            #         P = P / tf.reduce_max(P)
-
-
-            #     idx = np.argwhere( (P > np.random.uniform(low=0,high=1,size=(N))))
-            #     R = tf.gather(R,idx[:,0],axis=0)
-            #     R = R + np.random.uniform(low=0,high=1,size=R.shape)
-            #     R = R/sz
-            #     points.append(R)
-            #     cnt = cnt + R.shape[0]
-            #     if cnt >= M:
-            #         break
-            # if cnt < M:
-            #     print("warning: cannot achieve desired sample ratio, taking uniform (2)")               
-            #     return None
-                
-            # points = tf.concat(points,0)
-            # points = points[0:M,:]
-            
-            
-            
-            points_tot.append(points)
-        
-        centers = tf.concat(points_tot,0)            
-        centers = tf.tile(centers,[1,2]).numpy()
-            
-        return centers
-
-      def draw_uniform():
-          centers = [None]*(nD*2)
-          for k in range(nD):
-            c = np.random.uniform(0,1,(numboxes, 1))
-            centers[k] = c
-            centers[k+nD] = c
-          centers = np.concatenate(centers,1)
-          return centers
-        
-
-      nD = self.ndim
-      
-      if labels is None or balance is None:
-          centers = draw_uniform()
-      else:
-          centers = draw_rnd(labels,M=numboxes//labels.shape[0])
-          if centers is None:
-              centers = draw_uniform()
-              
-      local_boxes = centers + bbox_sz
-      
-      if dphi > 0:
-          if nD==2:
-              local_boxes = np.concatenate([local_boxes,np.random.uniform(-dphi,dphi,[local_boxes.shape[0],1])],1)
-          else:
-              quats = np.random.normal(0,dphi,[local_boxes.shape[0],3])
-              local_boxes = np.concatenate([local_boxes,quats],1)
-              
-      
-      for k in range(nD):
-            idx = local_boxes[:,k]<0
-            local_boxes[idx,nD+k] = local_boxes[idx,nD+k] - local_boxes[idx,k]
-            local_boxes[idx,k] = 0
-            idx = local_boxes[:,k+nD]>1
-            local_boxes[idx,k] = local_boxes[idx,k] - (local_boxes[idx,k+nD]-1)
-            local_boxes[idx,nD+k] = 1
-      local_boxes = tf.convert_to_tensor(local_boxes,dtype=self.ftype)
-            
-      return local_boxes
-  
+                R = R+ex1(ex1(ex1(edges[:,0:nD,-1])))
+            return R
     
-
-    
-  
-
-  # Computes normalized coordinates of random crops
-  #  bbox_sz - a list of size 4 (2D) or 6 (3D) representing the template of the box
-  #              with origin zero.
-  #  overlap - an integer giving the additoinal number of boxes per dimension
-  #  jitter - to add random jitter 
-  # return boxes of shape [numboxes,4] (2D) or [numboxes,6] (3D) 
-  def tree_boxes(self,bbox_sz,overlap,jitter=0,jitter_border_fix=False,dphi=0):
-
-      nD = self.ndim
-      centers = [None] * nD
-      nums = [None] * nD
-      totnum = 1
-      for k in range(nD):
-        delta = bbox_sz[nD+k]-bbox_sz[k]
-        nums[k] = np.floor(1/delta)+1+overlap
-        if nums[k] < 2:
-            nums[k] = 2
-        delta_small= (1-delta)/(nums[k]-1) -0.000001
-        frac = nums[k]*delta-1
-        centers[k] = tf.cast(tf.range(nums[k]),dtype=self.ftype)*delta_small + delta*0.5
-        totnum *= nums[k]
-      centers = rep_rans(centers,nums,nD)
-      
-      if jitter > 0:
-          sh = centers.shape
-          rands = []
-          for k in range(nD):
-             delta = bbox_sz[nD+k]-bbox_sz[k]              
-             rng = np.random.uniform(-delta/2*jitter,delta/2*jitter,sh[0:nD])
-             if jitter_border_fix:
+        
+        def clip(R,sz,interp_type):
+            nD = len(sz)
+            
+            if interp_type == 'NN': # cast index to int
+                R = tf.dtypes.cast(tf.floor(R+0.5),dtype=tf.int32)
+            
+            ## clip indices
+            lind = []
+            for k in range(nD):
+                  tmp = R[...,k:(k+1)]
+                  tmp = tf.math.maximum(tmp,0)
+                  if interp_type == 'NN': 
+                     tmp = tf.math.minimum(tmp,tf.cast(sz[k]-1,tf.int32))
+                  else:
+                     tmp = tf.math.minimum(tmp,tensor(sz[k]-2))
+                  lind.append(tmp)
+            R = tf.concat(lind,nD+1)
+            return R
+        
+        
+        def quaternion(q):
+            x = tf.expand_dims(q[...,0:1],2)
+            y = tf.expand_dims(q[...,1:2],2)
+            z = tf.expand_dims(q[...,2:3],2)
+            r = tf.math.sqrt(x*x+y*y+z*z)
+            rmod = r-tf.math.floor(r)
+            sq = rmod/(r+0.00001)
+            x = sq*x                   
+            y = sq*y
+            z = sq*z
+            w = tf.math.sqrt(tf.maximum(0.0,1.0-(x*x+y*y+z*z)));
+            Rxx = 1 - 2*(y*y + z*z);
+            Rxy = 2*(x*y - z*w);
+            Rxz = 2*(x*z + y*w);
+            Ryx = 2*(x*y + z*w);
+            Ryy = 1 - 2*(x*x + z*z);
+            Ryz = 2*(y*z - x*w );
+            Rzx = 2*(x*z - y*w );
+            Rzy = 2*(y*z + x*w );
+            Rzz = 1 - 2 *(x*x + y*y);
+            null = x*0
+            return tf.concat([ tf.concat([Rxx,Rxy,Rxz,null],1),
+                               tf.concat([Ryx,Ryy,Ryz,null],1),
+                               tf.concat([Rzx,Rzy,Rzz,null],1),
+                               tf.concat([null,null,null,1+null],1)],2)
+        
+        def draw_center_bylabel(label,balance,nD,M):        
+            
+              if len(label.shape) < nD+2:
+                  label = tf.expand_dims(label,3)
+            
+              ratio = balance['ratio']
+              label_range = balance['label_range']
+              label_weight = balance['label_weight']
+              if 'label_weight' in balance and balance['label_weight'] is not None:
+                  for k in range(nD):
+                      label_weight = tf.expand_dims(label_weight,0)
+                
+              points_tot = []
+              for k in range(label.shape[0]):
+                  L = label[k,...]
+                  if label_range is not None:
+                      L = tf.gather(L,label_range,axis=nD)
+                  if label_weight is not None:
+                      L = L*label_weight
+                  L = np.amax(L,nD)
+                  L = 1.0*(L>0)
+                  sz = L.shape
+                  cnt=0
+            
+                  numvx = np.prod(sz)
+                  pos = tf.reduce_sum(L)
+                  neg = numvx-pos
+                  
+                  if  pos == 0 or pos-numvx*ratio > -0.01:
+                 #     print("warning: cannot achieve desired sample ratio, taking uniform")
+                      P = L*0+1
+                  else:
+                      background_p = (1-ratio)*pos/(numvx*ratio-pos)
+                      P = (L + background_p)
+                      
+                  p = tf.reshape(P,[numvx])
+                  p = tf.cast(p,dtype=tf.float64)
+                      
+                  p = p/tf.reduce_sum(p)
+                  idx = np.random.choice(numvx,M,p=p)
+                  R = np.transpose(np.unravel_index(idx,sz))
+                  R = R + np.random.uniform(low=0,high=1,size=R.shape)
+                  points = R/sz
+                  
+                  points = tf.expand_dims(tf.cast(points,dtype=label.dtype),1)
+                              
+                  points_tot.append(points)
+              
+              centers = tf.concat(points_tot,1)            
+                  
+              return centers
+        
+         
+        def draw_boxes(edges,shape,width,out_shape,out_width,label,N):
+        
+            def randU2d(dphi):
+                phi = tf.random.normal([b*N,1,1])*dphi
+                U = tf.concat([tf.concat([tf.math.cos(phi),-tf.math.sin(phi),phi*0],1),
+                               tf.concat([tf.math.sin(phi),tf.math.cos(phi),phi*0],1),
+                               tf.concat([0*phi,0*phi,1+phi*0],1)],               2)
+                return U
+        
+            def randU3d(dphi):
+                phi = tf.random.normal([b*N,3])*dphi
+                U = quaternion(phi)
+                return U
+                
+            nD = len(shape)
+            randrot = randU2d if nD==2 else randU3d
+            b = edges.shape[0]
+            
+            
+            ed = lambda a : tf.expand_dims(tf.expand_dims(a,0),0)
+            w = (1-overlap)*out_width/width
+        
+            # rnd points inside patches
+            if generate_type == "random":
+                if balance is not None:
+                    points = draw_center_bylabel(label,balance,nD,N)         
+                else:
+                    points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
+                x0 = (shape-1)*w/2
+                x1 = (shape-1)*(1-w)
+                points = ed(x0) + points * ed(x1)
+            elif generate_type == "tree":
+                # tree 
+                nboxes = tf.math.floor(1/w + 1)
+                ran = lambda i: tf.range(0.5,nboxes[i],dtype=edges.dtype)
                 if nD == 2:
-                    if k == 0: 
-                        rng[0,:] = 0
-                        rng[-1,:] = 0
-                    elif k == 1:
-                        rng[:,0] = 0
-                        rng[:,-1] = 0
+                     A = tf.meshgrid(ran(0),ran(1),indexing='ij')
                 else:
-                     if k == 0: 
-                         rng[0,:,:] = 0
-                         rng[-1,:,:] = 0
-                     elif k == 1:
-                         rng[:,0,:] = 0
-                         rng[:,-1,:] = 0
-                     else:
-                         rng[:,:,0] = 0
-                         rng[:,:,-1] = 0
-             else:
-                 if nD == 2:
-                     if k == 0: 
-                         rng[0,:] = tf.math.abs(rng[0,:])
-                         rng[-1,:] = -tf.math.abs(rng[-1,:])
-                     elif k == 1:
-                         rng[:,0] = tf.math.abs(rng[:,0])
-                         rng[:,-1] = -tf.math.abs(rng[:,-1])
-                 else:
-                      if k == 0: 
-                         rng[0,:,:] = tf.math.abs(rng[0,:,:])
-                         rng[-1,:,:] = -tf.math.abs(rng[-1,:,:])
-                      elif k == 1:
-                         rng[:,0,:] = tf.math.abs(rng[:,0,:])
-                         rng[:,-1,:] = -tf.math.abs(rng[:,-1,:])
-                      else:
-                         rng[:,:,0] = tf.math.abs(rng[:,:,0])
-                         rng[:,:,-1] = -tf.math.abs(rng[:,:,-1])
-             rands.append(np.expand_dims(rng,nD))
-          rands = np.concatenate(rands,nD)
-          centers = centers + rands
-
-      qwq = tf.tile(tf.reshape(centers,tf.cast([totnum,nD],dtype=tf.int32)),[1,2]) + bbox_sz
-      
-      if dphi > 0:
-          qwq = np.concatenate([qwq,np.random.uniform(-dphi,dphi,[qwq.shape[0],1])],1)
-      qwq = tf.cast(qwq,dtype=self.ftype)
-      
-      
-      return qwq, qwq.shape[0];
-
-
-  def get_patchsize(self,level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
-      if isinstance(self.patch_size[0],Iterable):
-          return self.patch_size[level]
-      else: 
-          return self.patch_size
-
-
-  def createCropsLocal(self,data_parent,labels_parent,crops,
-      level,
-      generate_type,test,
-      jitter=0,
-      jitter_border_fix=False,
-      num_patches=1,
-      branch_factor=1,
-      dphi=0,
-      patch_size_factor=1,
-      overlap=0,resolution=None,balance=None,verbose=True):
-      
-              
-    
-      def get_scalefac(level,abssz):  # either a float, or a list of floats where each entry corresponds to a different depth level,
-                                  # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
-          if isinstance(self.scale_fac,float) or isinstance(self.scale_fac,int):
-              return [self.scale_fac]*self.ndim
-          elif isinstance(self.scale_fac,dict):
-              if ('level' + str(level))  not in self.scale_fac:
-                  return None
-              tmp = self.scale_fac['level' + str(level)]
-              if isinstance(tmp,float) or isinstance(tmp,int):
-                  return [tmp]*self.ndim
-              elif isinstance(tmp,str):
-                  absv = tmp.replace("mm","").split(",")
-                  absv = list(map(int, absv))
-                  tmp = []
-                  for k in range(self.ndim):
-                      tmp.append(absv[k]/abssz[k])
-                  return tmp
-              else:
-                  return tmp
-          elif isinstance(self.scale_fac,Iterable):
-              return [self.scale_fac[level]]*self.ndim
-      
-      def get_smoothing(level,which):
-          if which == 'data':
-              sm = self.smoothfac_data
-          else:
-              sm = self.smoothfac_label
-          if isinstance(sm,list):
-              return sm[level]
-          else:
-              return sm
-        
-      last_abssz = None
-      if crops is not None:
-          last_abssz = crops['absolute_size_patch_mm']
-      this_scale_fac=get_scalefac(level,last_abssz)
-      
-      
-      init_scale = self.init_scale
-      keepAspect = self.keepAspect
-      divisor = 8 # used for initital scale to get a nice image size
-      nD = self.ndim
-      forwarded_aspects = np.ones(nD) #[1]*nD
-      aspect_correction = np.ones(nD) #nD*[1]
-      if keepAspect and crops is not None:
-          aspect_correction = crops['aspect_correction']
-
-      if crops is None:
-        images = data_parent
-        if generate_type == 'random':     # 
-           replicate_patches = num_patches
-        elif generate_type == 'tree':     # 
-          replicate_patches = 1
-        else:
-          assert False,'not valid generate_type'
-      else:
-        images = crops['data_cropped']
-        if generate_type == 'random':     #
-          replicate_patches = branch_factor
-        elif generate_type == 'tree':     # 
-          replicate_patches = None
-        else:
-          assert False,'not valid generate_type'
-      sz = images.shape
-      bsize = sz[0] 
-      
-      if generate_type == 'tree' and crops is None:
-        assert bsize == 1, "for generate_type=tree the batch_size has to be one!"
- 
-    
-      
-      start = timer()
-
-      ############### compute bbox coordinates
-      if crops is None and isinstance(init_scale,list):      # in case init_scale = shape, we scale the full image
-        patch_size = init_scale                              # onto shape, which is then first layer
-        qbox = [None] * (2*nD)
-        for d in range(nD):
-          qbox[d] = tf.zeros(shape=(replicate_patches*bsize, 1))
-          qbox[d+nD] = tf.ones(shape=(replicate_patches*bsize, 1))
-        local_boxes = tf.concat(qbox,1)
-        # compute relative aspects to keep aspectration
-        fac = max(sz[1:nD+1])/max(patch_size)
-        for d in range(nD):
-          forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
-      elif crops is None and init_scale != -1 and not isinstance(init_scale,str):               # the first layer is a isotropically scaled version
-   
-
-        patch_size = [0] * nD        
-        qbox = [None] * (2*nD)
-        for d in range(nD):
-          desired = round(init_scale*sz[d+1])
-          patch_size[d] = getClosestDivisable(desired,divisor)
-          fac = 1 #patch_size[d]/desired
-          qbox[d] = tf.zeros(shape=(replicate_patches*bsize, 1))
-          qbox[d+nD] = fac*tf.ones(shape=(replicate_patches*bsize, 1))
-        local_boxes = tf.concat(qbox,1)
-        # compute relative aspects to keep aspectration
-        fac = max(sz[1:nD+1])/max(patch_size)
-        for d in range(nD):
-          forwarded_aspects[d] = fac * patch_size[d]/sz[d+1]
-      else:                                  # the first layer is already patched                
-
-        patch_size_=self.get_patchsize(level)
-        
-        patch_size = [0]*nD
-        for k in range(len(patch_size)):
-            patch_size[k] = patch_size_[k]*patch_size_factor
-
-        if crops is None and isinstance(init_scale,str):
-            forwarded_aspects = [1]*nD
-            bbox_sz = [0] * (nD*2)            
-            if init_scale.find('mm') != -1 or init_scale.find('cm') != -1:
-                assert (resolution is not None), "for absolute init_scale you have to pass resolution"
-                if init_scale.find('cm') != -1:
-                    sizes_mm = init_scale.replace("cm","").split(",")
-                    sizes_mm = list(map(lambda x: float(x)*10, sizes_mm))
-                else:
-                    sizes_mm = init_scale.replace("mm","").split(",")
-                    sizes_mm = list(map(float, sizes_mm))
-                for d in range(nD):
-                    sfac = patch_size_factor*sizes_mm[d]/resolution[d]/sz[d+1]
-                    bbox_sz[d]    = -sfac*0.5
-                    bbox_sz[d+nD] = sfac*0.5
-            if init_scale.find('vx') != -1:
-                sizes_vx = init_scale.replace("vx","").split(",")
-                sizes_vx = list(map(int, sizes_vx))
-                for d in range(nD):
-                    sfac = patch_size_factor*sizes_vx[d]/sz[d+1]
-                    bbox_sz[d]    = -sfac*0.5
-                    bbox_sz[d+nD] = sfac*0.5
-                            
-            
-        else:
-            
-            asp = []
-            for d in range(nD):
-                asp.append(sz[d+1]/patch_size[d]*this_scale_fac[d]*0.5)
-            if self.scale_fac_ref == 'max':
-                asp = [max(asp)]*nD
-            elif self.scale_fac_ref == 'min':
-                asp = [min(asp)]*nD
-            elif self.scale_fac_ref == 'perdim':
-                asp = asp
+                     A = tf.meshgrid(ran(0),ran(1),ran(2),indexing='ij')
+                N = int32(tf.reduce_prod(nboxes))
+                for k in range(nD):
+                    A[k] = tensor(tf.reshape(A[k],[N,1,1]))
+                    A[k] = A[k] + tf.random.uniform([N,b,1],minval=-jitter,maxval=jitter,dtype=edges.dtype)
+                    A[k] = A[k]/nboxes[k]*shape[k]
+                points = tf.concat(A,2)
+                N = points.shape[0]
             else:
-                asp = [asp[self.scale_fac_ref]]*nD
-                
-            bbox_sz = [0] * (nD*2)
-            for d in range(nD):
-                bbox_sz[d]   = -asp[d]*patch_size[d]/sz[d+1]* aspect_correction[d]
-                bbox_sz[d+nD] = asp[d]*patch_size[d]/sz[d+1] *aspect_correction[d]
-
-
-        if generate_type == 'random':     
-          local_boxes = self.random_boxes(bbox_sz,labels_parent,bsize*replicate_patches,balance,dphi=dphi)
-        elif generate_type == 'tree':   
-          if crops is not None:
-              local_boxes = []
-              for t in range(crops['parent_boxes'].shape[0]):
-                lb,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix,dphi=dphi)
-                local_boxes.append(tf.expand_dims(lb,1))
-              local_boxes = tf.concat(local_boxes,1)
-          else:
-              local_boxes,replicate_patches = self.tree_boxes(bbox_sz,overlap,jitter=jitter,jitter_border_fix=jitter_border_fix,dphi=dphi)
-            
-          
-
-
-
-    
-      ############### compute box indices
-      if crops is None: # the first layer
-        parent_boxes = local_boxes
-      else: # preceding layers (crops have to recomputed according to grandparent)
-        last_boxes = crops['parent_boxes']
-          
-        if generate_type == 'tree':          
-           ccatdim=2
-           last_boxes = tf.expand_dims(last_boxes,0)
-        else:
-           ccatdim=1
-           last_boxes = tf.tile(last_boxes,[replicate_patches,1])                   
-          
-        center_last = []
-        center_local = []
-        wid = []
-        wid_local = []            
-        for j in range(nD):
-            center_last.append( (last_boxes[...,(nD+j):(nD+1+j)]+last_boxes[...,j:(j+1)])*0.5 )
-            center_local.append( (local_boxes[...,(nD+j):(nD+1+j)]+local_boxes[...,j:(j+1)])*0.5 - 0.5 )
-            wid.append( (last_boxes[...,(nD+j):(j+nD+1)]-last_boxes[...,j:(j+1)]) )
-            wid_local.append(local_boxes[...,(nD+j):(j+nD+1)]-local_boxes[...,j:(j+1)])
-
-        if last_boxes.shape[ccatdim] > nD*2:
-            phi = last_boxes[...,2*nD:]
-        else:
-            phi = last_boxes[...,0:(1+(nD-2)*2)]*0
+                assert False, "not a valid generate_type"
         
-        center_ = center_last
-        if nD == 2:
-            R = [ [tf.math.cos(phi),tf.math.sin(phi)],
-                  [-tf.math.sin(phi),tf.math.cos(phi)]  ]
-        else:
-            R = quaternion2mat(phi)
-
-        for a in range(nD):
-            for b in range(nD):
-                center_[a] += R[a][b]*center_local[b]*wid[a]*sz[1+b]/sz[1+a]
-
-        toconcat = [None] * (2*nD)
-        for a in range(nD):
-            toconcat[a] =    center_[a]-wid[a]*wid_local[a]*0.5
-            toconcat[a+nD] = center_[a]+wid[a]*wid_local[a]*0.5
-        if nD==2:
-            toconcat.append(phi+local_boxes[...,2*nD:])
-        else:
-            toconcat.append(quaternion_prod(phi,local_boxes[...,2*nD:]))
-        parent_boxes = tf.concat(toconcat,ccatdim)
-
-        if generate_type == 'tree':                  
-            parent_boxes = tf.reshape(parent_boxes,[parent_boxes.shape[0]*parent_boxes.shape[1], parent_boxes.shape[2]])
-            local_boxes = tf.reshape(local_boxes,[local_boxes.shape[0]*local_boxes.shape[1],  local_boxes.shape[2]])
-
+            points = tf.einsum('bxy,Nby->Nbx',edges[...,0:nD,0:nD],points) + tf.expand_dims(edges[...,0:nD,-1],0)
+            points = tf.reshape(points,[b*N,nD])
             
-  #          p = sz[2]/sz[1]
-                                
-  #          centerX_ = center_last[0] + (tf.math.cos(phi)*center[0]_local*wid[0]*sz[1]/sz[1] + tf.math.sin(phi)*center[1]_local*wid[0]*sz[2]/sz[1])
-  #          centerY_ = center_last[1] + (-tf.math.sin(phi)*center[0]_local*wid[1]*sz[1]/sz[2] + tf.math.cos(phi)*center[1]_local*wid[1]*sz[2]/sz[2])
-
-            # centerX_last = (last_boxes[...,(nD):(nD+1)]+last_boxes[...,0:(0+1)])*0.5
-            # centerY_last = (last_boxes[...,(1+nD):(1+nD+1)]+last_boxes[...,1:(2)])*0.5
-            # centerX_local = (local_boxes[...,(nD):(nD+1)]+local_boxes[...,0:(0+1)])*0.5 - 0.5
-            # centerY_local = (local_boxes[...,(1+nD):(1+nD+1)]+local_boxes[...,1:(2)])*0.5 - 0.5
-            # widX =  (last_boxes[...,(nD):(nD+1)]-last_boxes[...,0:(0+1)])
-            # widY = (last_boxes[...,(1+nD):(1+nD+1)]-last_boxes[...,1:(2)])
-            # widX_local = (local_boxes[...,(nD):(nD+1)]-local_boxes[...,0:(0+1)])
-            # widY_local = (local_boxes[...,(1+nD):(1+nD+1)]-local_boxes[...,1:(2)])
-
-            # centerX_ = centerX_last + (tf.math.cos(phi)*centerX_local*widX + tf.math.sin(phi)*centerY_local*widX*p)
-            # centerY_ = centerY_last + (-tf.math.sin(phi)*centerX_local*widY/p + tf.math.cos(phi)*centerY_local*widY)
-  
-            # print("###################################")
-            # print("forw_asp", forwarded_aspects)
-            # print("patch_size", patch_size_)
-            # print("sz", sz)                      
-            # print("###################################")
-    
-            #toconcat = [centerX_-widX*widX_local*0.5,centerY_-widY*widY_local*0.5, 
-            #            centerX_+widX*widX_local*0.5,centerY_+widY*widY_local*0.5,phi+local_boxes[...,2*nD:]]
-            #parent_boxes = tf.concat(toconcat,ccatdim)
             
-      if self.dest_full_size[level] is None:          
-          dest_full_size = [None]*(nD+1)
-          for k in range(nD):
-              dest_full_size[k+1] = tf.convert_to_tensor(np.math.floor(1/patch_size_factor*patch_size[k]/np.min(parent_boxes[:,nD+k]-parent_boxes[:,k])),dtype=self.ftype)
-          self.dest_full_size[level] = dest_full_size
-      else:
-          dest_full_size = self.dest_full_size[level]
-
-      # compute the index suitable for gather_nd
-      local_box_index,_ = self.convert_to_gatherND_index(local_boxes,sz,patch_size,interp_type=self.interp_type,
-                                                         aspects=None)
-      parent_box_index,_ = self.convert_to_gatherND_index(parent_boxes,data_parent.shape,patch_size,interp_type=self.interp_type,
-                                                          aspects=aspect_correction)
-      parent_box_scatter_index, _ = self.convert_to_gatherND_index(parent_boxes,dest_full_size,patch_size,interp_type=self.scatter_type,
-                                                           aspects=aspect_correction)
-  
-
-
-      relres = []
-      
-      for k in range(nD):
-        relres.append(((parent_boxes[0,k+nD]-parent_boxes[0,k])*data_parent.shape[k+1]/patch_size[k]).numpy() ) 
+            # rnd transformations
+            R1 = randrot(dphi1)
+            R2 = randrot(dphi2)
+            S = 1+tf.random.normal([b*N,nD])*dscale
+            S = S*(2*tensor(tf.random.uniform([b*N,nD]) > flip*0.5)-1)
+            
+            U = tf.linalg.diag(tf.concat([S,tf.ones([b*N,1])],1))
+            U = tf.einsum('cxy,cyz->cxz',U,R1)
+            U = tf.einsum('cxy,cyz->cxz',R2,U)
+            facs = tf.expand_dims(tf.expand_dims(tf.concat([out_width/out_shape,[1]],0),0),1) 
+            U = U * facs
+            
+            # assemble 
+            offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([out_shape/2,[1]],0))
+            E = U+tf.concat([tf.zeros([b*N,nD+1,nD]),tf.expand_dims(offs,2)],2)
+            E = tf.reshape(E,[N,b,nD+1,nD+1])
                     
-      abssz = None
-      if resolution is not None:
-          abssz = resolution[0:nD] * np.array(relres) * patch_size[0:nD]
-  
-      if verbose:
-        print("--------- cropping, level ",level)
-        print("shape of patch: ", *patch_size )
-        print("voxsize (relative to original scale): ", *relres)
-        if resolution is not None:
-            print("patchsize (mm): ", *abssz)
-        print("numpatches in level: %d" % (parent_box_index.shape[0] / data_parent.shape[0]))
-        print("shape of full output: ",  *list(map(lambda x: x.numpy(), dest_full_size[1:])))
+            return E
         
+    
+    
+        src_shape = tensor(src_data.shape[1:-1])
+        if level == 0:        
+            last_boxes = src_boxes
+            last_width = src_width
+            last_shape = src_shape
+            last_label = src_labels
+            N=num_patches
+        else:
+            last_boxes = crops['local_boxes']        
+            last_width = patch_widths[level-1]
+            last_shape = patch_shapes[level-1]
+            last_label = crops['labels_cropped']
+            N=branch_factor
+            
+        nD = len(last_width)
+        
+    
+        if flip is None:
+            flip = tensor([1]*nD)
+                        
+        start = timer()
+          
+        local_boxes = draw_boxes(last_boxes, last_shape, 
+                                 last_width, patch_shapes[level], patch_widths[level], 
+                                 last_label,
+                                 N)
+        local_box_index = compindex(last_boxes,local_boxes,last_shape,patch_shapes[level],0,self.interp_type,0)
+    
+    
+    
+        local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]),1 ,nD+1,nD+1])  
+        parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],pixel_noise,self.interp_type,0)
+        
+        if dest_shapes[level] is not None:
+            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],patch_shapes[level],0,self.scatter_type,1)
+        else:
+            parent_box_scatter_index = None          
+        local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]) ,nD+1,nD+1])
+    
+        
+        relres = [1]*nD
+            
+        if verbose:
+          print("--------- cropping, level ",level)
+            
+    
+        ############## do the actual cropping
+        res_data = self.crop(src_data,parent_box_index,relres,self.get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)        
+        if src_labels is not None:      
+          res_labels = self.crop(src_labels,parent_box_index,relres,self.get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
+        else:
+            res_labels = None
 
+            
+        if verbose:
+           end = timer()
+           print("time elapsed: " + str(end - start) )
 
+            
+    
+    
+    
+        return {"data_cropped" : res_data, 
+                "labels_cropped" : res_labels, 
+                               
+                  # these are crop coordinates refering to the last upper scale
+                  "local_boxes" : local_boxes, 
+                  "local_box_index": local_box_index,
+    
+                  # these are crop coordinates refereing to the very original image
+          #        "parent_boxes": parent_boxes, 
+                  "parent_box_index": parent_box_index,
+                  "parent_box_scatter_index": parent_box_scatter_index,
+                  "dest_full_size":dest_shapes[level],
+    
+      #            "absolute_size_patch_mm":abssz,
+       #           "aspect_correction":forwarded_aspects
+                  }
+    
+    
 
-      ############## do the actual cropping
-      res_data = self.crop(data_parent,parent_box_index,relres,get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)        
-      if labels_parent is not None:      
-        res_labels = self.crop(labels_parent,parent_box_index,relres,get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
-      else:
-        res_labels = None
+      
 
-  #    if res_data.shape[0] != local_boxes.shape[0]:
-  #        res_data
+  # def createCropsLocal(self,data_parent,labels_parent,crops,
+  #     level,
+  #     generate_type,test,
+  #     jitter=0,
+  #     jitter_border_fix=False,
+  #     num_patches=1,
+  #     branch_factor=1,
+  #     dphi=0,
+  #     patch_size_factor=1,
+  #     overlap=0,resolution=None,balance=None,verbose=True):
+      
+              
+    
+      
+  #     start = timer()
 
-
-      # for testing
-      if test:
-        if crops is None:
-          mult = (nD+2)*[1]
-          mult[0] = num_patches
-          images = tf.tile(images,mult)
-        test = tf.gather_nd(images,local_box_index,batch_dims=1)
-      else:
-        test = None
 
   
-      if verbose:
-        end = timer()
-        print("time elapsed: " + str(end - start) )
+  #     if verbose:
+  #       end = timer()
+  #       print("time elapsed: " + str(end - start) )
 
 
-      return {"data_cropped" : res_data, 
-              "labels_cropped" : res_labels, 
+  #     return {"data_cropped" : res_data, 
+  #             "labels_cropped" : res_labels, 
               
-               # only used for testing (crops of the last scale)
-              "data_cropped_test": test,
+  #              # only used for testing (crops of the last scale)
+  #             "data_cropped_test": test,
               
-              # these are crop coordinates refering to the last upper scale
-              "local_boxes" : local_boxes, 
-              "local_box_index": local_box_index,
+  #             # these are crop coordinates refering to the last upper scale
+  #             "local_boxes" : local_boxes, 
+  #             "local_box_index": local_box_index,
 
-              # these are crop coordinates refereing to the very original image
-              "parent_boxes": parent_boxes, 
-              "parent_box_index": parent_box_index,
-              "parent_box_scatter_index": parent_box_scatter_index,
-              "dest_full_size":dest_full_size,
+  #             # these are crop coordinates refereing to the very original image
+  #             "parent_boxes": parent_boxes, 
+  #             "parent_box_index": parent_box_index,
+  #             "parent_box_scatter_index": parent_box_scatter_index,
+  #             "dest_full_size":dest_full_size,
 
-              "absolute_size_patch_mm":abssz,
-              "aspect_correction":forwarded_aspects
-              }
+  #             "absolute_size_patch_mm":abssz,
+  #             "aspect_correction":forwarded_aspects
+  #             }
+
+
+
+
+
 
 
 
@@ -1362,94 +1196,6 @@ class CropGenerator():
       ax = plt.subplot(2,self.depth,level+1+self.depth)
       qq = self.scatter_valid(pbox_index,dqq*0+1,[sha[1],sha[2],1])
       ax.imshow(tf.transpose(qq[:,:,0],[0,1]))
-
-
-
-
-def quaternion2mat(q):
-    x = q[...,0:1]
-    y = q[...,1:2]
-    z = q[...,2:3]
-    r = tf.math.sqrt(x*x+y*y+z*z)
-    rmod = r-tf.math.floor(r)
-    sq = rmod/(r+0.00001)
-    x = sq*x                   
-    y = sq*y
-    z = sq*z
-    w = tf.math.sqrt(tf.maximum(0.0,1.0-(x*x+y*y+z*z)));
-    Rxx = 1 - 2*(y*y + z*z);
-    Rxy = 2*(x*y - z*w);
-    Rxz = 2*(x*z + y*w);
-    Ryx = 2*(x*y + z*w);
-    Ryy = 1 - 2*(x*x + z*z);
-    Ryz = 2*(y*z - x*w );
-    Rzx = 2*(x*z - y*w );
-    Rzy = 2*(y*z + x*w );
-    Rzz = 1 - 2 *(x*x + y*y);
-    return [ [Rxx,Rxy,Rxz],
-             [Ryx,Ryy,Ryz], 
-             [Rzx,Rzy,Rzz] ]
-
-def quaternion_prod(x,y):
-
-    p1 = x[...,0:1]
-    p2 = x[...,1:2]
-    p3 = x[...,2:3]
-    
-    q1 = y[...,0:1]
-    q2 = y[...,1:2]
-    q3 = y[...,2:3]
-
-    p0 = tf.math.sqrt(tf.maximum(0.0,1.0-(p1*p1+p2*p2+p3*p3)));
-    q0 = tf.math.sqrt(tf.maximum(0.0,1.0-(q1*q1+q2*q2+q3*q3)));
-  
-    
-    #real = p0*q0 − (p1*q1 + p2*q2 + p3*q3),
-    return tf.concat([(p2*q3 - p3*q2) + (p2*q3 - p3*q2) + p0*q1 + q0*p1,
-                      (p3*q1 - p1*q3) + (p3*q1 - p1*q3) + p0*q2 + q0*p2,
-                      (p1*q2 - p2*q1) + (p1*q2 - p2*q1) + p0*q3 + q0*p3],-1)
-
-
-
-
-
-
-
-#if 0:
-
- # crops = c.sample(trainset,None,test=False,generate_type='tree',num_patches = 1)
-
-  #  # plt.imshow(tf.squeeze(trainset[0,:,:,0]))
-
-  #   f = plt.figure(figsize=(20,20))
-
-  #   cnt = 1
-  #   n = 0
-  #   for x in scales:
-  # # 
-  #     print(x['data_cropped'].shape)
-  #     ax = plt.subplot(4,3,cnt)
-  #     ax.imshow(tf.squeeze(x['data_cropped'][n,:,:,0]))
-  #     cnt = cnt + 1
-
-  #     ax = plt.subplot(4,3,cnt)
-  #     ax.imshow(tf.squeeze(x['data_cropped_test'][n,:,:,0]))
-  #     cnt = cnt + 1
-
-  #     ax = plt.subplot(4,3,cnt)
-  #     ax.imshow(tf.math.reduce_sum(x['labels_cropped'][n,:,:,:],2))
-  #     cnt = cnt + 1
-
-
-
-# cgen = CropGenerator(patch_size = (64,64), 
-#                   scale_fac = 0.6, 
-#                   init_scale = -1,
-#                   overlap = 10,
-#                   depth=3)
-#cgen.testtree(labelset[0][0:1,:,:,5:6])
-
-
 
 
 

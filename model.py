@@ -398,6 +398,8 @@ class PatchWorkModel(Model):
       ## now, apply the network at the current scale       
       if testIT:
          res=inp
+         output.append(res)
+         
       else:
          res = self.blocks[k](inp,training=training)      
          if k < len(self.classifiers) and training:
