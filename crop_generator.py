@@ -457,16 +457,39 @@ class CropGenerator():
           resolution_ = resolutions[j]
           resolution_ = resolution_[0:self.ndim]
       
-      # if we use data augmentation during training
-      if augment is not None:
-          print("augmenting ...")
-          trainset_,labels_ = augment(trainset_,labels_)
-          print("augmenting done. ")
-
-
+      
+      dphi1=dphi
+      dphi2=dphi
+      flip=None
+      dscale = 0
+      pixel_noise = 0
+      
+      
 
       tensor = lambda a : tf.cast(a,dtype=self.ftype)
       int32 = lambda a : tf.cast(a,dtype=tf.int32)
+
+      
+      if augment is not None:                  
+          if isinstance(augment,dict):
+              if 'dphi' in augment:
+                  dphi1 = tensor(augment['dphi'])
+                  dphi2 = tensor(augment['dphi'])
+              if 'dphi1' in augment:
+                  dphi1 = tensor(augment['dphi1'])
+              if 'dphi2' in augment:
+                  dphi2 = tensor(augment['dphi2'])
+              if 'flip' in augment:
+                  flip = tensor(augment['flip'])
+              if 'dscale' in augment:
+                  dscale = tensor(augment['dscale'])
+              if 'pixel_noise' in augment:
+                  pixel_noise = tensor(augment['pixel_noise'])
+          else:
+              print("augmenting ...")
+              trainset_,labels_ = augment(trainset_,labels_)
+              print("augmenting done. ")
+
 
 
 
@@ -553,11 +576,11 @@ class CropGenerator():
                          generate_type=generate_type,
                          jitter = jitter,
                          overlap = overlap,
-                         dphi1=dphi,
-                         dphi2=dphi,
-                         flip=None,
-                         dscale = 0,
-                         pixel_noise = 0,
+                         dphi1=dphi1,
+                         dphi2=dphi2,
+                         flip=flip,
+                         dscale = dscale,
+                         pixel_noise = pixel_noise,
                          balance=balance,
                          num_patches=num_patches,
                          branch_factor=branch_factor,
@@ -794,8 +817,12 @@ class CropGenerator():
             balance = balance.copy()
             if 'label_range' in balance and balance['label_range'] is not None:
                 balance['label_range'] = tf.cast(balance['label_range'],dtype=tf.int32)
+            else:
+                balance['label_range'] = tf.cast(range(self.model.num_labels),dtype=tf.int32)
             if 'label_weight' in balance  and balance['label_weight'] is not None:
                 balance['label_weight'] = tf.cast(balance['label_weight'],dtype=src_data.dtype)
+            else:
+                balance['label_weight'] = tf.cast([1]*self.model.num_labels,dtype=src_data.dtype)
     
         patch_widths = patching_params['patch_widths']
         patch_shapes = patching_params['patch_shapes']
