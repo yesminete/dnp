@@ -1206,8 +1206,8 @@ class PatchWorkModel(Model):
 
 
         if fit_type == 'custom':
-            
-            dataset = c_data.getDataset().shuffle(total_numpatches).batch(batch_size,drop_remainder=True)
+            shuffle_buffer = max(2000,total_numpatches)
+            dataset = c_data.getDataset().shuffle(shuffle_buffer).batch(batch_size,drop_remainder=True)
 
             if not "train_step" in self.compiled:
                 self.compiled["train_step"] = tf.function(train_step_supervised)
