@@ -831,7 +831,8 @@ class CropGenerator():
         depth = patching_params['depth']
         
         tensor = lambda a : tf.cast(a,dtype=self.ftype)
-        
+        int32 = lambda a : tf.cast(a,dtype=tf.int32)
+       
         
         def compindex(dbox,lbox,dshape,lshape,noise,interptyp,offs):        
             e = tf.einsum('bxy,kbyz->kbxz',tf.linalg.inv(dbox,adjoint=False),lbox)
@@ -992,9 +993,8 @@ class CropGenerator():
                     points = draw_center_bylabel(label,balance,nD,N)         
                 else:
                     points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
-                x0 = (shape-1)*w/2
-                x1 = (shape-1)*(1-w)
-                points = ed(x0) + points * ed(x1)
+                points = points*shape
+                                                
             elif generate_type == "tree":
                 # tree 
                 nboxes = tf.math.floor(1/w + 1)
@@ -1012,6 +1012,11 @@ class CropGenerator():
                 N = points.shape[0]
             else:
                 assert False, "not a valid generate_type"
+    
+            # snap overlapping patches on edges
+            snap = ed(shape*out_width/width*0.5)
+            points = tf.where(points < snap, snap,points)
+            points = tf.where(points > ed(shape)-snap, ed(shape)-snap,points)
         
             points = tf.einsum('bxy,Nby->Nbx',edges[...,0:nD,0:nD],points) + tf.expand_dims(edges[...,0:nD,-1],0)
             points = tf.reshape(points,[b*N,nD])
@@ -1094,7 +1099,8 @@ class CropGenerator():
             
         if verbose:
            end = timer()
-           print("time elapsed: " + str(end - start) )
+           print(" #patches:" + str(res_data.shape[0]) + " time/patch:" + ("{:.3f}ms").format(((end - start)/(res_data.shape[0]))) )
+           print(" elapsed: " + ("{:.3f}ms").format(end - start) )
 
             
     
