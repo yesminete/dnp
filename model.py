@@ -604,6 +604,7 @@ class PatchWorkModel(Model):
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
              res = zipper(pred,sumpred,lambda a,b : a/(b+0.0001))     
+             
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
