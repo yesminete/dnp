@@ -107,10 +107,13 @@ class myHistory :
             plt.pause(0.001)
             
         else:
-    #%%
+            #%%
             loss_hist = self.trainloss_hist
             plt.cla()
+            
             def plothist(loss_hist,txt):
+                import matplotlib.pyplot as plt
+                
                 cols = 'rbymckrbymck'   
                 cnt = 0
                 for k in sorted(loss_hist):
@@ -120,14 +123,24 @@ class myHistory :
                     y = np.convolve(y,np.ones([n])/n,mode='valid')
                     if n > 1:
                         y = np.concatenate([np.ones([n-1])*y[0],y],0)
-                                        
+                    
+                    labeltxt = (txt+k).replace("_output","") + (": {:.2f}").format(math.log(y[-1]))
+                    
+                    
                     if txt == "":                     
-                        plt.semilogy(x,y,cols[cnt],label=txt+k,marker='o', linestyle='dashed')
+                        plt.semilogy(x,y,cols[cnt],label=labeltxt,marker='o', linestyle='dashed')
                     else:
-                        plt.semilogy(x,y,cols[cnt],label=txt+k)
+                        plt.semilogy(x,y,cols[cnt],label=labeltxt)
                     cnt+=1
+
+            fig, ax = plt.subplots()
+
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
+            
+            
+
+#%%           
             plt.legend(loc=3)
             plt.grid()
             if self.model.modelname is not None:
@@ -138,6 +151,7 @@ class myHistory :
                 plt.savefig(self.model.modelname + ".png")
             else:
                 plt.pause(0.001)  
+#%%            
     except Exception as e:
         if 'DISPLAY' in os.environ:        
             print("Exception:" + str(e))
