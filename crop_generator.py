@@ -496,6 +496,12 @@ class CropGenerator():
 
       def getPatchingParams(input_width,input_shape,resolution,depth):
 
+          showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
+
+          print("input:  shape:"+ showten(tensor(input_shape),0)+
+                "  width(mm):"+showten(tensor(input_width),1) +
+                '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
+
           nD = len(resolution)
           patch_shapes = []
           for k in range(depth):
@@ -547,10 +553,13 @@ class CropGenerator():
             dest_shapes.append(int32(input_width/w))
 
           if verbose:
-            showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
             for k in range(depth):
-               print("level "+str(k) + ":  shape:"+ showten(patch_shapes[k],0)+ "  width(mm):"+showten(patch_widths[k],1) )
-               print('  voxsize relative to input:' + showten((patch_widths[k]/patch_shapes[k])/(input_width/tensor(input_shape) ),2))
+               print("level "+str(k) + ":  shape:"+ showten(patch_shapes[k],0)+ "  width(mm):"+showten(patch_widths[k],1) +
+                    '  voxsize:' +  showten((patch_widths[k]/patch_shapes[k]),2),
+                     '  (rel. to input:' + 
+                     showten((patch_widths[k]/patch_shapes[k])/(input_width/tensor(input_shape) ),2)                     
+                     + ')'
+                     )
                print('  dest_shape:' + showten(dest_shapes[k],0))
             
 
