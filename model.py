@@ -19,6 +19,7 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import layers
 from tensorflow.keras.callbacks import History 
+import tensorflow.keras.backend as kb
 
 from timeit import default_timer as timer
 from os import path
@@ -69,7 +70,7 @@ class myHistory :
           
       if which == 'train':
           loss_hist = self.trainloss_hist
-      if which == 'valid':
+      else: # if which == 'valid':
           loss_hist = self.validloss_hist
       for k in cur_hist:
          if k not in loss_hist:
@@ -963,6 +964,7 @@ class PatchWorkModel(Model):
             unlabeled_ids = [],
             valid_ids = [],
             valid_num_patches=None,
+            self_validation=True,
             batch_size=32,
             verbose=1,
             steps_per_epoch=None,
@@ -985,6 +987,15 @@ class PatchWorkModel(Model):
             callback=None
             ):
       
+    def f1_metric(y_true, y_pred):
+        true_positives = kb.sum(kb.round(kb.clip(y_true * y_pred, 0, 1)))
+        possible_positives = kb.sum(kb.round(kb.clip(y_true, 0, 1)))
+        predicted_positives = kb.sum(kb.round(kb.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + kb.epsilon())
+        recall = true_positives / (possible_positives + kb.epsilon())
+        f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
+        return f1_val      
+      
 
     def getSample(subset,np,valid=False):
         tset = [trainset[i] for i in subset]
@@ -992,8 +1003,10 @@ class PatchWorkModel(Model):
         rset = None
         
         dphi = rot_intrinsic
+        aug_ = augment
         if valid:
             dphi=0
+            aug_=None
         
         self.cropper.dest_full_size = [None]*self.cropper.depth
 
@@ -1005,14 +1018,14 @@ class PatchWorkModel(Model):
     
             if traintype == 'random':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
-                                        num_patches=np,augment=augment,balance=balance,dphi=dphi)
+                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi)
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
-                                        jitter_border_fix=jitter_border_fix,augment=augment,balance=balance,dphi=dphi)
+                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi)
         return c
     
     @tf.function
-    def valid_step_supervised(images,lossfun):
+    def valid_step_supervised(images,lossfun,prefix):
             
       hist = {}
       
@@ -1028,8 +1041,9 @@ class PatchWorkModel(Model):
             loss += l
             if len(labels) > 1:
                 if k == len(labels)-1:
-                    hist['valid_output_'+str(k+1)+'_loss'] = l
-      hist['valid_S_loss'] = loss
+                    hist[prefix+'_output_'+str(k+1)+'_loss'] = l
+                    hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k])
+  #    hist[prefix+'_S_loss'] = loss
       return hist
     
     def train_step_supervised(images,lossfun):
@@ -1052,8 +1066,9 @@ class PatchWorkModel(Model):
             if depth > 1:
                 if k == depth-1:
                     hist['output_' + str(k+1) + '_loss'] = l
+                    hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
             loss += l
-        hist['S_loss'] = loss
+   #     hist['S_loss'] = loss
             
       gradients = tape.gradient(loss,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
@@ -1197,7 +1212,7 @@ class PatchWorkModel(Model):
         if max_agglomerative:
             sampletyp[1] = num_patches
 
-
+        debug=False
             
 
         print("starting training")
@@ -1211,7 +1226,10 @@ class PatchWorkModel(Model):
             dataset = c_data.getDataset().shuffle(total_numpatches).batch(batch_size,drop_remainder=True)
 
             if not "train_step" in self.compiled:
-                self.compiled["train_step"] = tf.function(train_step_supervised)
+                if debug:
+                    self.compiled["train_step"] = train_step_supervised
+                else:
+                    self.compiled["train_step"] = tf.function(train_step_supervised)
                 
             
             numsamples = tf.data.experimental.cardinality(dataset).numpy() * batch_size
@@ -1226,6 +1244,10 @@ class PatchWorkModel(Model):
                 infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
 
             if not "train_step_discrim" in self.compiled:
+                if debug:
+                    self.compiled["train_step_discrim"] = (train_step_discriminator)
+                    self.compiled["train_step_unsuper"] = (train_step_unsupervised)
+                else:
                     self.compiled["train_step_discrim"] = tf.function(train_step_discriminator)
                     self.compiled["train_step_unsuper"] = tf.function(train_step_unsupervised)
             
@@ -1285,27 +1307,33 @@ class PatchWorkModel(Model):
                     
         print("time elapsed, fitting: " + str(end - start) )
         
+        
+        
+
         ### validation
-        if len(valid_ids) > 0:
-            print("sampling patches for validation")
-            c = getSample(valid_ids,valid_num_patches,valid=True)    
+        def do_validation(idx,npatches,prefix):
+            c = getSample(idx,npatches,valid=True)    
             print("validating")
             dataset = c.getDataset().batch(batch_size)
             log = []
             for images in dataset:
-                losslog = valid_step_supervised(images,loss)            
+                losslog = valid_step_supervised(images,loss,prefix)            
                 log.append(losslog)
                 print('.', end='')                
-            print('| ')                
-                
-            log = self.myhist.accum('valid',log,1,tensors=True,mean=True)
+            print('| ')                                
+            log = self.myhist.accum(prefix,log,1,tensors=True,mean=True)
             for k in log:
                 print(k + ":" + str(log[k][0]),end=" ")
             print("")
 
-
-            c = None
-            res = None
+        
+        if self_validation:        
+            print("sampling patches for self validtion")
+            do_validation(trainidx,max(5,num_patches//10),'selfv')
+        
+        if len(valid_ids) > 0:
+            print("sampling patches for validtion")
+            do_validation(valid_ids,valid_num_patches,'valid')
             
             
         if callback is not None:
