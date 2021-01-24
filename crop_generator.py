@@ -316,15 +316,14 @@ class CropGenerator():
 
 
 
-
-
-
-
   def get_patchsize(self,level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
-          if isinstance(self.patch_size[0],Iterable):
-              return self.patch_size[level]
+          pats = self.patch_size
+          if self.scheme is not None and 'patch_size' in self.scheme:
+              pats = self.scheme['patch_size']
+          if isinstance(pats[0],Iterable):
+              return pats[level]
           else: 
-              return self.patch_size
+              return pats
         
   def get_scalefac(self,level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
                                     # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
@@ -354,7 +353,8 @@ class CropGenerator():
 
 
   def serialize_(self):
-      return { 'patch_size':self.patch_size,
+      return { 'scheme':self.scheme,
+               'patch_size':self.patch_size,
                'scale_fac' :self.scale_fac,
                'scale_fac_ref' :self.scale_fac_ref,
                'interp_type' :self.interp_type,
@@ -394,6 +394,13 @@ class CropGenerator():
              test=False,
              lazyEval=None,
              verbose=False):
+      
+      
+    def at(dic,key):
+        if key in dic:
+            return dic[key]
+        else:
+            return None
 
             
     def extend_classlabels(x,class_labels_):
@@ -513,13 +520,14 @@ class CropGenerator():
              patch_shapes.append(self.get_patchsize(k))
           patch_shapes = list(map(tensor,patch_shapes))
         
+          
+        
           if self.scheme is not None:
-              destvox_mm = self.scheme['destvox_mm']
-              destvox_rel = self.scheme['destvox_rel']
-              
-              fov_mm = self.scheme['fov_mm']
-              fov_rel = self.scheme['fov_rel']
-              
+              destvox_mm = at(self.scheme,'destvox_mm')
+              destvox_rel = at(self.scheme,'destvox_rel')
+              fov_mm = at(self.scheme,'fov_mm')
+              fov_rel = at(self.scheme,'fov_rel')
+                                
               if fov_mm is not None:
                   patch_widths = [tensor(fov_mm)]
               else:
