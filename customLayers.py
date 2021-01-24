@@ -10,7 +10,7 @@ from tensorflow.keras import layers
 import tensorflow as tf
 import numpy as np
 
-import patchwork
+#import patchwork
 
 
 
@@ -96,7 +96,8 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
             
     theLayers[id_u+"relu"] = BNrelu()
   theLayers["3000"] =  [layers.Dropout(rate=0.5), conv(outK)]
-  return patchwork.CNNblock(theLayers,verbose=verbose)
+  #return patchwork.CNNblock(theLayers,verbose=verbose)
+  return CNNblock(theLayers,verbose=verbose)
 
 
 
@@ -194,7 +195,8 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
   else:
       theLayers["9_final"] =  conv(outK)
       
-  return patchwork.CNNblock(theLayers,verbose=verbose)
+  #return patchwork.CNNblock(theLayers,verbose=verbose)
+  return CNNblock(theLayers,verbose=verbose)
 
 
 
@@ -247,7 +249,8 @@ def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False
             
     theLayers[id_u+"relu"] = BNrelu()
   theLayers["3000"] =  [layers.Dropout(rate=0.5), conv(outK)]
-  return patchwork.CNNblock(theLayers,verbose=verbose)
+ # return patchwork.CNNblock(theLayers,verbose=verbose)
+  return CNNblock(theLayers,verbose=verbose)
 
 
 
@@ -290,7 +293,8 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
     if activation is not None:
         theLayers["3005"] = layers.Activation(activation)
       
-    return patchwork.CNNblock(theLayers,verbose=verbose)
+    return CNNblock(theLayers,verbose=verbose)
+    #return patchwork.CNNblock(theLayers,verbose=verbose)
     
     
 

@@ -509,10 +509,11 @@ class CropGenerator():
 
           showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
 
-          print("input:  shape:"+ showten(tensor(input_shape),0)+
-                "  width(mm):"+showten(tensor(input_width),1) +
-                '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
-
+          if verbose:
+              print("input:  shape:"+ showten(tensor(input_shape),0)+
+                    "  width(mm):"+showten(tensor(input_width),1) +
+                    '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
+    
           nD = len(resolution)
         
           patch_shapes = []
