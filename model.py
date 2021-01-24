@@ -190,6 +190,7 @@ class PatchWorkModel(Model):
                trained_epochs = 0,
                modelname = None,
                train_cycle = None,
+               augment = None,
                input_fdim = None
                ):
     super().__init__()
@@ -230,6 +231,7 @@ class PatchWorkModel(Model):
     self.trained_epochs = trained_epochs
     self.modelname = modelname
     self.train_cycle = train_cycle
+    self.augment = augment
     self.input_fdim = input_fdim
     self.compiled = {}
     
@@ -303,6 +305,7 @@ class PatchWorkModel(Model):
                'validloss_hist':self.myhist.validloss_hist,
                'trained_epochs':self.trained_epochs,
                'train_cycle':self.train_cycle,
+               'augment':self.augment,
                'input_fdim':self.input_fdim
             }
 
@@ -524,6 +527,11 @@ class PatchWorkModel(Model):
          if 'label' not in lazyEval:
              lazyEval['label'] = None
 
+
+     if augment is None:
+          augment = self.augment
+
+
               
      pstats = [None]*len(level)
 
@@ -680,7 +688,7 @@ class PatchWorkModel(Model):
         else:
             return img,None
     
-        
+    
       scrop = None
      
       nD = self.cropper.ndim
@@ -1156,6 +1164,8 @@ class PatchWorkModel(Model):
     for b in self.classifiers:
         self.disc_variables += b.trainable_variables
     
+    if isinstance(augment,dict):        
+        self.augment = augment
     
     
     if valid_num_patches is None:
