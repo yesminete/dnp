@@ -109,7 +109,6 @@ class myHistory :
         else:
             #%%
             loss_hist = self.trainloss_hist
-            plt.cla()
             
             def plothist(loss_hist,txt):
                 import matplotlib.pyplot as plt
@@ -138,6 +137,7 @@ class myHistory :
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
             
+            ax.set_ylim(ymax=10)
             
 
 #%%           
