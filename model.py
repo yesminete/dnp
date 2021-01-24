@@ -124,7 +124,7 @@ class myHistory :
                     if n > 1:
                         y = np.concatenate([np.ones([n-1])*y[0],y],0)
                     
-                    labeltxt = (txt+k).replace("_output","") + (": {:.2f}").format(math.log(y[-1]))
+                    labeltxt = (txt+k).replace("_output","") + (": {:.2f}").format(math.log(y[-1])/math.log(10.0)   )
                     
                     
                     if txt == "":                     
