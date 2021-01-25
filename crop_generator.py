@@ -212,14 +212,17 @@ def scatter_interp(x,data,sz):
 
 class CropGenerator():
 
-  def __init__(self,patch_size = (64,64),  # this is the size of our patches
-                    scale_fac = 0.4,       # scale factor from one scale to another
-                    scale_fac_ref = 'max', # for inhomgenus matrixsizes scale_fac has to computed to certain axis (possible values 'max','min' or int refering to dimension)
-                    init_scale = -1,       # a) if init_scale = -1, already first layer consists of patches, 
-                                           # b) if init_scale = sfac, it's the scale factor which the full image is scaled to
-                                           # c) if init_scale = [sx,sy], it's the shape the full image is scaled to
-                    auto_patch = None,
-                    keepAspect = True,     # in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
+  def __init__(self,scheme=None,                    
+                    patch_size = (64,64),  # (deprecated) this is the size of our patches
+                    scale_fac = 0.4,       # (deprecated) scale factor from one scale to another
+                    scale_fac_ref = 'max', # (deprecated) for inhomgenus matrixsizes scale_fac has to computed to certain axis (possible values 'max','min' or int refering to dimension)
+                    init_scale = -1,       # (deprecated) a) if init_scale = -1, already first layer consists of patches, 
+                                           # (deprecated) b) if init_scale = sfac, it's the scale factor which the full image is scaled to
+                                           # (deprecated) c) if init_scale = [sx,sy], it's the shape the full image is scaled to
+                    auto_patch = None,     # (deprecated)                                   
+                    keepAspect = True,     # (deprecated)  in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
+                    
+                    
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
                     interp_type = 'NN',    # nearest Neighbor (NN) or linear (lin)
@@ -231,6 +234,7 @@ class CropGenerator():
                     ftype=tf.float32
                     ):
     self.model = None
+    self.scheme = scheme
     self.patch_size = patch_size
     self.scale_fac = scale_fac
     self.scale_fac_ref = scale_fac_ref
@@ -312,15 +316,14 @@ class CropGenerator():
 
 
 
-
-
-
-
   def get_patchsize(self,level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
-          if isinstance(self.patch_size[0],Iterable):
-              return self.patch_size[level]
+          pats = self.patch_size
+          if self.scheme is not None and 'patch_size' in self.scheme:
+              pats = self.scheme['patch_size']
+          if isinstance(pats[0],Iterable):
+              return pats[level]
           else: 
-              return self.patch_size
+              return pats
         
   def get_scalefac(self,level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
                                     # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
@@ -350,7 +353,8 @@ class CropGenerator():
 
 
   def serialize_(self):
-      return { 'patch_size':self.patch_size,
+      return { 'scheme':self.scheme,
+               'patch_size':self.patch_size,
                'scale_fac' :self.scale_fac,
                'scale_fac_ref' :self.scale_fac_ref,
                'interp_type' :self.interp_type,
@@ -390,6 +394,13 @@ class CropGenerator():
              test=False,
              lazyEval=None,
              verbose=False):
+      
+      
+    def at(dic,key):
+        if key in dic:
+            return dic[key]
+        else:
+            return None
 
             
     def extend_classlabels(x,class_labels_):
@@ -496,49 +507,82 @@ class CropGenerator():
 
       def getPatchingParams(input_width,input_shape,resolution,depth):
 
+          showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
+
+          if verbose:
+              print("input:  shape:"+ showten(tensor(input_shape),0)+
+                    "  width(mm):"+showten(tensor(input_width),1) +
+                    '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
+    
           nD = len(resolution)
+        
           patch_shapes = []
           for k in range(depth):
              patch_shapes.append(self.get_patchsize(k))
           patch_shapes = list(map(tensor,patch_shapes))
+        
           
-          init_scale = self.init_scale
-          depth = self.depth
-          if isinstance(init_scale,str) or init_scale == -1:
-             if isinstance(init_scale,str):
-                if init_scale.find('mm') != -1 or init_scale.find('cm') != -1:
-                    assert (resolution is not None), "for absolute init_scale you have to pass resolution"
-                    if init_scale.find('cm') != -1:
-                        sizes_mm = init_scale.replace("cm","").split(",")
-                        sizes_mm = list(map(lambda x: float(x)*10, sizes_mm))
-                    else:
-                        sizes_mm = init_scale.replace("mm","").split(",")
-                        sizes_mm = list(map(float, sizes_mm))                   
-                    patch_widths = [tensor(sizes_mm)]
-                else:
-                   assert False, "bug in init_scale"
-             else:
-                patch_widths = []
+        
+          if self.scheme is not None:
+              destvox_mm = at(self.scheme,'destvox_mm')
+              destvox_rel = at(self.scheme,'destvox_rel')
+              fov_mm = at(self.scheme,'fov_mm')
+              fov_rel = at(self.scheme,'fov_rel')
+                                
+              if fov_mm is not None:
+                  patch_widths = [tensor(fov_mm)]
+              else:
+                  patch_widths = [tensor(fov_rel)*input_width]
             
-             shapes = [tensor(input_shape)] + patch_shapes
-             for k in range(len(patch_widths),depth):
-                asp = []
-                for d in range(nD):
-                    asp.append(shapes[k][d]/shapes[k+1][d]*self.get_scalefac(k)[d])
-                if self.scale_fac_ref == 'max':
-                    asp = [max(asp)]*nD
-                elif self.scale_fac_ref == 'min':
-                    asp = [min(asp)]*nD
-                elif self.scale_fac_ref == 'perdim':
-                    asp = asp
-                else:
-                    asp = [asp[self.scale_fac_ref]]*nD
-                if len(patch_widths) == 0:
-                    patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*input_width)
-                else:
-                    patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*patch_widths[-1])
+              if destvox_mm is not None:
+                  final_width = patch_shapes[-1]*tensor(destvox_mm)
+              else:
+                  final_width = patch_shapes[-1]*input_width/tensor(input_shape)*tensor(destvox_rel)
+              fac = tf.math.pow(final_width / patch_widths[0],1/(depth-1))
+              for k in range(1,depth):
+                  patch_widths.append(fac*patch_widths[-1])
+                  
+          else:
+            
               
-                    
+              init_scale = self.init_scale
+              depth = self.depth
+              if isinstance(init_scale,str) or init_scale == -1:
+                 if isinstance(init_scale,str):
+                    if init_scale.find('mm') != -1 or init_scale.find('cm') != -1:
+                        assert (resolution is not None), "for absolute init_scale you have to pass resolution"
+                        if init_scale.find('cm') != -1:
+                            sizes_mm = init_scale.replace("cm","").split(",")
+                            sizes_mm = list(map(lambda x: float(x)*10, sizes_mm))
+                        else:
+                            sizes_mm = init_scale.replace("mm","").split(",")
+                            sizes_mm = list(map(float, sizes_mm))                   
+                        patch_widths = [tensor(sizes_mm)]
+                    else:
+                       assert False, "bug in init_scale"
+                 else:
+                    patch_widths = []
+                
+                 shapes = [tensor(input_shape)] + patch_shapes
+                 for k in range(len(patch_widths),depth):
+                    asp = []
+                    for d in range(nD):
+                        asp.append(shapes[k][d]/shapes[k+1][d]*self.get_scalefac(k)[d])
+                    if self.scale_fac_ref == 'max':
+                        asp = [max(asp)]*nD
+                    elif self.scale_fac_ref == 'min':
+                        asp = [min(asp)]*nD
+                    elif self.scale_fac_ref == 'perdim':
+                        asp = asp
+                    else:
+                        asp = [asp[self.scale_fac_ref]]*nD
+                    if len(patch_widths) == 0:
+                        patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*input_width)
+                    else:
+                        patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*patch_widths[-1])
+              
+                
+                                 
           dest_edges = []
           dest_shapes = []
           for k in range(len(patch_shapes)):
@@ -547,10 +591,13 @@ class CropGenerator():
             dest_shapes.append(int32(input_width/w))
 
           if verbose:
-            showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
             for k in range(depth):
-               print("level "+str(k) + ":  shape:"+ showten(patch_shapes[k],0)+ "  width(mm):"+showten(patch_widths[k],1) )
-               print('  voxsize relative to input:' + showten((patch_widths[k]/patch_shapes[k])/(input_width/tensor(input_shape) ),2))
+               print("level "+str(k) + ":  shape:"+ showten(patch_shapes[k],0)+ "  width(mm):"+showten(patch_widths[k],1) +
+                    '  voxsize:' +  showten((patch_widths[k]/patch_shapes[k]),2),
+                     '  (rel. to input:' + 
+                     showten((patch_widths[k]/patch_shapes[k])/(input_width/tensor(input_shape) ),2)                     
+                     + ')'
+                     )
                print('  dest_shape:' + showten(dest_shapes[k],0))
             
 
