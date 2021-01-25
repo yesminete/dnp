@@ -959,7 +959,7 @@ class CropGenerator():
                                tf.concat([Rzx,Rzy,Rzz,null],1),
                                tf.concat([null,null,null,1+null],1)],2)
         
-        def draw_center_bylabel(label,balance,nD,M):        
+        def draw_center_bylabel(label,balance,noisefac,nD,M):        
             
               if len(label.shape) < nD+2:
                   label = tf.expand_dims(label,3)
@@ -1000,6 +1000,7 @@ class CropGenerator():
                   p = p/tf.reduce_sum(p)
                   idx = np.random.choice(numvx,M,p=p)
                   R = np.transpose(np.unravel_index(idx,sz))
+                  R = R + np.random.normal(size=R.shape)*tf.expand_dims(noisefac,0)*0.2                  
                   R = R + np.random.uniform(low=0,high=1,size=R.shape)
                   points = R/sz
                   
@@ -1037,7 +1038,7 @@ class CropGenerator():
             # rnd points inside patches
             if generate_type == "random":
                 if balance is not None:
-                    points = draw_center_bylabel(label,balance,nD,N)         
+                    points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
                 else:
                     points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
                 points = points*shape
@@ -1124,7 +1125,7 @@ class CropGenerator():
         parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],pixel_noise,self.interp_type,0)
         
         if dest_shapes[level] is not None:
-            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],patch_shapes[level],0,self.scatter_type,1)
+            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],patch_shapes[level],0,self.scatter_type,0)
         else:
             parent_box_scatter_index = None          
         local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]) ,nD+1,nD+1])
