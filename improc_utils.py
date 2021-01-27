@@ -351,27 +351,27 @@ def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
     if not batch_dim:
         image = tf.expand_dims(image,0)
 
-    off = 0.5
+    off = -0.5
     
     if nD==2:
         sz = image.shape
         X,Y = np.meshgrid(np.arange(0,dest_shape[0]),np.arange(0,dest_shape[1]),indexing='ij')
-        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
-        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
         if edge_center:
             X = X + off
             Y = Y + off
+        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
+        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
         res = interp2lin(image,X,Y)
     if nD==3:
         sz = image.shape
         X,Y,Z = np.meshgrid(np.arange(0,dest_shape[0]),np.arange(0,dest_shape[1]),np.arange(0,dest_shape[2]),indexing='ij')
-        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
-        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
-        Z = tf.cast(Z,dtype=tf.float32)/dest_shape[2]*sz[3]
         if edge_center:
             X = X + off
             Y = Y + off
             Z = Z + off
+        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
+        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
+        Z = tf.cast(Z,dtype=tf.float32)/dest_shape[2]*sz[3]
         res = interp3lin(image,X,Y,Z)
         
     if not batch_dim:
@@ -1108,7 +1108,7 @@ def align_to_physical_coords(im):
     for k in range(3):
         flip[k,k] = sg[idxinv[k]]
         if sg[idxinv[k]] < 0:
-            flip[k,3] = d.shape[k]-1
+            flip[k,3] = d.shape[k]
     
     for k in range(3):
         if sg[idxinv[k]] < 0:

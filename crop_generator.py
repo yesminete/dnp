@@ -1122,10 +1122,12 @@ class CropGenerator():
     
     
         local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]),1 ,nD+1,nD+1])  
-        parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],pixel_noise,self.interp_type,0)
+        parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],
+                                     pixel_noise,self.interp_type,0)
         
         if dest_shapes[level] is not None:
-            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],patch_shapes[level],0,self.scatter_type,0)
+            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],patch_shapes[level],
+                                                 0,self.scatter_type,1)
         else:
             parent_box_scatter_index = None          
         local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]) ,nD+1,nD+1])

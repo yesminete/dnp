@@ -103,7 +103,6 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
 
 def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False,
                   padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
-
   if nD == 3:
       strides = [2,2,2]
       _conv = layers.Conv3D

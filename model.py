@@ -632,7 +632,7 @@ class PatchWorkModel(Model):
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
              for k in level:
-                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD))                        
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=True))                        
          if single:
            res = res[0]
      
@@ -666,6 +666,7 @@ class PatchWorkModel(Model):
                  patch_size_factor=1,
                  crop_fdim=None,
                  crop_sdim=None,
+                 testIT=False,
                  lazyEval = None):
 
       def crop_spatial(img,c):
@@ -736,6 +737,7 @@ class PatchWorkModel(Model):
                                 lazyEval = lazyEval,
                                 patch_size_factor=patch_size_factor,
                                 verbose=True,
+                                testIT=testIT,
                                 scale_to_original=scale_to_original)
 
 
@@ -766,14 +768,18 @@ class PatchWorkModel(Model):
           
       
       if not scale_to_original:
+          vsz = img1.header['pixdim'][1:nD+1]
           sz = a.shape[1:nD+1]
           if nD == 2:
               facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],1]
           else:
               facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],res.shape[2]/sz[2]]
           img1.header.set_data_shape(res.shape)
-          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,0],[0,1/facs[1],0,0],[0,0,1/facs[2],0],[0,0,0,1]]))
-      
+          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,1],
+                                                      [0,1/facs[1],0,1],
+                                                      [0,0,1/facs[2],1],
+                                                      [0,0,0,1]]))
+            
       
       img1.header.set_data_dtype('int16')          
 
