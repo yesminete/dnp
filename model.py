@@ -78,7 +78,24 @@ class myHistory :
       for k in loss_hist:
          if k in cur_hist:
              loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
-      return cur_hist
+             
+     
+      new_minimum = False
+      for k in self.validloss_hist:
+          h = self.validloss_hist[k]
+          a = filter(lambda x: x[0] > self.model.trained_epochs-5,h)
+          a = list(map(lambda a:a[1],a))
+          if len(a) < 2:
+              break
+          if 'loss' in k:
+              if a[-1] < min(a[0:-1]):
+                  new_minimum = True
+          # else:
+          #     if a[-1] > max(a[0:-1]):
+          #         new_minimum = True
+          
+             
+      return cur_hist, new_minimum
     
   def show_train_stat(self):
 
@@ -137,6 +154,12 @@ class myHistory :
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
             
+            if self.model.saved_points is not None:
+                for k in self.model.saved_points:
+                    xx = int(self.model.saved_points[k])
+                    plt.axvline(x=xx)
+                    plt.text(int(xx), 14,k)
+            
             ax.set_ylim(ymax=10)
             
 
@@ -188,6 +211,7 @@ class PatchWorkModel(Model):
                trainloss_hist = None,
                validloss_hist = None,
                trained_epochs = 0,
+               saved_points = None,
                modelname = None,
                train_cycle = None,
                augment = None,
@@ -231,6 +255,7 @@ class PatchWorkModel(Model):
     self.trained_epochs = trained_epochs
     self.modelname = modelname
     self.train_cycle = train_cycle
+    self.saved_points = saved_points
     self.augment = augment
     self.input_fdim = input_fdim
     self.compiled = {}
@@ -304,6 +329,7 @@ class PatchWorkModel(Model):
                'trainloss_hist':self.myhist.trainloss_hist,
                'validloss_hist':self.myhist.validloss_hist,
                'trained_epochs':self.trained_epochs,
+               'saved_points':self.saved_points,
                'train_cycle':self.train_cycle,
                'augment':self.augment,
                'input_fdim':self.input_fdim
@@ -822,6 +848,8 @@ class PatchWorkModel(Model):
 
   def save(self,fname):
      outname = fname + ".json"
+     if self.train_cycle is not None:              
+         self.saved_points[str(self.train_cycle)]=self.trained_epochs
      with open(outname,'w') as outfile:
          json.dump(self, outfile,cls=patchworkModelEncoder)
      print(fname +" saved!")
@@ -1156,6 +1184,9 @@ class PatchWorkModel(Model):
         DEVCPU = "/cpu:0"
     else:
         DEVCPU = "/gpu:0"
+    
+    if self.saved_points is None:
+        self.saved_points = {}
         
     if self.train_cycle is None:
        self.train_cycle = 0   
@@ -1211,6 +1242,7 @@ class PatchWorkModel(Model):
         print("unlabeled imgs: "+ str(len(unlabeled_ids)))        
     print("validate imgs: "+ str(len(valid_ids)))
             
+    was_last_min = False
     for i in range(num_its):
         print("----------------------------------------- iteration:" + str(i))
         
@@ -1306,7 +1338,7 @@ class PatchWorkModel(Model):
                     log.append(losslog)
                     print('.', end='')                
                 
-                log = self.myhist.accum('train',log,1,tensors=True,mean=True)
+                log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
                 self.trained_epochs+=1
                 end = timer()
                 print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
@@ -1351,25 +1383,26 @@ class PatchWorkModel(Model):
                 log.append(losslog)
                 print('.', end='')                
             print('| ')                                
-            log = self.myhist.accum(prefix,log,1,tensors=True,mean=True)
+            log, new_min = self.myhist.accum(prefix,log,1,tensors=True,mean=True)
             for k in log:
                 print(k + ":" + str(log[k][0]),end=" ")
             print("")
+            return new_min
 
         
         if self_validation:        
             print("sampling patches for self validtion")
-            do_validation(trainidx,max(5,num_patches//10),'selfv')
+            new_min_self = do_validation(trainidx,max(5,num_patches//10),'selfv')
         
         if len(valid_ids) > 0:
             print("sampling patches for validtion")
-            do_validation(valid_ids,valid_num_patches,'valid')
+            new_min_valid = do_validation(valid_ids,valid_num_patches,'valid')
             
+
             
         if callback is not None:
             callback(i)
 
-        
         
         if autosave:
            if self.modelname is None:
