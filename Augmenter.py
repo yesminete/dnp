@@ -14,7 +14,7 @@ import tensorflow as tf
 
 
 from random import sample 
-from improc_utils import *
+from .improc_utils import *
 
 def Augmenter( morph_width = 150,
                 morph_strength=0.25,

@@ -11,3 +11,4 @@ from .modelAUN import *
 from .crop_generator import *
 from .improc_utils import *
 from .customLayers import *
+from .Augmenter import *
