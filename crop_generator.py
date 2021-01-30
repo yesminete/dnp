@@ -871,15 +871,22 @@ class CropGenerator():
             else:
                 balance['label_weight'] = tf.cast([1]*self.model.num_labels,dtype=src_data.dtype)
     
-        patch_widths = patching_params['patch_widths']
-        patch_shapes = patching_params['patch_shapes']
-        dest_edges = patching_params['dest_edges']
-        dest_shapes = patching_params['dest_shapes']
-        depth = patching_params['depth']
-        
+    
+    
         tensor = lambda a : tf.cast(a,dtype=self.ftype)
         int32 = lambda a : tf.cast(a,dtype=tf.int32)
        
+        src_bdim = src_data.shape[0]
+        src_shape = tensor(src_data.shape[1:-1])
+
+    
+        patch_widths = patching_params['patch_widths']
+        patch_shapes = patching_params['patch_shapes']
+        dest_edges = list(map(lambda x: tf.tile(x,[src_bdim,1,1]),patching_params['dest_edges']))
+        dest_shapes = patching_params['dest_shapes']
+        depth = patching_params['depth']
+        
+        
         
         def compindex(dbox,lbox,dshape,lshape,noise,interptyp,offs):        
             e = tf.einsum('bxy,kbyz->kbxz',tf.linalg.inv(dbox,adjoint=False),lbox)
@@ -1079,10 +1086,12 @@ class CropGenerator():
             U = tf.linalg.diag(tf.concat([S,tf.ones([b*N,1])],1))
             U = tf.einsum('cxy,cyz->cxz',U,R1)
             U = tf.einsum('cxy,cyz->cxz',R2,U)
-            facs = tf.expand_dims(tf.expand_dims(tf.concat([out_width/out_shape,[1]],0),0),1) 
-            U = U * facs
+            R = tf.einsum('cxy,cyz->cxz',R2,R1)
             
-            # assemble 
+            vxsz = tf.expand_dims(tf.expand_dims(tf.concat([out_width/out_shape,[1]],0),0),1) 
+            U = U * vxsz
+            
+            # assemble homogenous coords
             offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([out_shape/2,[1]],0))
             E = U+tf.concat([tf.zeros([b*N,nD+1,nD]),tf.expand_dims(offs,2)],2)
             E = tf.reshape(E,[N,b,nD+1,nD+1])
@@ -1090,8 +1099,6 @@ class CropGenerator():
             return E
         
     
-    
-        src_shape = tensor(src_data.shape[1:-1])
         if level == 0:        
             last_boxes = src_boxes
             last_width = src_width
@@ -1121,7 +1128,9 @@ class CropGenerator():
     
     
     
-        local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]),1 ,nD+1,nD+1])  
+        local_boxes = tf.reshape(local_boxes,[
+                        tf.reduce_prod(local_boxes.shape[0:2])/src_bdim, src_bdim ,
+                        nD+1,nD+1])  
         parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],
                                      pixel_noise,self.interp_type,0)
         
