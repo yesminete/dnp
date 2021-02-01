@@ -198,6 +198,7 @@ class PatchWorkModel(Model):
                spatial_train=True,
                spatial_max_train=False,
                finalBlock=None,
+               finalizeOnApply=False,
 
                classifierCreator=None,
                num_classes=1,
@@ -222,6 +223,7 @@ class PatchWorkModel(Model):
     self.blocks = []
     self.classifiers = []
     self.finalBlock=finalBlock
+    self.finalizeOnApply = finalizeOnApply
     self.set_cropgen(cropper)
     self.forward_type = forward_type
     self.num_labels = num_labels
@@ -326,6 +328,7 @@ class PatchWorkModel(Model):
 
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
+               'finalizeOnApply':self.finalizeOnApply,
                'trainloss_hist':self.myhist.trainloss_hist,
                'validloss_hist':self.myhist.validloss_hist,
                'trained_epochs':self.trained_epochs,
@@ -454,12 +457,13 @@ class PatchWorkModel(Model):
          outs = res[...,0:self.num_labels]
          
          ## apply a finalBlock on the last spatial output    
-         if self.finalBlock is not None and k == self.cropper.depth-1:
-            if isinstance(self.finalBlock,list):
-                for fb in self.finalBlock:
-                    output.append(fb(outs))
-            else:                    
-                output.append(self.finalBlock(outs,training=training))
+         if (training == False or not self.finalizeOnApply)
+               and self.finalBlock is not None k == self.cropper.depth-1:
+               if isinstance(self.finalBlock,list):
+                   for fb in self.finalBlock:
+                       output.append(fb(outs))
+               else:                    
+                   output.append(self.finalBlock(outs,training=training))
          else:
              output.append(outs)
          
