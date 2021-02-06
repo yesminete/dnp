@@ -1116,7 +1116,7 @@ class CropGenerator():
         
     
         if flip is None:
-            flip = tensor([1]*nD)
+            flip = tensor([0]*nD)
                         
         start = timer()
           

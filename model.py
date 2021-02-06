@@ -27,6 +27,7 @@ import nibabel as nib
 import json
 import warnings
 import time
+import sys
 
 from random import sample 
 
@@ -34,6 +35,37 @@ from random import sample
 from .crop_generator import *
 from .improc_utils import *
 from .customLayers import *
+
+
+
+
+class FilterOut(object):
+    def __init__(self, filterstr, *args):
+        self.handles = [sys.__stdout__]
+        self.omitted = 0
+        self.omitted_line = ""
+        self.filterstr = filterstr
+    def write(self, s):
+        for f in self.handles:
+            if self.filterstr in s:                
+                self.omitted +=1
+                self.omitted_line = s
+            elif self.omitted > 0 and s == '\n':
+                s
+            elif self.omitted > 0:
+                f.write(self.omitted_line+"\n")
+                f.write('omitted ' + str(self.omitted) +' lines.\n')
+                self.omitted = 0
+                f.write(s)                
+            else:
+                f.write(s)
+
+                
+    def flush(self):
+        for f in self.handles:
+            f.flush()
+
+
 
 ############################ The definition of the Patchwork model
 
@@ -216,6 +248,7 @@ class PatchWorkModel(Model):
                modelname = None,
                train_cycle = None,
                augment = None,
+               align_physical = None,
                input_fdim = None
                ):
     super().__init__()
@@ -259,6 +292,7 @@ class PatchWorkModel(Model):
     self.train_cycle = train_cycle
     self.saved_points = saved_points
     self.augment = augment
+    self.align_physical = align_physical
     self.input_fdim = input_fdim
     self.compiled = {}
     
@@ -335,6 +369,7 @@ class PatchWorkModel(Model):
                'saved_points':self.saved_points,
                'train_cycle':self.train_cycle,
                'augment':self.augment,
+               'align_physical':self.align_physical,
                'input_fdim':self.input_fdim
             }
 
@@ -457,8 +492,7 @@ class PatchWorkModel(Model):
          outs = res[...,0:self.num_labels]
          
          ## apply a finalBlock on the last spatial output    
-         if (training == False or not self.finalizeOnApply)
-               and self.finalBlock is not None k == self.cropper.depth-1:
+         if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
                if isinstance(self.finalBlock,list):
                    for fb in self.finalBlock:
                        output.append(fb(outs))
@@ -692,7 +726,7 @@ class PatchWorkModel(Model):
                  dphi=0,
                  augment=None,
                  along4dim=False,
-                 align_physical=True,
+                 align_physical=None,
                  patch_size_factor=1,
                  crop_fdim=None,
                  crop_sdim=None,
@@ -719,7 +753,12 @@ class PatchWorkModel(Model):
         else:
             return img,None
     
-    
+      if align_physical is None:
+          align_physical = self.align_physical
+
+      if align_physical is None:
+          align_physical = True
+              
       scrop = None
      
       nD = self.cropper.ndim
@@ -1066,7 +1105,7 @@ class PatchWorkModel(Model):
         aug_ = augment
         if valid:
             dphi=0
-            aug_=None
+            aug_={'dphi':0,'dscale':0,'flip':0}
         
         self.cropper.dest_full_size = [None]*self.cropper.depth
 
