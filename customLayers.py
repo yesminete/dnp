@@ -298,6 +298,52 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
     
 
 
+def createTnet(nD=3, depth=2,padding='SAME',verbose=False,input_shape=None):
+
+  if nD == 3:
+      _conv = layers.Conv3D
+      _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
+  elif nD == 2:
+      _conv = layers.Conv2D
+      _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=(2,2))
+  
+  def BNrelu():
+      return [layers.BatchNormalization(), layers.LeakyReLU()]
+  
+  def conv_down(fdim):
+         return _conv(fdim,3,padding='SAME') 
+  def conv_up(fdim,even):
+         return _convT(fdim,3,padding='SAME' )
+  def conv(outK):
+         return _conv(outK,3,padding='SAME') 
+  offs = [0,0,0,0,0,0]
+  
+  #%%
+  n = input_shape[-1]
+  fdims = [n]
+  fac = math.pow(1/n,1/(depth-1))
+  for k in range(depth-1):
+      fdims.append(fdims[-1]*fac)
+  fdims = list(map(math.floor,fdims))
+  fdims[-1] = 1
+       
+  #%%    
+
+  theLayers = {}
+  for z in range(depth):
+            
+    fdim = fdims[z]
+    id_u = str(1000 + z+1)
+    id_d = str(2000 + depth-z+1)
+
+    theLayers[id_u+"conv0"] =  [conv_up(fdim) ]+BNrelu()
+    theLayers[id_d+"conv0"] =  [conv_down(fdim) ]+BNrelu()
+            
+  return CNNblock(theLayers,verbose=verbose)
+
+
+custom_layers['createTnet'] = createTnet
+
 
 
 class identity(layers.Layer):
