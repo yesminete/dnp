@@ -1166,6 +1166,10 @@ class PatchWorkModel(Model):
                 if k == depth-1:
                     hist['output_' + str(k+1) + '_loss'] = l
                     hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+            else:
+                hist['output_loss'] = l
+                hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
+                
             loss += l
    #     hist['S_loss'] = loss
             
@@ -1261,6 +1265,8 @@ class PatchWorkModel(Model):
         for k in range(self.cropper.depth-1):
             loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
         loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
+        self.loss = loss
+    else:
         self.loss = loss
     
     loss = self.loss
