@@ -298,7 +298,7 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
     
 
 
-def createTnet(nD=3, depth=2,out=1,ind=3,ksize=3,padding='SAME',verbose=False,input_shape=None):
+def createTnet(nD=3, depth=2,out=1,ind=3,noise=0.5,ksize=3,padding='SAME',verbose=False,input_shape=None):
 
   if nD == 3:
       _conv = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=(2,2,2))
@@ -335,7 +335,7 @@ def createTnet(nD=3, depth=2,out=1,ind=3,ksize=3,padding='SAME',verbose=False,in
 
     theLayers[id_u+"conv0"] = [conv_up(fdims[z+1]) ]+BNrelu()
     if z == depth-1:
-        theLayers[id_u+"conv1"] = [{'f': identity() } , {'applyout':"1", 'f':identity() }  ]
+        theLayers[id_u+"conv1"] = [{'f': Scramble(nD,noise=noise) } , {'applyout':"1", 'f':identity() }  ]
     theLayers[id_d+"conv0"] =  [conv_down(fdims[z]) ]+BNrelu()
     
     
@@ -355,6 +355,64 @@ class identity(layers.Layer):
       return image
   
 custom_layers['identity'] = identity
+
+
+
+
+class Scramble(layers.Layer):
+
+  def __init__(self,nD,noise=0.5,**kwargs):
+    super().__init__(**kwargs)
+    self.nD = nD
+    self.noise = noise
+    
+    
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'noise': self.noise,
+            'nD': self.nD
+        } )    
+        return config                  
+    
+    
+  def call(self, image, training=False):    
+      
+    if training == False:
+        return image
+        
+      
+    def grid(bdim,shape,pixel_noise):
+        ex1 = lambda x: tf.expand_dims(x,0)    
+        nD = self.nD
+        if nD == 2:
+            A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),indexing='ij')
+        if nD == 3:
+            A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),tf.range(0,shape[2],dtype=tf.float32),indexing='ij')
+        for k in range(nD):
+            q = tf.expand_dims(tf.expand_dims(A[k],0),nD+1)
+            noise = tf.expand_dims(tf.random.normal([bdim] + A[k].shape),(nD+1))
+            A[k] = q + noise*pixel_noise
+
+        A = tf.concat(A,nD+1)
+        A = tf.cast(tf.math.floor(A+0.4999),dtype=tf.int32)
+        A = tf.where(A<0,0,A)
+        
+        s = tf.cast(shape[0:nD],dtype=tf.int32)-1
+        for k in range(nD+1):
+            s = tf.expand_dims(s,0)        
+        A = tf.where(A>s,s,A)
+        
+        
+        return A
+    
+    shape = image.shape
+    g = grid(shape[0],shape[1:],self.noise)
+    return tf.gather_nd(image,g,batch_dims=1)
+
+    
+custom_layers['Scramble'] = Scramble
 
 
 
