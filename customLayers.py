@@ -298,7 +298,7 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
     
 
 
-def createTnet(nD=3, depth=2,out=1,ksize=3,padding='SAME',verbose=False,input_shape=None):
+def createTnet(nD=3, depth=2,out=1,ind=3,ksize=3,padding='SAME',verbose=False,input_shape=None):
 
   if nD == 3:
       _conv = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=(2,2,2))
@@ -315,7 +315,7 @@ def createTnet(nD=3, depth=2,out=1,ksize=3,padding='SAME',verbose=False,input_sh
   def conv_up(fdim):
          return _convT(fdim,ksize,padding='SAME' )
   
-  n = input_shape[-1]
+  n = ind
   #%%
   fdims = [n]
   fac = np.power(out/n,1/(depth))
