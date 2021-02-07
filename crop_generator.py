@@ -1147,7 +1147,10 @@ class CropGenerator():
                                      pixel_noise,self.interp_type,0)
         
         if dest_shapes[level] is not None:
-            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],out_patch_shapes[level],
+
+            vratio = tf.concat([patch_shapes[level]/out_patch_shapes[level],[1]],0)
+            local_boxes_out = tf.einsum('Nbxy,y->Nbxy',local_boxes,vratio)            
+            parent_box_scatter_index = compindex(dest_edges[level],local_boxes_out,dest_shapes[level],out_patch_shapes[level],
                                                  0,self.scatter_type,1)
         else:
             parent_box_scatter_index = None          
