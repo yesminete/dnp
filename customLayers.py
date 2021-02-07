@@ -298,34 +298,31 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
     
 
 
-def createTnet(nD=3, depth=2,padding='SAME',verbose=False,input_shape=None):
+def createTnet(nD=3, depth=2,out=1,ksize=3,padding='SAME',verbose=False,input_shape=None):
 
   if nD == 3:
-      _conv = layers.Conv3D
+      _conv = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=(2,2,2))
       _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
   elif nD == 2:
-      _conv = layers.Conv2D
+      _conv = lambda *args, **kwargs: layers.Conv2D(*args, **kwargs,strides=(2,2,2))
       _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=(2,2))
   
   def BNrelu():
       return [layers.BatchNormalization(), layers.LeakyReLU()]
   
   def conv_down(fdim):
-         return _conv(fdim,3,padding='SAME') 
-  def conv_up(fdim,even):
-         return _convT(fdim,3,padding='SAME' )
-  def conv(outK):
-         return _conv(outK,3,padding='SAME') 
-  offs = [0,0,0,0,0,0]
+         return _conv(fdim,ksize,padding='SAME') 
+  def conv_up(fdim):
+         return _convT(fdim,ksize,padding='SAME' )
   
-  #%%
   n = input_shape[-1]
+  #%%
   fdims = [n]
-  fac = math.pow(1/n,1/(depth-1))
-  for k in range(depth-1):
+  fac = np.power(out/n,1/(depth))
+  for k in range(depth):
       fdims.append(fdims[-1]*fac)
-  fdims = list(map(math.floor,fdims))
-  fdims[-1] = 1
+  fdims = list(map(lambda x: np.int32(np.floor(x)),fdims))
+  fdims[-1] = out
        
   #%%    
 
@@ -336,8 +333,12 @@ def createTnet(nD=3, depth=2,padding='SAME',verbose=False,input_shape=None):
     id_u = str(1000 + z+1)
     id_d = str(2000 + depth-z+1)
 
-    theLayers[id_u+"conv0"] =  [conv_up(fdim) ]+BNrelu()
-    theLayers[id_d+"conv0"] =  [conv_down(fdim) ]+BNrelu()
+    theLayers[id_u+"conv0"] = [conv_up(fdims[z+1]) ]+BNrelu()
+    if z == depth-1:
+        theLayers[id_u+"conv1"] = [{'f': identity() } , {'applyout':"1", 'f':identity() }  ]
+    theLayers[id_d+"conv0"] =  [conv_down(fdims[z]) ]+BNrelu()
+    
+    
             
   return CNNblock(theLayers,verbose=verbose)
 
@@ -689,6 +690,7 @@ class CNNblock(layers.Layer):
     x = inputs
     nD = len(inputs.shape)-2 
     cats = {}
+    applyout = []
     maxadds = {}
     for l in self.theLayers:
         cats[l] = []
@@ -746,6 +748,11 @@ class CNNblock(layers.Layer):
               if self.verbose:
                   print("          dest:"+dest)
               cats[dest].append(res)  
+            if 'applyout' in d:
+              dest = d['applyout']
+              if self.verbose:
+                  print("          applyout:"+dest)
+              applyout.append(res)  
             if 'maxadd' in d:
               if self.verbose:
                   print("          dest:"+d['maxadd'])
@@ -765,7 +772,10 @@ class CNNblock(layers.Layer):
         #x = a(x,training=training)
         x = apply_fun(a,x)
 
-    return x
+    if not training and len(applyout) > 0:
+        return tf.concat(applyout,nD+1)
+    else:
+        return x
 
 
 

@@ -324,6 +324,17 @@ class CropGenerator():
               return pats[level]
           else: 
               return pats
+
+  def get_outpatchsize(self,level):  
+          pats = self.patch_size
+          if self.scheme is not None and 'patch_size' in self.scheme:
+              pats = self.scheme['patch_size']
+          if self.scheme is not None and 'out_patch_size' in self.scheme:
+              pats = self.scheme['out_patch_size']
+          if isinstance(pats[0],Iterable):
+              return pats[level]
+          else: 
+              return pats
         
   def get_scalefac(self,level):  # either a float, or a list of floats where each entry corresponds to a different depth level,
                                     # or dict with entries { 'level0' : [0.5,0.5] , 'level1' : [0.4,0.3]} where scalefac is dependent on dimension and level
@@ -514,14 +525,9 @@ class CropGenerator():
                     "  width(mm):"+showten(tensor(input_width),1) +
                     '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
     
-          nD = len(resolution)
-        
-          patch_shapes = []
-          for k in range(depth):
-             patch_shapes.append(self.get_patchsize(k))
-          patch_shapes = list(map(tensor,patch_shapes))
-        
-          
+          nD = len(resolution)        
+          patch_shapes = map(lambda k: tensor(self.get_patchsize(k)),range(depth))
+          out_patch_shapes = map(lambda k: tensor(self.get_outpatchsize(k)),range(depth))
         
           if self.scheme is not None:
               destvox_mm = at(self.scheme,'destvox_mm')
@@ -585,8 +591,8 @@ class CropGenerator():
                                  
           dest_edges = []
           dest_shapes = []
-          for k in range(len(patch_shapes)):
-            w = patch_widths[k]/patch_shapes[k]*1
+          for k in range(len(out_patch_shapes)):
+            w = patch_widths[k]/out_patch_shapes[k]*1
             dest_edges.append(tf.expand_dims(tf.linalg.diag(tf.concat([w,[1]],0)),0))
             dest_shapes.append(int32(input_width/w))
 
@@ -603,6 +609,7 @@ class CropGenerator():
 
           return { 'patch_widths' : patch_widths,
                   'patch_shapes' : patch_shapes,
+                  'out_patch_shapes' : out_patch_shapes,
                   'dest_edges' : dest_edges,
                   'dest_shapes' : dest_shapes,
                   'depth' : self.depth,                  
@@ -882,6 +889,7 @@ class CropGenerator():
     
         patch_widths = patching_params['patch_widths']
         patch_shapes = patching_params['patch_shapes']
+        out_patch_shapes = patching_params['out_patch_shapes']
         dest_edges = list(map(lambda x: tf.tile(x,[src_bdim,1,1]),patching_params['dest_edges']))
         dest_shapes = patching_params['dest_shapes']
         depth = patching_params['depth']
@@ -1135,7 +1143,7 @@ class CropGenerator():
                                      pixel_noise,self.interp_type,0)
         
         if dest_shapes[level] is not None:
-            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],patch_shapes[level],
+            parent_box_scatter_index = compindex(dest_edges[level],local_boxes,dest_shapes[level],out_patch_shapes[level],
                                                  0,self.scatter_type,1)
         else:
             parent_box_scatter_index = None          
@@ -1183,56 +1191,6 @@ class CropGenerator():
                   }
     
     
-
-      
-
-  # def createCropsLocal(self,data_parent,labels_parent,crops,
-  #     level,
-  #     generate_type,test,
-  #     jitter=0,
-  #     jitter_border_fix=False,
-  #     num_patches=1,
-  #     branch_factor=1,
-  #     dphi=0,
-  #     patch_size_factor=1,
-  #     overlap=0,resolution=None,balance=None,verbose=True):
-      
-              
-    
-      
-  #     start = timer()
-
-
-  
-  #     if verbose:
-  #       end = timer()
-  #       print("time elapsed: " + str(end - start) )
-
-
-  #     return {"data_cropped" : res_data, 
-  #             "labels_cropped" : res_labels, 
-              
-  #              # only used for testing (crops of the last scale)
-  #             "data_cropped_test": test,
-              
-  #             # these are crop coordinates refering to the last upper scale
-  #             "local_boxes" : local_boxes, 
-  #             "local_box_index": local_box_index,
-
-  #             # these are crop coordinates refereing to the very original image
-  #             "parent_boxes": parent_boxes, 
-  #             "parent_box_index": parent_box_index,
-  #             "parent_box_scatter_index": parent_box_scatter_index,
-  #             "dest_full_size":dest_full_size,
-
-  #             "absolute_size_patch_mm":abssz,
-  #             "aspect_correction":forwarded_aspects
-  #             }
-
-
-
-
-
 
 
 
