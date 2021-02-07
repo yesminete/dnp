@@ -992,7 +992,7 @@ class PatchWorkModel(Model):
             else:
                 initdat = tf.ones([1,32,32, model.input_fdim])    
             print("----------------- load/init network by minimal application")
-            dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=False,scale_to_original=False,generate_type='random',repetitions=1,init=True)        
+            dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=True,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
             print("----------------- model and weights loaded")
         except:
             if not notmpfile:
