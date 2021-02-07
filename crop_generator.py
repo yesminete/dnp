@@ -526,8 +526,8 @@ class CropGenerator():
                     '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
     
           nD = len(resolution)        
-          patch_shapes = map(lambda k: tensor(self.get_patchsize(k)),range(depth))
-          out_patch_shapes = map(lambda k: tensor(self.get_outpatchsize(k)),range(depth))
+          patch_shapes = list(map(lambda k: tensor(self.get_patchsize(k)),range(depth)))
+          out_patch_shapes =list(map(lambda k: tensor(self.get_outpatchsize(k)),range(depth)))
         
           if self.scheme is not None:
               destvox_mm = at(self.scheme,'destvox_mm')
@@ -544,9 +544,13 @@ class CropGenerator():
                   final_width = patch_shapes[-1]*tensor(destvox_mm)
               else:
                   final_width = patch_shapes[-1]*input_width/tensor(input_shape)*tensor(destvox_rel)
-              fac = tf.math.pow(final_width / patch_widths[0],1/(depth-1))
-              for k in range(1,depth):
-                  patch_widths.append(fac*patch_widths[-1])
+              
+              if depth == 1:
+                  patch_widths = [tensor(final_width)]
+              else:
+                  fac = tf.math.pow(final_width / patch_widths[0],1/(depth-1))
+                  for k in range(1,depth):
+                      patch_widths.append(fac*patch_widths[-1])
                   
           else:
             

@@ -1063,7 +1063,7 @@ class PatchWorkModel(Model):
             unlabeled_ids = [],
             valid_ids = [],
             valid_num_patches=None,
-            self_validation=True,
+            self_validation=False,
             batch_size=32,
             verbose=1,
             steps_per_epoch=None,
