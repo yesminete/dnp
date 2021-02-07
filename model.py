@@ -1171,7 +1171,6 @@ class PatchWorkModel(Model):
                 hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
                 
             loss += l
-   #     hist['S_loss'] = loss
             
       gradients = tape.gradient(loss,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
