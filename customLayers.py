@@ -335,7 +335,7 @@ def createTnet(nD=3, depth=2,out=1,ind=3,noise=0.5,ksize=3,padding='SAME',verbos
 
     theLayers[id_u+"conv0"] = [conv_up(fdims[z+1]) ]+BNrelu()
     if z == depth-1:
-        theLayers[id_u+"conv1"] = [{'f': Scramble(nD,noise=noise) } , {'applyout':"1", 'f':identity() }  ]
+        theLayers[id_u+"conv1"] = [{'f': Scramble(nD,noise=noise) } , {'applyout':"1", 'f':Scramble(nD,noise=noise) }  ]
     theLayers[id_d+"conv0"] =  [conv_down(fdims[z]) ]+BNrelu()
     
     
@@ -379,8 +379,8 @@ class Scramble(layers.Layer):
     
   def call(self, image, training=False):    
       
-    if training == False:
-        return image
+    #if training == False:
+    #    return image
         
       
     def grid(bdim,shape,pixel_noise):
@@ -817,7 +817,7 @@ class CNNblock(layers.Layer):
               themaxs = tf.reduce_max(res,axis=list(range(1,nD+1)),keepdims=True)
               maxadds[d['maxadd']].append(themaxs)  
             
-            if 'dest' not in d and 'maxadd' not in d:
+            if 'dest' not in d and 'maxadd' not in d and 'applyout' not in d:
               y = res
               
               
