@@ -1161,12 +1161,13 @@ class PatchWorkModel(Model):
         loss = 0
         depth = len(labels)
         for k in range(depth):
-            l = lossfun[k](labels[k],preds[k])
-            l = tf.reduce_mean(l)
+            lmat = lossfun[k](labels[k],preds[k])
+            l = tf.reduce_mean(lmat)
             if depth > 1:
                 if k == depth-1:
                     hist['output_' + str(k+1) + '_loss'] = l
                     hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+            #        hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=range(1,self.cropper.ndim+1))
             else:
                 hist['output_loss'] = l
                 hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
@@ -1260,12 +1261,15 @@ class PatchWorkModel(Model):
             optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
         self.optimizer = optimizer            
 
-    if loss is None and not hasattr(self,'loss'):
-        loss = []
-        for k in range(self.cropper.depth-1):
-            loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
-        loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
-        self.loss = loss
+    if loss is None:
+        if hasattr(self,'loss'):
+            loss = self.loss
+        else:
+            loss = []
+            for k in range(self.cropper.depth-1):
+                loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
+            loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
+            self.loss = loss
     else:
         self.loss = loss
     
@@ -1323,7 +1327,7 @@ class PatchWorkModel(Model):
         if max_agglomerative:
             sampletyp[1] = num_patches
 
-        debug=False
+        debug=True
             
 
         print("starting training")
