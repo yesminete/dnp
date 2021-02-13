@@ -213,7 +213,7 @@ class myHistory :
             
             if hasattr(self,'age'):
                 ax1 = plt.subplot(gs[1])
-                plt.barh(tf.range(self.age.shape[0]),tf.sort(self.age))
+                plt.barh(range(self.age.shape[0]),tf.sort(self.age).numpy())
                 plt.yticks([])
                 plt.title('hard patch age')
                 plt.grid()
