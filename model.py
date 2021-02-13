@@ -134,7 +134,8 @@ class myHistory :
     try: 
         
         import matplotlib.pyplot as plt
-        
+        from matplotlib import gridspec
+
         if isinstance(self.trainloss_hist,list):
             
             l = len(self.trainloss_hist[0][1])
@@ -181,10 +182,16 @@ class myHistory :
                         plt.semilogy(x,y,cols[cnt],label=labeltxt)
                     cnt+=1
 
-            fig, ax = plt.subplots()
+ 
+            if hasattr(self,'age'):
+                gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1]) 
+                ax = plt.subplot(gs[0])
+            else:
+                fig, ax = plt.subplots()
 
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
+
             
             if self.model.saved_points is not None:
                 for k in self.model.saved_points:
@@ -192,20 +199,35 @@ class myHistory :
                     plt.axvline(x=xx)
                     plt.text(int(xx), 14,k)
             
-            ax.set_ylim(ymax=10)
+            ax.set_ylim(top=10)
+            if self.model.modelname is not None:
+                ps = os.path.split(self.model.modelname)
+                tit = os.path.split(ps[0])[1] + "/" + ps[1] + " (" + str(self.model.train_cycle) + ")"
+                plt.title(tit)
             
 
 #%%           
             plt.legend(loc=3)
             plt.grid()
+                
+            
+            if hasattr(self,'age'):
+                ax1 = plt.subplot(gs[1])
+                plt.barh(tf.range(self.age.shape[0]),tf.sort(self.age))
+                plt.yticks([])
+                plt.title('hard patch age')
+                plt.grid()
+
+
+
             if self.model.modelname is not None:
-                ps = os.path.split(self.model.modelname)
-                tit = os.path.split(ps[0])[1] + "/" + ps[1] + " (" + str(self.model.train_cycle) + ")"
-                plt.title(tit)
                 plt.pause(0.001)  
                 plt.savefig(self.model.modelname + ".png")
             else:
                 plt.pause(0.001)  
+
+
+                 
 #%%            
     except Exception as e:
         if 'DISPLAY' in os.environ:        
@@ -1064,6 +1086,7 @@ class PatchWorkModel(Model):
             unlabeled_ids = [],
             valid_ids = [],
             valid_num_patches=None,
+            hard_mining = 0,
             self_validation=False,
             batch_size=32,
             verbose=1,
@@ -1167,7 +1190,7 @@ class PatchWorkModel(Model):
                 if k == depth-1:
                     hist['output_' + str(k+1) + '_loss'] = l
                     hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
-            #        hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=range(1,self.cropper.ndim+1))
+                    hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=range(1,self.cropper.ndim+1))
             else:
                 hist['output_loss'] = l
                 hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
@@ -1232,6 +1255,8 @@ class PatchWorkModel(Model):
         DEVCPU = "/cpu:0"
     else:
         DEVCPU = "/gpu:0"
+        
+    batch_size_intended = batch_size
     
     if self.saved_points is None:
         self.saved_points = {}
@@ -1296,6 +1321,12 @@ class PatchWorkModel(Model):
     print("validate imgs: "+ str(len(valid_ids)))
             
     was_last_min = False
+    
+    if hard_mining is not None and hard_mining>0 and hasattr(self,'hard_data'):
+        hard_data = self.hard_data
+    else:
+        hard_data = None
+        
     for i in range(num_its):
         print("----------------------------------------- iteration:" + str(i))
         
@@ -1304,10 +1335,16 @@ class PatchWorkModel(Model):
         start = timer()
         c_data = getSample(trainidx,num_patches)      
         end = timer()
-        total_numpatches = len(trainidx)*num_patches
-        if batch_size > total_numpatches:
+        print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
+        
+        if hard_data is not None:
+            c_data.merge(hard_data)
+        
+        total_numpatches = c_data.num_patches()
+        if batch_size_intended > total_numpatches:
             batch_size = total_numpatches        
-        print("time elapsed, sampling: " + str(end - start) + " (for " + str(total_numpatches) + ")")
+        else:
+            batch_size = batch_size_intended
         if GAN_train:
             if total_numpatches == 0:
                 unlabeled_num_patches = num_patches
@@ -1327,7 +1364,7 @@ class PatchWorkModel(Model):
         if max_agglomerative:
             sampletyp[1] = num_patches
 
-        debug=True
+        debug=False
             
 
         print("starting training")
@@ -1366,7 +1403,10 @@ class PatchWorkModel(Model):
                     self.compiled["train_step_discrim"] = tf.function(train_step_discriminator)
                     self.compiled["train_step_unsuper"] = tf.function(train_step_unsupervised)
             
+            
+            patchloss = []
             for e in range(epochs):
+
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
                 print(infostr + ", batchsize: " + str(batch_size) , end=',  ')
                 sttime = timer()
@@ -1378,6 +1418,11 @@ class PatchWorkModel(Model):
                     labeled_element = next(diter,None)
                     if labeled_element is not None and train_S:
                         losslog.update( self.compiled["train_step"](labeled_element,loss) )
+                        if 'loss_per_patch' in losslog:
+                            patchloss.append(tf.concat([tf.expand_dims(tf.cast(labeled_element[0]['batchindex'],dtype=tf.float32),1),
+                                                        tf.expand_dims(losslog['loss_per_patch'],1)],1))
+                            del losslog['loss_per_patch']
+                        
                     if GAN_train:    
                         unlabeled_element = next(uiter,None)
                         if unlabeled_element is not None:
@@ -1389,7 +1434,8 @@ class PatchWorkModel(Model):
                         break
                     
                     log.append(losslog)
-                    print('.', end='')                
+                    print('.', end='') 
+                
                 
                 log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
                 self.trained_epochs+=1
@@ -1398,6 +1444,9 @@ class PatchWorkModel(Model):
                 for k in log:
                     print(k + ":" + str(log[k][0]),end=" ")
                 print("")
+
+            patchloss = tf.concat(patchloss,0)
+            patchloss = tf.scatter_nd(tf.cast(patchloss[:,0:1],dtype=tf.int32),patchloss[:,1:2],[total_numpatches,1])
 
         else:
             inputdata = c_data.getInputData(sampletyp)
@@ -1414,11 +1463,22 @@ class PatchWorkModel(Model):
             self.trained_epochs += epochs
             del inputdata
             del targetdata
+
         end = timer()
         
-        del c_data.scales
-        del c_data
+        if hard_mining is not None and hard_mining>0:
+           c_data.subset(patchloss,hard_mining)    
+           self.myhist.age = c_data.getAge()
+           hard_data = c_data
+           self.hard_data = hard_data
+        else:
+           del c_data.scales
+           del c_data
+           if hasattr(self.myhist,'age'):
+               del self.myhist.age
+           c_data = None
 
+        
                     
         print("time elapsed, fitting: " + str(end - start) )
         

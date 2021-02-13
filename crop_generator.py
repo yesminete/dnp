@@ -45,6 +45,8 @@ class CropInstance:
     self.scales = scales
     self.cropper = cropper
     self.intermediate_loss = intermediate_loss
+    
+    self.scales[0]['age'] = tf.zeros([self.num_patches()])
 
   def extb2dim(self,x,batchdim2):
       if batchdim2 == -1:
@@ -52,6 +54,33 @@ class CropInstance:
       sz = x.shape
       x = tf.reshape(x,[sz[0]//batchdim2, batchdim2] + sz[1:])
       return x
+
+  def num_patches(self):
+      return self.scales[0]['data_cropped'].shape[0]
+  
+  def merge(self,ci):
+      for i in range(len(self.scales)):
+          x = self.scales[i]
+          y = ci.scales[i]
+          for k in x:
+              if x[k] is not None and k != 'dest_full_size':
+                  x[k] = tf.concat([x[k],y[k]],0)
+      self.scales[0]['age'] += 1
+
+  def getAge(self):
+      return self.scales[0]['age']
+
+  def subset(self,patchloss,fraction):
+      n = tf.cast(patchloss.shape[0]*fraction,dtype=tf.int32)
+      idx = tf.argsort(patchloss,0,'DESCENDING')[0:n]
+      
+      for i in range(len(self.scales)):
+          x = self.scales[i]
+          for k in x:
+              if x[k] is not None and k != 'dest_full_size':
+                 x[k] = tf.gather(x[k],idx[:,0]) 
+      
+
 
   # get input training data 
   def getInputData(self,sampletyp=None):                    
@@ -64,6 +93,7 @@ class CropInstance:
       inp['input'+str(cnt)] = self.extb2dim(x['data_cropped'],batchdim2)
       inp['cropcoords'+str(cnt)] = self.extb2dim(x['local_box_index'],batchdim2)
       cnt = cnt + 1
+    inp['batchindex'] = tf.range(inp['input0'].shape[0])
 
     if sampletyp[0] is not None:      
         cnt = 0
