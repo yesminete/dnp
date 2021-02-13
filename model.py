@@ -1145,6 +1145,10 @@ class PatchWorkModel(Model):
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
                                         jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi)
+                
+            for k in range(len(c.scales)):
+                del c.scales[k]['parent_box_scatter_index']
+                del c.scales[k]['parent_box_index']
         return c
     
     @tf.function
