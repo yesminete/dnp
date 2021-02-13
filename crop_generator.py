@@ -433,6 +433,7 @@ class CropGenerator():
              balance=None,
              augment=None,
              test=False,
+             training=False,
              lazyEval=None,
              verbose=False):
       
@@ -672,6 +673,7 @@ class CropGenerator():
                          balance=balance,
                          num_patches=num_patches,
                          branch_factor=branch_factor,
+                         training=training,
                          verbose=verbose)
 
 
@@ -898,6 +900,7 @@ class CropGenerator():
                          pixel_noise = 0,
                          balance=None,
                          num_patches=1,
+                         training=False,
                          branch_factor=1 ,
                          verbose=False):
         
@@ -1176,7 +1179,7 @@ class CropGenerator():
         parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],
                                      pixel_noise,self.interp_type,0)
         
-        if dest_shapes[level] is not None:
+        if dest_shapes[level] is not None and not training:
 
             vratio = tf.concat([patch_shapes[level]/out_patch_shapes[level],[1]],0)
             local_boxes_out = tf.einsum('Nbxy,y->Nbxy',local_boxes,vratio)            
@@ -1206,7 +1209,9 @@ class CropGenerator():
            print(" #patches:" + str(res_data.shape[0]) + " time/patch:" + ("{:.3f}ms").format(((end - start)/(res_data.shape[0]))) )
            print(" elapsed: " + ("{:.3f}ms").format(end - start) )
 
-            
+        
+        if training:
+            parent_box_index = None
     
     
     
