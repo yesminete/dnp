@@ -1474,7 +1474,7 @@ class PatchWorkModel(Model):
               c_data.subset(patchloss,hard_mining)    
               self.myhist.age = c_data.getAge()
               hard_data = c_data
-           self.hard_data = hard_data
+              self.hard_data = hard_data
         else:
            del c_data.scales
            del c_data
