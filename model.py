@@ -1339,7 +1339,8 @@ class PatchWorkModel(Model):
         print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
         
         if hard_data is not None:
-            c_data.merge(hard_data)
+           with tf.device(DEVCPU):                
+               c_data.merge(hard_data)
         
         total_numpatches = c_data.num_patches()
         if batch_size_intended > total_numpatches:
@@ -1468,9 +1469,10 @@ class PatchWorkModel(Model):
         end = timer()
         
         if hard_mining is not None and hard_mining>0:
-           c_data.subset(patchloss,hard_mining)    
-           self.myhist.age = c_data.getAge()
-           hard_data = c_data
+           with tf.device(DEVCPU):    
+              c_data.subset(patchloss,hard_mining)    
+              self.myhist.age = c_data.getAge()
+              hard_data = c_data
            self.hard_data = hard_data
         else:
            del c_data.scales
