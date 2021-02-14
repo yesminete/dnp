@@ -47,6 +47,7 @@ class CropInstance:
     self.intermediate_loss = intermediate_loss
     
     self.scales[0]['age'] = tf.zeros([self.num_patches()])
+    self.attrs = ['data_cropped','local_box_index','labels_cropped','class_labels','age']
 
   def extb2dim(self,x,batchdim2):
       if batchdim2 == -1:
@@ -62,8 +63,8 @@ class CropInstance:
       for i in range(len(self.scales)):
           x = self.scales[i]
           y = ci.scales[i]
-          for k in x:
-              if x[k] is not None and k != 'dest_full_size':
+          for k in self.attrs:
+              if k in x and x[k] is not None and k != 'dest_full_size':
                   x[k] = tf.concat([x[k],y[k]],0)
       self.scales[0]['age'] += 1
 
@@ -73,11 +74,12 @@ class CropInstance:
   def subset(self,patchloss,fraction):
       n = tf.cast(patchloss.shape[0]*fraction,dtype=tf.int32)
       idx = tf.argsort(patchloss,0,'DESCENDING')[0:n]
-      
       for i in range(len(self.scales)):
           x = self.scales[i]
-          for k in x:
-              if x[k] is not None and k != 'dest_full_size':
+          for k in self.attrs:
+              #print(k)
+              if k in x and x[k] is not None and k != 'dest_full_size':
+                 #print(x[k].shape)
                  x[k] = tf.gather(x[k],idx[:,0]) 
       
 
