@@ -5,6 +5,7 @@ Spyder Editor
 This is a temporary script file.
 """
 
+
 # pip install tensorflow==2.1.0 matplotlib pillow opencv-python  nibabel
 
 
