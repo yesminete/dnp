@@ -1285,6 +1285,8 @@ class PatchWorkModel(Model):
     if not hasattr(self,'optimizer') or self.optimizer is None:    
         if optimizer is None:
             optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+        else:
+            print('taking custom optimizer')
         self.optimizer = optimizer            
 
     if loss is None:
