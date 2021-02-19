@@ -686,6 +686,20 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if verbose:            
                     print("   loading file:" + fname)           
             resolution = img.header['pixdim'][1:4]
+            
+            if len(img.header.extensions) > 0:
+                try:
+                    eh = img.header.extensions[0].get_content()
+                    eh = eh.decode('utf-8')              
+                    eh = json.loads(eh)
+                    toarr = lambda a: list(map(float,filter(lambda x: x!="",a.split(" "))))
+                    bval = toarr(eh['bval'])
+                    bvecs = eh['bvec'].split("\n")
+                    bvecs = [toarr(bvecs[0]),toarr(bvecs[1]),toarr(bvecs[2])]                
+                    resolution = { 'voxsize' : resolution, 'bval':bval,'bvec':bvecs}
+                except Exception as e:
+                    print('exthdr found, expect diff.info. , but failed to parse ...')
+                
             header = img.header
             if template_nii is None:
                 template_nii = img
