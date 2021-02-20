@@ -446,7 +446,8 @@ class CropGenerator():
         else:
             return None
 
-            
+
+           
     def extend_classlabels(x,class_labels_):
       if self.create_indicator_classlabels and x['labels_cropped'] is not None:
           tmp = tf.math.reduce_mean(x['labels_cropped'],list(range(1,self.ndim+1)))
@@ -457,6 +458,9 @@ class CropGenerator():
 
     input_transform_behaviour=None
     label_transform_behaviour=None
+
+    tensor = lambda a : tf.cast(a,dtype=self.ftype)
+
 
     reptree = False
     if generate_type == 'tree_full':
@@ -511,7 +515,11 @@ class CropGenerator():
       # if resolutions are also passed
       resolution_ = None
       if resolutions is not None:
-          resolution_ = resolutions[j]
+          if isinstance(resolutions[j],dict):
+              resolution_ = resolutions[j]['voxsize']
+              qdir = tf.math.sqrt(tensor(resolutions[j]['bval'])/1000)*tensor(resolutions[j]['bvec'])              
+          else:
+              resolution_ = resolutions[j]
           resolution_ = resolution_[0:self.ndim]
       
       
