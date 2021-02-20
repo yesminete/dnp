@@ -455,6 +455,8 @@ class CropGenerator():
       else:
           return class_labels_
 
+    input_transform_behaviour=None
+    label_transform_behaviour=None
 
     reptree = False
     if generate_type == 'tree_full':
@@ -672,6 +674,8 @@ class CropGenerator():
                          flip=flip,
                          dscale = dscale,
                          pixel_noise = pixel_noise,
+                         input_transform_behaviour = input_transform_behaviour,
+                         label_transform_behaviour = label_transform_behaviour,                         
                          balance=balance,
                          num_patches=num_patches,
                          branch_factor=branch_factor,
@@ -897,9 +901,11 @@ class CropGenerator():
                          overlap = 0,
                          dphi1=0,
                          dphi2=0,
-                         flip=None,
+                         flip=None,                         
                          dscale = 0,
                          pixel_noise = 0,
+                         input_transform_behaviour = None,
+                         label_transform_behaviour = None,
                          balance=None,
                          num_patches=1,
                          training=False,
@@ -934,6 +940,17 @@ class CropGenerator():
         depth = patching_params['depth']
         
         
+                
+        def fdim_transform(res_data,orients,transform_behaviour):
+            if transform_behaviour is None:
+                return res_data
+            else:
+                T = transform_behaviour(orients)
+                if nD==2:
+                    return tf.einsum('bij,bxyj->bxyi')
+                else:
+                    return tf.einsum('bij,bxyzj->bxyzi')
+
         
         def compindex(dbox,lbox,dshape,lshape,noise,interptyp,offs):        
             e = tf.einsum('bxy,kbyz->kbxz',tf.linalg.inv(dbox,adjoint=False),lbox)
@@ -1143,7 +1160,7 @@ class CropGenerator():
             E = U+tf.concat([tf.zeros([b*N,nD+1,nD]),tf.expand_dims(offs,2)],2)
             E = tf.reshape(E,[N,b,nD+1,nD+1])
                     
-            return E
+            return E,R
         
     
         if level == 0:        
@@ -1167,28 +1184,32 @@ class CropGenerator():
                         
         start = timer()
           
-        local_boxes = draw_boxes(last_boxes, last_shape, 
+        local_boxes, orientations = draw_boxes(last_boxes, last_shape, 
                                  last_width, patch_shapes[level], patch_widths[level], 
                                  last_label,
                                  N)
+    
+        # the index which crops the suboatch out of the last patch
         local_box_index = compindex(last_boxes,local_boxes,last_shape,patch_shapes[level],0,self.interp_type,0)
     
-    
-    
+
         local_boxes = tf.reshape(local_boxes,[
                         tf.reduce_prod(local_boxes.shape[0:2])/src_bdim, src_bdim ,
                         nD+1,nD+1])  
+        
+        # the index which crops data the data out of the overall parent
         parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],
                                      pixel_noise,self.interp_type,0)
-        
-        if dest_shapes[level] is not None and not training:
 
+        # the index which scatters output into the global image        
+        if dest_shapes[level] is not None and not training:
             vratio = tf.concat([patch_shapes[level]/out_patch_shapes[level],[1]],0)
             local_boxes_out = tf.einsum('Nbxy,y->Nbxy',local_boxes,vratio)            
             parent_box_scatter_index = compindex(dest_edges[level],local_boxes_out,dest_shapes[level],out_patch_shapes[level],
                                                  0,self.scatter_type,1)
         else:
-            parent_box_scatter_index = None          
+            parent_box_scatter_index = None       
+            
         local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]) ,nD+1,nD+1])
     
         
@@ -1197,11 +1218,12 @@ class CropGenerator():
         if verbose:
           print("--------- cropping, level ",level)
             
-    
         ############## do the actual cropping
-        res_data = self.crop(src_data,parent_box_index,relres,self.get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)        
+        res_data = self.crop(src_data,parent_box_index,relres,self.get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)       
+        res_data = fdim_transform(res_data,orients,input_transform_behaviour)
         if src_labels is not None:      
           res_labels = self.crop(src_labels,parent_box_index,relres,self.get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
+          res_labels = fdim_transform(res_labels,orients,label_transform_behaviour)
         else:
             res_labels = None
 
