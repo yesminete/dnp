@@ -298,9 +298,10 @@ def simpleClassifier(depth=6,feature_dim=5,nD=2,outK=2,multiplicity=2,
     
 
 
-def createTnet(nD=3, depth=2,out=1,ind=3,noise=0.5,ksize=3,padding='SAME',verbose=False,input_shape=None):
+def createTnet(nD=3, depth=2,fdims=None,out=1,ind=3,noise=0.5,ksize=3,padding='SAME',direction=True,verbose=False,input_shape=None):
 
   if nD == 3:
+      _convS = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=(1,1,1))
       _conv = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=(2,2,2))
       _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=(2,2,2))
   elif nD == 2:
@@ -314,30 +315,39 @@ def createTnet(nD=3, depth=2,out=1,ind=3,noise=0.5,ksize=3,padding='SAME',verbos
          return _conv(fdim,ksize,padding='SAME') 
   def conv_up(fdim):
          return _convT(fdim,ksize,padding='SAME' )
+  def conv(fdim):
+         return _convS(fdim,ksize,padding='SAME' )
   
   n = ind
   #%%
-  fdims = [n]
-  fac = np.power(out/n,1/(depth))
-  for k in range(depth):
-      fdims.append(fdims[-1]*fac)
-  fdims = list(map(lambda x: np.int32(np.floor(x)),fdims))
-  fdims[-1] = out
-       
+  if fdims is None:
+      fdims = [n]
+      fac = np.power(out/n,1/(depth))
+      for k in range(depth):
+          fdims.append(fdims[-1]*fac)
+      fdims = list(map(lambda x: np.int32(np.floor(x)),fdims))
+      if not stayUp:  
+          fdims[-1] = out
+      
   #%%    
 
   theLayers = {}
-  for z in range(depth):
-            
-    fdim = fdims[z]
-    id_u = str(1000 + z+1)
-    id_d = str(2000 + depth-z+1)
-
-    theLayers[id_u+"conv0"] = [conv_up(fdims[z+1]) ]+BNrelu()
-    if z == depth-1:
-        theLayers[id_u+"conv1"] = [{'f': Scramble(nD,noise=noise) } , {'applyout':"1", 'f':Scramble(nD,noise=noise) }  ]
-    theLayers[id_d+"conv0"] =  [conv_down(fdims[z]) ]+BNrelu()
-    
+  if direction == 0:
+      for z in range(depth):            
+        fdim = fdims[z]
+        id_u = str(1000 + z+1)
+        
+        theLayers[id_u+"conv0"] = [conv_up(fdims[z+1]) ]+BNrelu()
+        if z == depth-1:
+            theLayers[id_u+"conv1"] = conv(out)
+  else:        
+      for z in range(depth):            
+        fdim = fdims[z]
+        id_u = str(1000 + z+1)
+        
+        theLayers[id_u+"conv0"] = [conv_down(fdims[z+1]) ]+BNrelu()
+        if z == depth-1:
+            theLayers[id_u+"conv1"] = conv(out)
     
             
   return CNNblock(theLayers,verbose=verbose)

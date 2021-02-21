@@ -302,12 +302,6 @@ class PatchWorkModel(Model):
     self.spatial_train=spatial_train or spatial_max_train
     self.spatial_max_train=spatial_max_train
 
-
-
-    # for k in trainloss_hist:
-    #     self.trainloss_hist[k] = []
-    #     for j in range(len(trainloss_hist[k])):
-    #        self.trainloss_hist[k].append((0,1))
     
     
     self.trained_epochs = trained_epochs
@@ -482,7 +476,9 @@ class PatchWorkModel(Model):
              inp = self.preprocessor[k](inp,training=training)
          
          # cat with total input
-         if self.forward_type == 'simple':
+         if self.forward_type == 'noinput':
+             inp = last_cropped
+         elif self.forward_type == 'simple':
              if testIT:
                 inp = last_cropped
              else:
@@ -512,8 +508,11 @@ class PatchWorkModel(Model):
              res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
          
-         outs = res[...,0:self.num_labels]
-         
+         if self.num_labels != -1:
+             outs = res[...,0:self.num_labels]
+         else:
+             outs = res
+             
          ## apply a finalBlock on the last spatial output    
          if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
                if isinstance(self.finalBlock,list):
@@ -1091,6 +1090,7 @@ class PatchWorkModel(Model):
             self_validation=False,
             batch_size=32,
             verbose=1,
+            debug=False,
             steps_per_epoch=None,
             inc_train_cycle=True,
             jitter=0,
@@ -1186,18 +1186,20 @@ class PatchWorkModel(Model):
         loss = 0
         depth = len(labels)
         for k in range(depth):
-            lmat = lossfun[k](labels[k],preds[k])
-            l = tf.reduce_mean(lmat)
-            if depth > 1:
-                if k == depth-1:
-                    hist['output_' + str(k+1) + '_loss'] = l
-                    hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
-                    hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=range(1,self.cropper.ndim+1))
-            else:
-                hist['output_loss'] = l
-                hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
-                
-            loss += l
+            if lossfun[k] is not None:
+                lmat = lossfun[k](labels[k],preds[k])
+                l = tf.reduce_mean(lmat)
+                if depth > 1:
+                    if k == depth-1:
+                        hist['output_' + str(k+1) + '_loss'] = l
+                        hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+                        if hard_mining > 0:
+                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=range(1,self.cropper.ndim+1))
+                else:
+                    hist['output_loss'] = l
+                    hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
+                    
+                loss += l
             
       gradients = tape.gradient(loss,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
@@ -1368,8 +1370,6 @@ class PatchWorkModel(Model):
         sampletyp = [None, -1]
         if max_agglomerative:
             sampletyp[1] = num_patches
-
-        debug=False
             
 
         print("starting training")
@@ -1450,8 +1450,9 @@ class PatchWorkModel(Model):
                     print(k + ":" + str(log[k][0]),end=" ")
                 print("")
 
-            patchloss = tf.concat(patchloss,0)
-            patchloss = tf.scatter_nd(tf.cast(patchloss[:,0:1],dtype=tf.int32),patchloss[:,1:2],[total_numpatches,1])
+            if len(patchloss) > 0:
+                patchloss = tf.concat(patchloss,0)
+                patchloss = tf.scatter_nd(tf.cast(patchloss[:,0:1],dtype=tf.int32),patchloss[:,1:2],[total_numpatches,1])
 
         else:
             inputdata = c_data.getInputData(sampletyp)
