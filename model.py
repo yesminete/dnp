@@ -1194,7 +1194,7 @@ class PatchWorkModel(Model):
                         hist['output_' + str(k+1) + '_loss'] = l
                         hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
                         if hard_mining > 0:
-                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=range(1,self.cropper.ndim+1))
+                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=list(range(1,self.cropper.ndim+1)))
                 else:
                     hist['output_loss'] = l
                     hist['output_f1'] = 10**f1_metric(labels[k],preds[k])

@@ -543,6 +543,8 @@ class CropGenerator():
               resolution_ = resolutions[j]
           resolution_ = resolution_[0:self.ndim]
       
+      input_transform_behaviour = None
+      label_transform_behaviour = None
       if self.transforms is not None:
           input_transform_behaviour=CropGenerator.getTransform(self.transforms[0],qdir)
           label_transform_behaviour=CropGenerator.getTransform(self.transforms[-1],qdir)
