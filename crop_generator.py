@@ -71,7 +71,8 @@ class CropInstance:
   def getAge(self):
       return self.scales[0]['age']
 
-  def subset(self,patchloss,fraction):
+  def subset(self,patchloss,fraction,maxage=1000):
+      patchloss = tf.where(patchloss[:,1:2]>maxage,0,patchloss[:,0:1])
       n = tf.cast(patchloss.shape[0]*fraction,dtype=tf.int32)
       idx = tf.argsort(patchloss,0,'DESCENDING')[0:n]
       for i in range(len(self.scales)):

@@ -1087,6 +1087,7 @@ class PatchWorkModel(Model):
             valid_ids = [],
             valid_num_patches=None,
             hard_mining = 0,
+            hard_mining_maxage=50,
             self_validation=False,
             batch_size=32,
             verbose=1,
@@ -1474,7 +1475,8 @@ class PatchWorkModel(Model):
         
         if hard_mining is not None and hard_mining>0:
            with tf.device(DEVCPU):    
-              c_data.subset(patchloss,hard_mining)    
+              patchloss = tf.concat([patchloss,tf.expand_dims(c_data.getAge(),1)],1)
+              c_data.subset(patchloss,hard_mining,hard_mining_maxage)    
               self.myhist.age = c_data.getAge()
               hard_data = c_data
               self.hard_data = hard_data
