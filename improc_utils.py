@@ -725,6 +725,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if len(img.shape) < nD+2:
                 img = np.expand_dims(img,nD+1)                
             img = tf.convert_to_tensor(img,dtype=ftype)
+            img_inputcontrast = img;
             imgs.append(img)
             
             
@@ -804,14 +805,19 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                         if len(key) == 1:
                                             for z in annos[key[0]]:
                                                 a = annos[key[0]][z]
-                                                p = a['coords'][0:nD]
+                                                p = a['coords'][0:nD]                                                
                                                 p.append(a['size']*sizefac)
+                                                if 'thresh' in a:
+                                                    p.append(a['thresh'])
+                                                    
                                                 points.append(p)                                        
                                         else:
                                             if key[1] in annos[key[0]]:
                                                 a = annos[key[0]][key[1]]
                                                 p = a['coords'][0:nD]
                                                 p.append(a['size']*sizefac)
+                                                if 'thresh' in a:
+                                                    p.append(a['thresh'])
                                                 points.append(p)
                                             else:
                                                 print(key[1] + ' not present for ' + fname)
@@ -821,7 +827,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                         notfound=True
                                         break
                                 print('rendering ' + str(len(points)) + ' markers')
-                                img = renderpoints(points, header,ftype,nD,normalize)
+                                img = renderpoints(points, header,ftype,nD,normalize,img_inputcontrast)
                                 img,_ = crop_spatial(img,scrop)
                             
                                 img = np.expand_dims(img,0)
@@ -1004,7 +1010,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     if labels is not None:
         return trainset,labelset,resolutions,subjects_names;
 
-def renderpoints(points,header,ftype,nD,normalize=False):
+def renderpoints(points,header,ftype,nD,normalize=False,img_inputcontrast=None):
 
     sz =header['dim'][1:nD+1]
     A = header.get_best_affine()
@@ -1039,6 +1045,10 @@ def renderpoints(points,header,ftype,nD,normalize=False):
         for p in points:
             R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1])  + (Z_-p[2])*(Z_-p[2]) 
             tmp = R2 < p[3]*p[3]
+            if len(p) >= 5:
+                tmp = tf.math.logical_and(tmp,img_inputcontrast[0,:,:,:,0]>p[4])
+                            
+            
             if not normalize:
                 img = tf.math.logical_or(img,tmp)
             else:
@@ -1086,6 +1096,35 @@ def loadAnnotation(annos,asdict=True):
                     
                 
             
+        
+def getLocalMaximas(res,affine,threshold):
+
+    x = tf.expand_dims(res,0)
+    a = x==tf.nn.max_pool3d(x,3,1,'SAME')
+    a = tf.math.logical_and(a,x>threshold)
+    idx = tf.where(a)
+    maxis = tf.gather_nd(x,idx)
+
+    maxpoints = 50
+    points = []
+    sorted_ = tf.argsort(maxis,-1,'DESCENDING')
+    for j in range(min(maxis.shape[0],maxpoints)):
+        k = sorted_[j]
+        p = tf.concat([idx[k,1:4],[1]],0).numpy()
+        p = np.matmul(affine,p)
+        #p = idx[k,1:4].numpy()
+        points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
+                        'name': 'score:'+str(maxis[k].numpy()),
+                        'size': 2                                
+            })
+        
+    annotation = { "type":"pointset",
+                   "state":{},
+                   "name":"detections",
+                   "points":points        
+        }    
+    
+    return {"annotations":[annotation]}
             
         
 
@@ -1122,7 +1161,7 @@ def align_to_physical_coords(im):
     for k in range(3):
         flip[k,k] = sg[idxinv[k]]
         if sg[idxinv[k]] < 0:
-            flip[k,3] = d.shape[k]
+            flip[k,3] = d.shape[k]-1
     
     for k in range(3):
         if sg[idxinv[k]] < 0:

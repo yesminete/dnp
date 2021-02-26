@@ -1105,14 +1105,16 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None,
             patch_on_cpu=True,
-            fit_type='keras',
+            fit_type='custom',
             train_S = True,
             train_U = True,
             train_D = True,
             callback=None
             ):
       
-    def f1_metric(y_true, y_pred):
+    def f1_metric(y_true, y_pred,valid=False):
+        if self.finalizeOnApply and not valid:
+            y_pred = tf.nn.sigmoid(y_pred)
         true_positives = kb.sum(kb.round(kb.clip(y_true * y_pred, 0, 1)))
         possible_positives = kb.sum(kb.round(kb.clip(y_true, 0, 1)))
         predicted_positives = kb.sum(kb.round(kb.clip(y_pred, 0, 1)))
@@ -1159,7 +1161,7 @@ class PatchWorkModel(Model):
       labels = images[1]
       
      
-      preds = self(data, training=False)
+      preds = self(data, training=True)
       loss = 0
       for k in range(len(labels)):          
             l = lossfun[k](labels[k],preds[k])
@@ -1168,7 +1170,7 @@ class PatchWorkModel(Model):
             if len(labels) > 1:
                 if k == len(labels)-1:
                     hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                    hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k])
+                    hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k],valid=False)
   #    hist[prefix+'_S_loss'] = loss
       return hist
     
@@ -1195,10 +1197,18 @@ class PatchWorkModel(Model):
                         hist['output_' + str(k+1) + '_loss'] = l
                         hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
                         if hard_mining > 0:
-                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=list(range(1,self.cropper.ndim+1)))
+                            if len(lmat.shape) < self.cropper.ndim+1:
+                                hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)
+                            else:
+                                hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=list(range(1,self.cropper.ndim+1)))
                 else:
                     hist['output_loss'] = l
                     hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
+                    if hard_mining > 0:
+                        if len(lmat.shape) < self.cropper.ndim+1:
+                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)
+                        else:
+                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=list(range(1,self.cropper.ndim+1)))
                     
                 loss += l
             
@@ -1298,8 +1308,9 @@ class PatchWorkModel(Model):
             loss = self.loss
         else:
             loss = []
-            for k in range(self.cropper.depth-1):
-                loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
+            if self.intermediate_loss:
+                for k in range(self.cropper.depth-1):
+                    loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
             loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
             self.loss = loss
     else:
