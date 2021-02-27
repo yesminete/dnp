@@ -710,6 +710,25 @@ def maxloss3d(y,x,from_logits=True):
     loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
     return tf.reduce_max(tf.where(y<0.5,loss,0),axis=[1,2,3]) + tf.reduce_max(tf.where(y>0.5,loss,0),axis=[1,2,3])
         
+def topk_loss3d(y,x,K=1,from_logits=True):
+    sz = y.shape
+    nvx = sz[1]*sz[2]*sz[3]
+    ncl = sz[-1]
+    loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+    isz = [-1,nvx,ncl]
+    loss = tf.reshape(loss,isz)
+    x = tf.reshape(x,isz)
+    y = tf.reshape(y,isz)
+    
+    neg = tf.where(y<0.5,loss,0)
+    pos = tf.where(y>0.5,loss,0)
+    sumloss = 0
+    for j in range(ncl):
+        valspos,_ = tf.nn.top_k(pos[...,j:j+1],k=K)
+        valsneg,_ = tf.nn.top_k(neg[...,j:j+1],k=K)
+        sumloss = sumloss + tf.reduce_mean(valspos+valsneg,axis=1)
+
+    return sumloss
 
 
 
