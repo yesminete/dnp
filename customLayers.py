@@ -724,11 +724,11 @@ def topk_loss3d(y,x,K=1,from_logits=True):
     pos = tf.where(y>0.5,loss,0)
     sumloss = 0
     for j in range(ncl):
-        valspos,_ = tf.nn.top_k(pos[...,j:j+1],k=K)
-        valsneg,_ = tf.nn.top_k(neg[...,j:j+1],k=K)
+        valspos,_ = tf.nn.top_k(pos[...,j],k=K)
+        valsneg,_ = tf.nn.top_k(neg[...,j],k=K)
         sumloss = sumloss + tf.reduce_mean(valspos+valsneg,axis=1)
 
-    return sumloss
+    return tf.expand_dims(sumloss,1)
 
 
 
