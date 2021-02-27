@@ -1305,6 +1305,7 @@ class PatchWorkModel(Model):
 
 
     def createLossArray(lossfun):
+        print("creating loss array")
         loss = []
         if self.intermediate_loss:
             for k in range(self.cropper.depth-1):
@@ -1321,6 +1322,7 @@ class PatchWorkModel(Model):
             if callable(loss):
                 self.loss = createLossArray(loss)
             else:            
+                print("using passed loss array")
                 self.loss = loss
     
     loss = self.loss
