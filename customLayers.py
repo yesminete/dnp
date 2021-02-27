@@ -702,6 +702,16 @@ custom_layers['biConvolution'] = biConvolution
 
 
 
+def maxloss2d(y,x,from_logits=True):
+    loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,4),tf.expand_dims(x,4),from_logits=from_logits)
+    return tf.reduce_max(tf.where(y<0.5,loss,0),axis=[1,2]) + tf.reduce_max(tf.where(y>0.5,loss,0),axis=[1,2])
+        
+def maxloss3d(y,x,from_logits=True):
+    loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+    return tf.reduce_max(tf.where(y<0.5,loss,0),axis=[1,2,3]) + tf.reduce_max(tf.where(y>0.5,loss,0),axis=[1,2,3])
+        
+
+
 
 
 #%%###############################################################################################

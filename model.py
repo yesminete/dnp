@@ -1303,18 +1303,25 @@ class PatchWorkModel(Model):
             print('taking custom optimizer')
         self.optimizer = optimizer            
 
-    if loss is None:
-        if hasattr(self,'loss'):
-            loss = self.loss
+
+    def createLossArray(lossfun):
+        loss = []
+        if self.intermediate_loss:
+            for k in range(self.cropper.depth-1):
+                loss.append(lambda x,y: lossfun(x,y,from_logits=True))
+        loss.append(lambda x,y: lossfun(x,y,from_logits=self.finalizeOnApply))
+        return loss
+        
+
+
+    if not hasattr(self,'loss'):
+        if loss is None:
+            self.loss = createLossArray(tf.keras.losses.binary_crossentropy)
         else:
-            loss = []
-            if self.intermediate_loss:
-                for k in range(self.cropper.depth-1):
-                    loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=True))
-            loss.append(lambda x,y: tf.keras.losses.binary_crossentropy(x,y,from_logits=False))
-            self.loss = loss
-    else:
-        self.loss = loss
+            if callable(loss):
+                self.loss = createLossArray(loss)
+            else:            
+                self.loss = loss
     
     loss = self.loss
     
