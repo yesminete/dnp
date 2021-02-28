@@ -710,11 +710,17 @@ def maxloss3d(y,x,from_logits=True):
     loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
     return tf.reduce_max(tf.where(y<0.5,loss,0),axis=[1,2,3]) + tf.reduce_max(tf.where(y>0.5,loss,0),axis=[1,2,3])
         
-def topk_loss3d(y,x,K=1,from_logits=True):
+def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc'):
     sz = y.shape
     nvx = sz[1]*sz[2]*sz[3]
     ncl = sz[-1]
-    loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+    if losstype=='bc':
+        loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+    elif losstype=='hinge':
+        if not from_logits:
+            assert False,"hinge only working for logits"
+        loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5))
+        
     isz = [-1,nvx,ncl]
     loss = tf.reshape(loss,isz)
     x = tf.reshape(x,isz)
@@ -730,7 +736,10 @@ def topk_loss3d(y,x,K=1,from_logits=True):
 
     return tf.expand_dims(sumloss,1)
 
-
+def TopK_loss3D(K=1,losstype='bc'):
+    def loss(x,y,from_logits=True):
+        return topk_loss3d(x,y,K=K,from_logits=from_logits,losstype=losstype)
+    return loss   
 
 
 #%%###############################################################################################
