@@ -709,6 +709,32 @@ def maxloss2d(y,x,from_logits=True):
 def maxloss3d(y,x,from_logits=True):
     loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
     return tf.reduce_max(tf.where(y<0.5,loss,0),axis=[1,2,3]) + tf.reduce_max(tf.where(y>0.5,loss,0),axis=[1,2,3])
+
+
+def Maxpool_loss3D(K=1,losstype='bc',threshold=1):
+    
+    def theloss(y,x,from_logits=True):
+        if losstype=='bc':
+            loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+        elif losstype=='hinge':
+            if not from_logits:
+                assert False,"hinge only working for logits"
+            loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5)/threshold)*threshold
+        else:
+            assert False,'losstype not available'
+            
+        a = tf.where(y<0.5,loss,0)
+        a = tf.nn.max_pool3d(a,ksize=(2*K+1),strides=K+1,padding='VALID')
+        print(a.shape)
+        a = tf.reduce_mean(a,axis=[1,2,3])
+    
+        b = tf.where(y>0.5,loss,0)
+        b = tf.nn.max_pool3d(b,ksize=(2*K+1),strides=K+1,padding='VALID')
+        b = tf.reduce_mean(b,axis=[1,2,3])
+        
+        return a+b
+    
+    return theloss
         
 def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc'):
     sz = y.shape
