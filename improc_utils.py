@@ -653,7 +653,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         if verbose:
             print("loading: " + k)
         else:
-            print(".",end="")
+            print("X",end="")
 
         crop_idx = []
 
@@ -664,7 +664,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     if verbose:
                         print("  missing label " + str(j) + " for subject " + k + ", skipping")
                     else:
-                        print(".",end="")
+                        print("O",end="")                        
                     incomplete = True
                     break
             if incomplete:

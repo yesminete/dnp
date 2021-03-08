@@ -189,8 +189,11 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
                 strides[r] = 1
                 
     
-  if dropout:
-      theLayers["9_final"] =  [layers.Dropout(rate=0.5), conv(outK)]
+  if dropout and dropout < 1.0: 
+      if nD == 3:
+          theLayers["9_final"] =  [layers.SpatialDropout3D(rate=float(dropout)), conv(outK)]
+      else:
+          theLayers["9_final"] =  [layers.SpatialDropout2D(rate=float(dropout)), conv(outK)]
   else:
       theLayers["9_final"] =  conv(outK)
       
@@ -710,6 +713,48 @@ def maxloss3d(y,x,from_logits=True):
     loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
     return tf.reduce_max(tf.where(y<0.5,loss,0),axis=[1,2,3]) + tf.reduce_max(tf.where(y>0.5,loss,0),axis=[1,2,3])
 
+
+
+
+
+
+
+
+
+
+
+def XXmaxloss3D(l,p):
+    t=0.2
+    x = tf.math.logical_and(l<0.5,p>-t)
+    a = tf.reduce_max(tf.where(x,p+t,0),axis=[2,3,4]) 
+    
+    x = tf.math.logical_and(l>0.5,p<t)
+    b = tf.reduce_max(tf.where(x,-p+t,0),axis=[2,3,4]) 
+    return a+b
+           
+
+def Max_loss3D(losstype='bc',threshold=1,axis=[1,2,3]):
+    
+    def theloss(y,x,from_logits=True):
+        if losstype=='bc':
+            loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+        elif losstype=='hinge':
+            if not from_logits:
+                assert False,"hinge only working for logits"
+            loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5)/threshold)*threshold
+        else:
+            assert False,'losstype not available'
+            
+        a = tf.where(y<0.5,loss,0)
+        a = tf.reduce_max(a,keepdims=True,axis=axis)
+
+        b = tf.where(y>0.5,loss,0)
+        b = tf.reduce_max(b,keepdims=True,axis=axis)
+        
+        return tf.reduce_mean(a+b,axis=[1,2,3])
+    
+    return theloss
+        
 
 def Maxpool_loss3D(K=1,losstype='bc',threshold=1):
     

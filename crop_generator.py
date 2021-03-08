@@ -121,11 +121,22 @@ class CropInstance:
     batchdim2 = sampletyp[1]
         
     out = []    
-    create_indicator_classlabels = self.cropper.create_indicator_classlabels
-    classifier_train = self.cropper.model.classifier_train
-    spatial_train = self.cropper.model.spatial_train
-    intermediate_loss = self.cropper.model.intermediate_loss
-    cls_intermediate_loss= self.cropper.model.cls_intermediate_loss
+    create_indicator_classlabels = False
+    classifier_train = False
+    spatial_train = True
+    intermediate_loss = True
+    cls_intermediate_loss= False
+    spatial_max_train = False
+    
+    if self.cropper.model is not None:    
+        create_indicator_classlabels = self.cropper.create_indicator_classlabels
+        classifier_train = self.cropper.model.classifier_train
+        spatial_train = self.cropper.model.spatial_train
+        intermediate_loss = self.cropper.model.intermediate_loss
+        cls_intermediate_loss= self.cropper.model.cls_intermediate_loss
+        spatial_max_train = self.cropper.model.spatial_max_train
+    
+    
     depth = len(self.scales)
     for i in range(depth-1):
         x = self.scales[i]
@@ -134,9 +145,9 @@ class CropInstance:
         if intermediate_loss and spatial_train:
             out.append(x['labels_cropped'])
         
-    if classifier_train or self.cropper.model.spatial_max_train:
+    if classifier_train or spatial_max_train:
         out.append(self.scales[-1]['class_labels'])
-    if spatial_train and not self.cropper.model.spatial_max_train:
+    if spatial_train and not spatial_max_train:
         out.append(self.scales[-1]['labels_cropped'])
     
     if batchdim2 != -1:
@@ -484,6 +495,15 @@ class CropGenerator():
     tensor = lambda a : tf.cast(a,dtype=self.ftype)
 
 
+    classifier_train = False
+    spatial_max_train = False
+    spatial_train = True
+    if self.model is not None:
+        classifier_train = self.model.classifier_train
+        spatial_max_train = self.model.spatial_max_train
+        spatial_train = self.model.spatial_train
+        
+        
     reptree = False
     if generate_type == 'tree_full':
       generate_type = 'tree'
@@ -510,10 +530,10 @@ class CropGenerator():
       labels_ = None
       class_labels_ = None
       if labelset is not None and labelset[j] is not None:
-          if (self.model.classifier_train and not self.create_indicator_classlabels) and self.model.spatial_train:
+          if (classifier_train and not self.create_indicator_classlabels) and self.model.spatial_train:
               class_labels_ = labelset[j][0]
               labels_ = labelset[j][1]
-          elif self.model.spatial_train and not self.model.spatial_max_train:
+          elif spatial_train and not spatial_max_train:
               labels_ = labelset[j]
           else:
               class_labels_ = labelset[j]
