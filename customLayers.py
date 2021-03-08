@@ -843,7 +843,14 @@ class CNNblock(layers.Layer):
             self.theLayers[args[0].name] = args[0]
             
           
-   
+  def get_config(self):
+         config = super().get_config().copy()
+         config.update(
+         {
+             'theLayers': dict(self.theLayers),
+         } )    
+         return config                  
+     
 
 
   def call(self, inputs, alphas=None, training=False):
@@ -949,7 +956,7 @@ class CNNblock(layers.Layer):
         #x = a(x,training=training)
         x = apply_fun(a,x)
 
-    if not training and len(applyout) > 0:
+    if len(applyout) > 0 and not training:
         return tf.concat(applyout,nD+1)
     else:
         return x
