@@ -486,7 +486,7 @@ class PatchWorkModel(Model):
          elif self.forward_type == 'mult':
             x = tf.expand_dims(inp,nD+2) * tf.sigmoid(tf.expand_dims(last_cropped,nD+1))
             x = tf.reshape(x,x.shape[0:nD+1] + x.shape[nD+1]*x.shape[nD+2])
-            inp = tf.concat([inp,x],(nD+1))
+            inp = tf.concat([inp,last_cropped,x],(nD+1))
          else: 
             assert 0,"unknown forward type"
 
