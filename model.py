@@ -484,10 +484,9 @@ class PatchWorkModel(Model):
              else:
                 inp = tf.concat([inp,last_cropped],(nD+1))
          elif self.forward_type == 'mult':
-            multiples = [1]*(nD+2)
-            multiples[nD+1] = last_cropped.shape[nD+1]
-            inp_ = tf.tile(inp,multiples) * last_cropped
-            inp = tf.concat([inp,inp_,last_cropped],nD+1)
+            x = tf.expand_dims(inp,nD+2) * tf.sigmoid(tf.expand_dims(last_cropped,nD+1))
+            x = tf.reshape(x,x.shape[0:nD+1] + x.shape[nD+1]*x.shape[nD+2])
+            inp = tf.concat([inp,last_cropped,x],(nD+1))
          else: 
             assert 0,"unknown forward type"
 

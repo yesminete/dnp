@@ -716,6 +716,15 @@ class CropGenerator():
 
       patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],resolution_,self.depth)
 
+
+      
+      aug_fac = lambda level: 1.0
+      if augment is not None:                  
+          if isinstance(augment,dict):
+              if 'gamma' in augment:
+                  aug_fac = lambda level: ((level+1)/self.depth)**augment['gamma']
+
+     
     
       localCrop = lambda x,level : self.createCropsLocal(trainset_,
                          labels_,                         
@@ -726,10 +735,10 @@ class CropGenerator():
                          generate_type=generate_type,
                          jitter = jitter,
                          overlap = overlap,
-                         dphi1=dphi1,
-                         dphi2=dphi2,
+                         dphi1=dphi1*aug_fac(level),
+                         dphi2=dphi2*aug_fac(level),
                          flip=flip,
-                         dscale = dscale,
+                         dscale = dscale*aug_fac(level),
                          pixel_noise = pixel_noise,
                          input_transform_behaviour = input_transform_behaviour,
                          label_transform_behaviour = label_transform_behaviour,                         
@@ -980,7 +989,7 @@ class CropGenerator():
             else:
                 balance['label_weight'] = tf.cast([1]*self.model.num_labels,dtype=src_data.dtype)
     
-    
+        print(dphi1)
     
         tensor = lambda a : tf.cast(a,dtype=self.ftype)
         int32 = lambda a : tf.cast(a,dtype=tf.int32)
