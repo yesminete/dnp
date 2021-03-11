@@ -905,7 +905,7 @@ class PatchWorkModel(Model):
 
             
       if pred_nii is not None:        
-          return pred_nii,res;
+          return newaffine,res;
       else:
           return res
 
@@ -1170,7 +1170,6 @@ class PatchWorkModel(Model):
                 if k == len(labels)-1:
                     hist[prefix+'_output_'+str(k+1)+'_loss'] = l
                     hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k],valid=False)
-  #    hist[prefix+'_S_loss'] = loss
       return hist
     
     def train_step_supervised(images,lossfun):
@@ -1304,7 +1303,8 @@ class PatchWorkModel(Model):
 
 
     def createLossArray(lossfun):
-        print("creating loss array")
+        print("creating loss array from")
+        print(lossfun)
         loss = []
         if self.intermediate_loss:
             for k in range(self.cropper.depth-1):
