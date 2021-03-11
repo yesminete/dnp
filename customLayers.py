@@ -124,7 +124,7 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
            return _convT(fdim,4+even,padding='VALID' )
       def conv(outK):
            return _conv(outK,4,padding='SAME') 
-      offs = [0,1,0,0,0,0,0]
+      offs = [0,1,0,0,0,0,0,0,0,0]
   else:
       def conv_down(fdim):
            return _conv(fdim,3,padding='SAME') 
@@ -132,7 +132,7 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
            return _convT(fdim,3,padding='SAME' )
       def conv(outK):
            return _conv(outK,3,padding='SAME') 
-      offs = [0,0,0,0,0,0]
+      offs = [0,0,0,0,0,0,0,0,0,0]
       
   if not isinstance(feature_dim,list):
       fdims=[]
