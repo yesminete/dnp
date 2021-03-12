@@ -1166,10 +1166,9 @@ class PatchWorkModel(Model):
             l = lossfun[k](labels[k],preds[k])
             l = tf.reduce_mean(l)
             loss += l
-            if len(labels) > 1:
-                if k == len(labels)-1:
-                    hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                    hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k],valid=False)
+            if k == len(labels)-1:
+                hist[prefix+'_output_'+str(k+1)+'_loss'] = l
+                hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k],valid=False)
       return hist
     
     def train_step_supervised(images,lossfun):
@@ -1306,10 +1305,11 @@ class PatchWorkModel(Model):
         print("creating loss array from")
         print(lossfun)
         loss = []
+        fin_on_app = self.finalizeOnApply
         if self.intermediate_loss:
             for k in range(self.cropper.depth-1):
                 loss.append(lambda x,y: lossfun(x,y,from_logits=True))
-        loss.append(lambda x,y: lossfun(x,y,from_logits=self.finalizeOnApply))
+        loss.append(lambda x,y: lossfun(x,y,from_logits=fin_on_app))
         return loss
         
 

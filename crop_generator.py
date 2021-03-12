@@ -989,7 +989,7 @@ class CropGenerator():
             else:
                 balance['label_weight'] = tf.cast([1]*self.model.num_labels,dtype=src_data.dtype)
     
-        print(dphi1)
+        
     
         tensor = lambda a : tf.cast(a,dtype=self.ftype)
         int32 = lambda a : tf.cast(a,dtype=tf.int32)

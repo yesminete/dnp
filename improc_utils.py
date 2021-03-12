@@ -919,7 +919,13 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if one_hot_index_list is not None:
                             r = []
                             for j in one_hot_index_list:
-                                r.append( tf.cast(img==j,dtype=ftype) )
+                                if isinstance(j,list):
+                                   x = 0
+                                   for ji in j:
+                                       x = x + tf.cast(img==ji,dtype=ftype)
+                                   r.append( x )
+                                else:
+                                   r.append( tf.cast(img==j,dtype=ftype) )
                             img = tf.concat(r,nD+1)
                                                     
                             
