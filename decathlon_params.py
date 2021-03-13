@@ -8,7 +8,6 @@ Created on Sat Mar 13 14:08:36 2021
 
 from .customLayers import *
 
-
 numinput = [4, 1, 1, 1, 2, 1, 1, 1, 1, 1]
 onehots = [[1,2,3], [1], [1,2], [1,2], [1,2], [1], [1,2], [1,2], [1], [1] ]
 vsizes = [[1.00, 1.00, 1.00], 
@@ -37,7 +36,7 @@ flips = [[1,0,0],  [1,0,0],  [1,0,0],  [0,0,0],  [1,0,0],
          [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0] ]
 
 theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
-                 outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False),
+                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False),
 
 def augmentP(task):
 
