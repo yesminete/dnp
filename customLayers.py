@@ -431,7 +431,7 @@ custom_layers['Scramble'] = Scramble
 
 class HistoMaker(layers.Layer):
 
-  def __init__(self,nD=2,out=4,scfac=0.2,scaling=1.0,init='ct',normalize=True,trainable=False,dropout=False,**kwargs):
+  def __init__(self,nD=2,out=10,scfac=0.2,scaling=1.0,init='ct',normalize=False,trainable=True,dropout=False,**kwargs):
     super().__init__(**kwargs)
 
     self.init = init

@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Mar 13 14:08:36 2021
+
+@author: reisertm
+"""
+
+from .customLayers import *
+
+
+numinput = [4, 1, 1, 1, 2, 1, 1, 1, 1, 1]
+onehots = [[1,2,3], [1], [1,2], [1,2], [1,2], [1], [1,2], [1,2], [1], [1] ]
+vsizes = [[1.00, 1.00, 1.00], 
+         [1.25, 1.25, 1.37], 
+         [0.77, 0.77, 1.00], 
+         [1.00, 1.00, 1.00], 
+         [0.62, 0.62, 3.60], 
+         [0.79, 0.79, 1.24], 
+         [0.80, 0.80, 2.50], 
+         [0.80, 0.80, 5.00], 
+         [0.79, 0.79, 5.00], 
+         [0.78, 0.78, 5.00] ]
+aniso = [0,0,0,0,1,0,1,1,1,1]
+wid80 =[[192.00, 192.00, 124.00 ],
+        [320.00, 320.00, 126.04 ],
+        [314.40, 314.40, 345.60 ],
+        [28.00, 40.00, 28.80 ],
+        [160.00, 160.00, 57.60 ],
+        [321.60, 321.60, 250.99 ],
+        [328.80, 328.80, 186.00 ],
+        [327.20, 327.20, 196.00 ],
+        [324.80, 324.80, 360.00 ],
+        [320.00, 320.00, 380.00 ]]
+ct = [0,0,1,0,0, 1,1,1,1,1]
+flips = [[1,0,0],  [1,0,0],  [1,0,0],  [0,0,0],  [1,0,0],
+         [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0] ]
+
+theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
+                 outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False),
+
+def augmentP(task):
+
+    if aniso[task] == 1:
+        return { 'dphi': [0.1,0,0], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+    else:
+        return { 'dphi': [0.1,0.1,0.1], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+
+def preprocP(task):
+    
+    if ct[task]==1:
+         preproc = lambda level: HistoMaker(nD=3,init='ct')
+         normtyp = None
+    else:
+         preproc = lambda level: HistoMaker(nD=3,out=10,init=None)
+         normtyp = 'mean'
+         
+    return preproc,normtyp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
