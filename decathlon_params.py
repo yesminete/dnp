@@ -21,7 +21,7 @@ vsizes = [[1.00, 1.00, 1.00],
          [0.79, 0.79, 5.00], 
          [0.78, 0.78, 5.00] ]
 aniso = [0,0,0,0,1,0,1,1,1,1]
-wid80 =[[192.00, 192.00, 124.00 ],
+wid80 =[[96.0, 136.0, 104.0 ],
         [320.00, 320.00, 126.04 ],
         [314.40, 314.40, 345.60 ],
         [28.00, 40.00, 28.80 ],
@@ -41,7 +41,7 @@ theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
 
 
 bala={"ratio":0.5}
-scheme = { 
+schemeP = lambda task : { 
     "destvox_mm": vsizes[task],
     "destvox_rel": None,
     "fov_mm":wid80[task],
