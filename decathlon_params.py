@@ -36,7 +36,25 @@ flips = [[1,0,0],  [1,0,0],  [1,0,0],  [0,0,0],  [1,0,0],
          [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0] ]
 
 theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
-                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False),
+                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False)
+
+
+
+bala={"ratio":0.5}
+scheme = { 
+    "destvox_mm": vsizes[task],
+    "destvox_rel": None,
+    "fov_mm":wid80[task],
+    "fov_rel":None,
+}
+depth=5
+ident=False
+fittyp = 'custom'
+
+myloss = TopK_loss3D(K=1000)
+
+
+
 
 def augmentP(task):
 
