@@ -23,8 +23,8 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 
 import patchwork2.model as patchwork
-import improc_utils
-import customLayers
+import patchwork2.improc_utils
+import patchwork2.customLayers
 
 
 #%%

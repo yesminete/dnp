@@ -38,8 +38,6 @@ from .improc_utils import *
 from .customLayers import *
 
 
-
-
 class FilterOut(object):
     def __init__(self, filterstr, *args):
         self.handles = [sys.__stdout__]

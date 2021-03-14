@@ -7,10 +7,12 @@ Created on Mon Mar 23 15:37:03 2020
 """
 
 import tensorflow as tf
-from . improc_utils import *
 from timeit import default_timer as timer
 from collections.abc import Iterable
 import math
+
+from .improc_utils import *
+
 
 ########## Cropmodel ##########################################
 
