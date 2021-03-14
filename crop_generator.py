@@ -687,9 +687,11 @@ class CropGenerator():
           dest_edges = []
           dest_shapes = []
           for k in range(len(out_patch_shapes)):
-            w = patch_widths[k]/out_patch_shapes[k]*1
-            dest_edges.append(tf.expand_dims(tf.linalg.diag(tf.concat([w,[1]],0)),0))
-            dest_shapes.append(int32(input_width/w))
+            w = patch_widths[k]/(out_patch_shapes[k]-1)*1
+            dshape = int32(input_width/w)
+            vsz =  input_width/tensor(dshape-1)
+            dest_edges.append(tf.expand_dims(tf.linalg.diag(tf.concat([vsz,[1]],0)),0))
+            dest_shapes.append(dshape)
 
           if verbose:
             for k in range(depth):
@@ -711,7 +713,7 @@ class CropGenerator():
                   'depth' : self.depth,                  
                   }
 
-      src_width =  tensor(trainset_.shape[1:-1])*tensor(resolution_)
+      src_width =  (tensor(trainset_.shape[1:-1])-1)*tensor(resolution_)
       src_boxes = tf.tile(tf.expand_dims(tf.linalg.diag(tensor(list(resolution_)+[1])),0),[trainset_.shape[0],1,1])
 
       patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],resolution_,self.depth)
@@ -1179,7 +1181,7 @@ class CropGenerator():
                     points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
                 else:
                     points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
-                points = points*shape
+                points = points*(shape-1)
                                                 
             elif generate_type == "tree":
                 # tree 
@@ -1193,14 +1195,14 @@ class CropGenerator():
                 for k in range(nD):
                     A[k] = tensor(tf.reshape(A[k],[N,1,1]))
                     A[k] = A[k] + tf.random.uniform([N,b,1],minval=-jitter,maxval=jitter,dtype=edges.dtype)
-                    A[k] = A[k]/nboxes[k]*shape[k]
+                    A[k] = A[k]/nboxes[k]*(shape[k]-1)
                 points = tf.concat(A,2)
                 N = points.shape[0]
             else:
                 assert False, "not a valid generate_type"
     
             # snap overlapping patches on edges
-            snap = ed(shape*out_width/width*0.5)
+            snap = ed((shape-1)*out_width/width*0.5)
             points = tf.where(points < snap, snap,points)
             points = tf.where(points > ed(shape)-snap, ed(shape)-snap,points)
         
@@ -1219,7 +1221,7 @@ class CropGenerator():
             U = tf.einsum('cxy,cyz->cxz',R2,U)
             R = tf.einsum('cxy,cyz->cxz',R2,R1)
             
-            vxsz = tf.expand_dims(tf.expand_dims(tf.concat([out_width/out_shape,[1]],0),0),1) 
+            vxsz = tf.expand_dims(tf.expand_dims(tf.concat([out_width/(out_shape-1),[1]],0),0),1) 
             U = U * vxsz
             
             # assemble homogenous coords
@@ -1285,7 +1287,7 @@ class CropGenerator():
             vratio = tf.concat([patch_shapes[level]/out_patch_shapes[level],[1]],0)
             local_boxes_out = tf.einsum('Nbxy,y->Nbxy',local_boxes,vratio)            
             parent_box_scatter_index = compindex(dest_edges[level],local_boxes_out,dest_shapes[level],out_patch_shapes[level],
-                                                 0,self.scatter_type,1)
+                                                 0,self.scatter_type,0)
         else:
             parent_box_scatter_index = None       
             

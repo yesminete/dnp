@@ -781,7 +781,7 @@ def Maxpool_loss3D(K=1,losstype='bc',threshold=1):
     
     return theloss
         
-def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc'):
+def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc',combi=False):
     sz = y.shape
     nvx = sz[1]*sz[2]*sz[3]
     ncl = sz[-1]
@@ -791,6 +791,10 @@ def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc'):
         if not from_logits:
             assert False,"hinge only working for logits"
         loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5))
+
+    sumloss = 0
+    if combi:
+        sumloss = tf.reduce_mean(loss,axis=list(range(1,len(sz))))*ncl
         
     isz = [-1,nvx,ncl]
     loss = tf.reshape(loss,isz)
@@ -799,7 +803,7 @@ def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc'):
     
     neg = tf.where(y<0.5,loss,0)
     pos = tf.where(y>0.5,loss,0)
-    sumloss = 0
+    
     for j in range(ncl):
         valspos,_ = tf.nn.top_k(pos[...,j],k=K)
         valsneg,_ = tf.nn.top_k(neg[...,j],k=K)
@@ -807,9 +811,9 @@ def topk_loss3d(y,x,K=1,from_logits=True,losstype='bc'):
 
     return tf.expand_dims(sumloss,1)
 
-def TopK_loss3D(K=1,losstype='bc'):
+def TopK_loss3D(K=1,losstype='bc',combi=False):
     def loss(x,y,from_logits=True):
-        return topk_loss3d(x,y,K=K,from_logits=from_logits,losstype=losstype)
+        return topk_loss3d(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi)
     return loss   
 
 

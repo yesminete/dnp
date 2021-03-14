@@ -711,14 +711,16 @@ class PatchWorkModel(Model):
              res = r
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
- #            res = zipper(pred,sumpred,lambda a,b : b)     
-             res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
+             if generate_type == 'tree':
+                 res = zipper(pred,sumpred,lambda a,b : a/b)     
+             else:
+                 res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
              for k in level:
-                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=True))                        
+                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
          if single:
            res = res[0]
      

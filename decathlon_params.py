@@ -51,7 +51,7 @@ depth=5
 ident=False
 fittyp = 'custom'
 
-myloss = TopK_loss3D(K=1000)
+myloss = TopK_loss3D(K=1000,combi=True)
 
 
 

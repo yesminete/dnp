@@ -359,8 +359,8 @@ def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
         if edge_center:
             X = X + off
             Y = Y + off
-        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
-        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
+        X = tf.cast(X,dtype=tf.float32)/(dest_shape[0]-1)*(sz[1]-1)
+        Y = tf.cast(Y,dtype=tf.float32)/(dest_shape[1]-1)*(sz[2]-1)
         res = interp2lin(image,X,Y)
     if nD==3:
         sz = image.shape
@@ -369,9 +369,9 @@ def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
             X = X + off
             Y = Y + off
             Z = Z + off
-        X = tf.cast(X,dtype=tf.float32)/dest_shape[0]*sz[1]
-        Y = tf.cast(Y,dtype=tf.float32)/dest_shape[1]*sz[2]
-        Z = tf.cast(Z,dtype=tf.float32)/dest_shape[2]*sz[3]
+        X = tf.cast(X,dtype=tf.float32)/(dest_shape[0]-1)*(sz[1]-1)
+        Y = tf.cast(Y,dtype=tf.float32)/(dest_shape[1]-1)*(sz[2]-1)
+        Z = tf.cast(Z,dtype=tf.float32)/(dest_shape[2]-1)*(sz[3]-1)
         res = interp3lin(image,X,Y,Z)
         
     if not batch_dim:
@@ -411,6 +411,8 @@ def interp2lin(image,X,Y):
     ftype = image.dtype
    
     res = [0]*sz[0]
+
+
     
     index = getIndex(Xint,Yint,0,0)
     w = tf.expand_dims((1-Xfrc)*(1-Yfrc),nD)

@@ -22,12 +22,12 @@ from timeit import default_timer as timer
 import nibabel as nib
 import matplotlib.pyplot as plt
 
-import patchwork.model as patchwork
-from patchwork.improc_utils import *
+import patchwork2.model as patchwork
+from patchwork2.improc_utils import *
 
 from DPX_core import *
 from DPX_improc import *
-from patchwork import *
+from patchwork2 import *
 
 
 #%%
@@ -234,18 +234,20 @@ res = model.apply_full(trainset[0],resolution=resolutions[0],
 
 #%% 2D
 nD=2
-cgen = patchwork.CropGenerator(patch_size = (128,128) ,
-                  scale_fac =  0.8,
-                  scale_fac_ref = 'min',
-                  init_scale = '140mm,140mm',
-                  #smoothfac_data=['boxcar',0.5],
+cgen = patchwork.CropGenerator(
+                  scheme = {
+                      "destvox_mm": [8,1],
+                      "destvox_rel": None,
+                      "fov_mm":[400]*nD,
+                      "fov_rel":None,
+                      "patch_size":[32,32]
+                      },
                   ndim=nD,
                   interp_type = 'NN',
                   keepAspect=True,
                   scatter_type = 'NN',
                   #create_indicator_classlabels=True,
-                  depth=1)
-
+                  depth=2)
 
 
 # cgen.sample(tf.ones([1,750,750]),None,generate_type='tree',
@@ -260,9 +262,6 @@ cgen = patchwork.CropGenerator(patch_size = (128,128) ,
 model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : customLayers.createUnet_bi(3,outK=outK,nD=nD),
                      # preprocCreator = lambda level: patchwork.normalizedConvolution(nD=2),
-                      classifier_train=True,
-                      spatial_train=False,
-                      intermediate_loss=False,
                       #block_out=[4,1],
 
                     #  classifierCreator = lambda level,outK: createClassifier(name='class'+str(level),outK=outK),
@@ -270,7 +269,7 @@ model = patchwork.PatchWorkModel(cgen,
                     #  cls_intermediate_loss=True,
                     #  classifier_train=True,
                       
-                      finalBlock=customLayers.simpleClassifier(outK=7,nD=nD),
+#                      finalBlock=customLayers.simpleClassifier(outK=7,nD=nD),
                       
                     #  finalBlock= customLayers.sigmoid_softmax(),
                      # forward_typinverse_rote='simple',
@@ -282,15 +281,20 @@ model = patchwork.PatchWorkModel(cgen,
 #                      jitter=1,jitter_border_fix=False, generate_type='tree', repetitions=1,verbose=True,scale_to_original=False,
 #                      lazyEval=0.3#{'reduceFun':'classifier_output'}
 #                      )
-
-res = model.apply_full(trainset[0][0:1,:,:,...],resolution=resolutions[0],
-                       generate_type='random',jitter=0,   repetitions=5,dphi=0.1,verbose=True,scale_to_original=True,testIT=False)
+xx = trainset[0][0:1,:,::10,...]
+res = model.apply_full(xx,resolution=[1,10],
+                       generate_type='random',jitter=0,   repetitions=500,dphi=0,verbose=True,scale_to_original=True,testIT=True)
 #res = model.apply_full(trainset[0][0:1,0:300,0:300,...],resolution=resolutions[0],
 #                       generate_type='random',jitter=0.05,   repetitions=20,dphi=0.9,verbose=True,scale_to_original=False)
 
 print(res.shape)
-plt.imshow(tf.squeeze(res))
-plt.pause(0.001)
+plt.imshow(tf.squeeze(res),aspect=0.1)
+#plt.imshow(tf.squeeze(res),aspect=0.2)
+plt.pause(1)
+
+plt.imshow(tf.squeeze(xx),aspect=0.1)
+#plt.imshow(tf.squeeze(res),aspect=0.2)
+
 #print(tf.reduce_sum(tf.math.abs(res-tf.squeeze(trainset[0]))).numpy()/100000)inverse_rot
 #plt.imshow(x[...,0],vmin=0,vmax=0.0000000001)
 
