@@ -753,6 +753,7 @@ class PatchWorkModel(Model):
                  crop_fdim=None,
                  crop_sdim=None,
                  testIT=False,
+                 return_nibabel=True,
                  lazyEval = None):
 
       def crop_spatial(img,c):
@@ -905,7 +906,10 @@ class PatchWorkModel(Model):
 
             
       if pred_nii is not None:        
-          return newaffine,res;
+          if return_nibabel:
+              return pred_nii,res
+          else:
+              return newaffine,res
       else:
           return res
 
