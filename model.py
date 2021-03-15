@@ -221,7 +221,9 @@ class myHistory :
 
             if self.model.modelname is not None:
                 plt.pause(0.001)  
-                plt.savefig(self.model.modelname + ".png")
+                plt.show()
+                fig.savefig(self.model.modelname + ".png")                
+            #    plt.savefig(self.model.modelname + ".png")
             else:
                 plt.pause(0.001)  
 
