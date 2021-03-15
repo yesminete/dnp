@@ -151,7 +151,7 @@ loading = {
 
 
 training = {
-   "num_patches":5,
+   "num_patches":20,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
    "epochs":5,
    "num_its":100,                
@@ -261,7 +261,7 @@ if len(tset) == 0:
 
 if os.path.isfile(modelfi+".json") and not reinit_model:
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> model already existing, loading ")
-    themodel = patchwork.PatchWorkModel.load(modelfi,immediate_init=True,notmpfile=True,clsCreator=default_classifier)
+    themodel = patchwork.PatchWorkModel.load(modelfi,immediate_init=True,notmpfile=True)
 else:
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> creating new model")    
@@ -297,7 +297,7 @@ if "align_physical" in loading:
 
     
     
-#%% start traininf    
+#%% start training    
 
 
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
