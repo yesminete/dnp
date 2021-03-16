@@ -27,27 +27,29 @@ import patchwork2 as patchwork
 
 
 
-#%% definition data sources
+#% definition data sources
 
 
 # define your data sources 
-contrasts = [ { 'subj1' :  'example2d.nii.gz'  } ]
-labels   = [ { 'subj1' :  'example2d_label.nii.gz' } ]
+contrasts = [ { 'subj1' :  'example2d.nii.gz',  
+                'subj2' :  'example2d.nii.gz'  } ]
+labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
+                'subj2' :  'example2d_label.nii.gz' } ]
 
-subjects = [ 'subj1' ];
+subjects = [ 'subj1', 'subj2'];
 
 # define ou want some validation dta
-valid_ids = []
+valid_ids = [1]
 
 
 modelfi = "models/yourmodel"
 
-reinit_model = False
+reinit_model = True
 
 
 
 
-#%% definition of your problem
+#% definition of your problem
 
 
 # dim of problem (2D/3D)
@@ -196,7 +198,7 @@ if reload_after_it is not None:
 
 
 
-#%%
+#%
 
 def get_gpu_memory():
      try:    
@@ -239,7 +241,7 @@ else:
 
  
 
-#%%
+#%
 
 loading['nD'] = nD
 
@@ -257,7 +259,7 @@ if len(tset) == 0:
     raise NameError('No data found! Stopping ...  ')
 
 
-#%% load or generate model
+#% load or generate model
 
 if os.path.isfile(modelfi+".json") and not reinit_model:
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> model already existing, loading ")
@@ -319,6 +321,7 @@ for i in range(0,outer_num_its):
         
         
     themodel.train(tset,lset,resolutions=rset,**training,
+                   debug=False,
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     

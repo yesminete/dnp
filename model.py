@@ -162,7 +162,7 @@ class myHistory :
             def plothist(loss_hist,txt):
                 import matplotlib.pyplot as plt
                 
-                cols = 'rbymckrbymck'   
+                cols = 'rbmckrbmck'   
                 cnt = 0
                 for k in sorted(loss_hist):
                     x = [ i for i, j in loss_hist[k] ]
@@ -176,9 +176,15 @@ class myHistory :
                     
                     
                     if txt == "":                     
-                        plt.semilogy(x,y,cols[cnt],label=labeltxt,marker='o', linestyle='dashed')
+                        if labeltxt.find("_threshold")>-1:
+                            plt.semilogy(x,y,'y',label=labeltxt,linestyle='dotted')
+                        else:
+                            plt.semilogy(x,y,cols[cnt],label=labeltxt,marker='o', linestyle='dashed')
                     else:
-                        plt.semilogy(x,y,cols[cnt],label=labeltxt)
+                        if labeltxt.find("_threshold")>-1:
+                            plt.semilogy(x,y,'y',label=labeltxt, linestyle='dashdot')
+                        else:    
+                            plt.semilogy(x,y,cols[cnt],label=labeltxt)
                     cnt+=1
 
  
@@ -1128,6 +1134,29 @@ class PatchWorkModel(Model):
         f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
         return f1_val      
       
+    def f1_metric_best(y_true, y_pred,valid=False):
+        if self.finalizeOnApply and not valid:
+            y_pred = tf.nn.sigmoid(y_pred)
+        
+        sz = y_pred.shape
+        y_pred = tf.reshape(y_pred,[tf.reduce_prod(sz)])
+        y_true = tf.reshape(y_true,[tf.reduce_prod(sz)])
+        idx = tf.argsort(y_pred,0,'DESCENDING')
+        
+        pval = tf.gather(y_pred,idx)
+        ranking = tf.gather(y_true,idx)
+        
+        TP = tf.cumsum(ranking)
+        precision = TP / tf.range(1,len(ranking)+1,dtype=self.dtype)
+        recall = TP / tf.reduce_sum(ranking)
+            
+        f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
+                
+        best_idx = tf.argmax(f1_val)
+        f1 = f1_val[best_idx]
+        th = pval[best_idx]
+                    
+        return f1,th
 
     def getSample(subset,np,valid=False):
         tset = [trainset[i] for i in subset]
@@ -1174,7 +1203,9 @@ class PatchWorkModel(Model):
             loss += l
             if k == len(labels)-1:
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1_metric(labels[k],preds[k],valid=False)
+                f1,th = f1_metric_best(labels[k],preds[k],valid=False)
+                hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
+                hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**th
       return hist
     
     def train_step_supervised(images,lossfun):
@@ -1198,7 +1229,12 @@ class PatchWorkModel(Model):
                 if depth > 1:
                     if k == depth-1:
                         hist['output_' + str(k+1) + '_loss'] = l
-                        hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+                        f1,th = f1_metric_best(labels[k],preds[k])
+                        hist['output_' + str(k+1) + '_f1'] = 10**f1
+                        hist['output_' + str(k+1) + '_threshold'] = 10**th
+                                                                       
+#                        hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+                        
                         if hard_mining > 0:
                             if len(lmat.shape) < self.cropper.ndim+1:
                                 hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)
