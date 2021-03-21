@@ -589,6 +589,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
                            crop_only_nonzero=False,
+                           reslice_labels=True,
                            verbose=False,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
@@ -687,7 +688,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             img = load_nifti(fname)      
             if verbose:            
                     print("   loading file:" + fname)           
-            resolution = img.header['pixdim'][1:4]
+            resolution = {"voxsize": img.header['pixdim'][1:4], "input_edges":img.affine}
             
             if len(img.header.extensions) > 0:
                 try:
@@ -892,8 +893,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         #if nD == 3:
                         sz1 = img.header.get_data_shape()
                         sz2 = template_nii.header.get_data_shape()
-                        if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
-                            img= resample_from_to(img, (template_shape,template_affine),order=3)
+                        
+                        if reslice_labels:
+                            if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
+                                img= resample_from_to(img, (template_shape,template_affine),order=3)
+                        else:
+                            resolution['output_edges'] = img.affine
                             
                         img = np.squeeze(img.get_fdata());
                         img,_ = crop_spatial(img,scrop)                        

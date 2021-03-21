@@ -596,8 +596,8 @@ class PatchWorkModel(Model):
        level = [level]
        single = True
      
-     pred = [0] * len(level)
-     sumpred = [0] * len(level)
+     pred = [0.0] * self.cropper.depth
+     sumpred = [0.0]  * self.cropper.depth
      
      reps = 1
      if generate_type == 'random':
@@ -728,14 +728,14 @@ class PatchWorkModel(Model):
              for k in level:
                 res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
          if single:
-           res = res[0]
+           res = res[level[0]]
      
          end = timer()
          print(">>> total time elapsed: " + str(end - start_total) )
          
          if patch_stats:
              if single:
-                 pstats = pstats[0]
+                 pstats = pstats[level[0]]
              return res,pstats
          else:
              return res
