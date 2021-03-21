@@ -51,7 +51,21 @@ depth=5
 ident=False
 fittyp = 'custom'
 
-myloss = TopK_loss3D(K=1000,combi=True)
+#myloss = TopK_loss3D(K=1000,combi=True)
+
+
+import tensorflow_addons as tfa
+
+l = tfa.losses.SigmoidFocalCrossEntropy(from_logits=True)
+t = tfa.losses.SigmoidFocalCrossEntropy(from_logits=False)
+
+#myloss = TopK_loss3D(K=1000,combi=True)
+#myloss = [l,l,l,l,t]
+
+myloss = None
+myoptim = None #tfa.optimizers.AdamW()
+#myoptim = tf.optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=True)
+
 
 
 
@@ -61,7 +75,7 @@ def augmentP(task):
     if aniso[task] == 1:
         return { 'dphi': [0.1,0,0], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
     else:
-        return { 'dphi': [0.1,0.1,0.1], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+        return { 'dphi': [0.1,0.1,0.1], 'flip': flips[task], 'dscale':0 }
 
 def preprocP(task):
     
@@ -69,7 +83,7 @@ def preprocP(task):
          preproc = lambda level: HistoMaker(nD=3,init='ct')
          normtyp = None
     else:
-         preproc = lambda level: HistoMaker(nD=3,out=10,init=None)
+         preproc = None #lambda level: HistoMaker(nD=3,out=10,init=None)
          normtyp = 'mean'
          
     return preproc,normtyp
