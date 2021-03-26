@@ -589,7 +589,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
                            crop_only_nonzero=False,
-                           reslice_labels=True,
+                           reslice_labels=False,
                            verbose=False,
                            threshold=0.5,
                            nD=3,ftype=tf.float32):
@@ -608,9 +608,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                 img = img[c[0],...]
                 img = img[:,c[1],...]
             if nD == 3:
-                img = img[c[0],...]
-                img = img[:,c[1],...]
-                img = img[:,:,c[2],...]
+                if c[0] is not None:
+                    img = img[c[0],...]
+                if c[1] is not None:
+                    img = img[:,c[1],...]
+                if c[2] is not None:
+                    img = img[:,:,c[2],...]
             return img,c
         else:
             return img,None
@@ -688,7 +691,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             img = load_nifti(fname)      
             if verbose:            
                     print("   loading file:" + fname)           
+
             resolution = {"voxsize": img.header['pixdim'][1:4], "input_edges":img.affine}
+ #           resolution = img.header['pixdim'][1:4]
             
             if len(img.header.extensions) > 0:
                 try:
@@ -893,10 +898,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         #if nD == 3:
                         sz1 = img.header.get_data_shape()
                         sz2 = template_nii.header.get_data_shape()
-                        
                         if reslice_labels:
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
-                                img= resample_from_to(img, (template_shape,template_affine),order=3)
+                                if len(img.shape) == 3:
+                                    img= resample_from_to(img, (template_shape ,template_affine),order=3)                                    
+                                else:
+                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3)
                         else:
                             resolution['output_edges'] = img.affine
                             

@@ -9,6 +9,9 @@ import sys
 sys.path.append("/home/reisertm")
 sys.path.append("/home/reisertm/nora/src/python")
 
+# add paths 
+sys.path.append("/software")
+sys.path.append("/DPXinstances/main/src/python")
 
 import numpy as np
 import tensorflow as tf
@@ -33,6 +36,26 @@ from patchwork2 import *
 #%%
 
 trainset,labelset,resolutions,subjs = load_data_for_training(
+                                project = 'OSG',    
+                                nD=2,
+                                subjects = '22804120#20190613001138',
+                                align_physical=False,
+                               # subjects = '15341572', #'#Tag:MIDItrain',
+                                contrasts_selector = ['TAG:ap'],
+                               # labels_selector = ['mask_untitled0.nii.gz','mask_untitled0.nii.gz'],
+                               # one_hot_index_list=[0,1],
+                                labels_selector = ['ap.nii.gz'],
+                              #  labels_selector = ['forms/untitledrrr.form.json'],
+                                exclude_incomplete_labels=True,
+                                add_inverted_label=False,
+                                max_num_data=1
+                                )
+
+
+
+#%%
+
+trainset,labelset,resolutions,subjs = load_data_for_training(
                                 project = 'tschaga',    
                                 subjects = '#Tag:test',
                                # subjects = '15341572', #'#Tag:MIDItrain',
@@ -50,6 +73,7 @@ trainset,labelset,resolutions,subjs = load_data_for_training(
                                 add_inverted_label=False,
                                 max_num_data=1
                                 )
+
 
 
 

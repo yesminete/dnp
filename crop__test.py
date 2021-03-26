@@ -27,8 +27,6 @@ import patchwork2.improc_utils
 import patchwork2.customLayers as customLayers
 
 
-
-
 #%%
 
 
@@ -92,6 +90,7 @@ res = model.apply_full(xx,resolution=[1,s],
 asp = xx.shape[1]/xx.shape[2]/res.shape[0]*res.shape[1]
 
 print(res.shape)
+plt.imshow(tf.squeeze(res),aspect=1/s,vmin=0,vmax=100)
 plt.imshow(tf.squeeze(res),aspect=asp)
 #plt.pause(1)
 #plt.imshow(tf.squeeze(xx),aspect=1/s)
