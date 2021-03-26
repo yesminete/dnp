@@ -560,11 +560,15 @@ class CropGenerator():
       resolution_ = None
       if resolutions is not None:
           if isinstance(resolutions[j],dict):
-              resolution_ = resolutions[j]['voxsize']
-              qdir = tf.math.sqrt(tensor(resolutions[j]['bval'])/1000)*tensor(resolutions[j]['bvec'])              
+              resolution_ = resolutions[j]
+              if 'bval' in resolutions[j]:
+                  qdir = tf.math.sqrt(tensor(resolutions[j]['bval'])/1000)*tensor(resolutions[j]['bvec'])              
+                  
+                  
+                  
           else:
               resolution_ = resolutions[j]
-          resolution_ = resolution_[0:self.ndim]
+              resolution_ = resolution_[0:self.ndim]
       
       input_transform_behaviour = None
       label_transform_behaviour = None
@@ -577,6 +581,7 @@ class CropGenerator():
       dphi2=dphi
       flip=None
       dscale = 0
+      independent_augmentation=False
       pixel_noise = 0
       
       
@@ -600,6 +605,8 @@ class CropGenerator():
                   dscale = tensor(augment['dscale'])
               if 'pixel_noise' in augment:
                   pixel_noise = tensor(augment['pixel_noise'])
+              if 'independent_augmentation' in augment:
+                  independent_augmentation = augment['independent_augmentation']
           else:
               print("augmenting ...")
               trainset_,labels_ = augment(trainset_,labels_)
@@ -685,7 +692,7 @@ class CropGenerator():
                         patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*patch_widths[-1])
               
                 
-                                 
+          # derive shape of output image
           dest_edges = []
           dest_shapes = []
           for k in range(len(out_patch_shapes)):
@@ -715,13 +722,45 @@ class CropGenerator():
                   'depth' : self.depth,                  
                   }
 
-      src_width =  (tensor(trainset_.shape[1:-1])-1)*tensor(resolution_)
-      src_boxes = tf.tile(tf.expand_dims(tf.linalg.diag(tensor(list(resolution_)+[1])),0),[trainset_.shape[0],1,1])
+      def toboxes(edges):
+          i_ = [0,1,3] if self.ndim == 2 else [0,1,2,3]
+          boxes = edges[i_,:]
+          return tensor(boxes[:,i_])
+
+
+      if isinstance(resolution_,dict) and "input_edges" in resolution_:
+          src_boxes = toboxes(resolution_['input_edges'])
+          src_voxsize = tf.math.sqrt(tf.reduce_sum(src_boxes[0:self.ndim,0:self.ndim]**2,0))
+          src_width = tf.math.sqrt(tf.reduce_sum(src_boxes[0:self.ndim,0:self.ndim]**2,0))*(tensor(trainset_.shape[1:-1])-1)
+          if "output_edges" in resolution_ and labels_ is not None:
+              src_boxes_labels = toboxes(resolution_['output_edges'])
+              src_width_labels = tf.math.sqrt(tf.reduce_sum(src_boxes_labels[0:self.ndim,0:self.ndim]**2,0))*(tensor(labels_.shape[1:-1])-1)                        
+          else:                  
+              src_boxes_labels = None
+              src_width_labels = None          
+      else:
+          if isinstance(resolution_,dict):
+               resolution_ = resolution_['voxsize']
+          src_width =  (tensor(trainset_.shape[1:-1])-1)*tensor(resolution_)
+          src_boxes = tf.linalg.diag(tensor(list(resolution_)+[1]))
+          src_boxes_labels = None
+          src_width_labels = None
+          
+      src_boxes = tf.tile(tf.expand_dims(src_boxes,0),[trainset_.shape[0],1,1])
+      if src_boxes_labels is not None:
+          src_boxes_labels = tf.tile(tf.expand_dims(src_boxes_labels,0),[trainset_.shape[0],1,1])
 
       patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],resolution_,self.depth)
 
-
+      if isinstance(resolution_,dict) and "input_edges" in resolution_:          
+          destboxes = patching_params['dest_edges']
+          worldtrafo = tf.einsum('ik,k->ik',toboxes(resolution_['input_edges']),1.0/tf.concat([src_voxsize,[1]],0))
+          for k in range(len(destboxes)):
+              destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
+        
+      
+        
       aug_fac = lambda level: 1.0
       if augment is not None:                  
           if isinstance(augment,dict):
@@ -731,9 +770,11 @@ class CropGenerator():
      
     
       localCrop = lambda x,level : self.createCropsLocal(trainset_,
-                         labels_,                         
                          src_boxes,
                          src_width,                         
+                         labels_,                         
+                         src_boxes_labels,
+                         src_width_labels,                         
                          x, level,
                          patching_params,
                          generate_type=generate_type,
@@ -743,6 +784,7 @@ class CropGenerator():
                          dphi2=dphi2*aug_fac(level),
                          flip=flip,
                          dscale = dscale*aug_fac(level),
+                         independent_augmentation=independent_augmentation,
                          pixel_noise = pixel_noise,
                          input_transform_behaviour = input_transform_behaviour,
                          label_transform_behaviour = label_transform_behaviour,                         
@@ -959,10 +1001,12 @@ class CropGenerator():
     
     
   def createCropsLocal(self,
-                         src_data,
-                         src_labels,
-                         src_boxes,
-                         src_width,
+                         src_data,            # the raw data img
+                         src_boxes,           # affine matrix of raw data
+                         src_width,           # width of raw data in mm
+                         src_labels,          # the raw label img
+                         src_boxes_labels,    # affine matrix of labels
+                         src_width_labels,    # width of label array
                          crops, 
                          level,
                          patching_params,
@@ -973,6 +1017,7 @@ class CropGenerator():
                          dphi2=0,
                          flip=None,                         
                          dscale = 0,
+                         independent_augmentation = False,
                          pixel_noise = 0,
                          input_transform_behaviour = None,
                          label_transform_behaviour = None,
@@ -1000,6 +1045,10 @@ class CropGenerator():
        
         src_bdim = src_data.shape[0]
         src_shape = tensor(src_data.shape[1:-1])
+        if src_labels is not None:
+            src_shape_labels = tensor(src_labels.shape[1:-1])
+            
+            
 
     
         patch_widths = patching_params['patch_widths']
@@ -1215,26 +1264,30 @@ class CropGenerator():
             points = tf.reshape(points,[b*N,nD])
             
             
-            # rnd transformations
-            R1 = randrot(dphi1)
-            R2 = randrot(dphi2)
-            S = 1+tf.random.normal([b*N,nD])*dscale
-            S = S*(2*tensor(tf.random.uniform([b*N,nD]) > flip*0.5)-1)
-            
-            U = tf.linalg.diag(tf.concat([S,tf.ones([b*N,1])],1))
-            U = tf.einsum('cxy,cyz->cxz',U,R1)
-            U = tf.einsum('cxy,cyz->cxz',R2,U)
-            R = tf.einsum('cxy,cyz->cxz',R2,R1)
+            if affine_augment is None or independent_augmentation:                        
+                # rnd transformations
+                R1 = randrot(dphi1)
+                R2 = randrot(dphi2)
+                S = 1+tf.random.normal([b*N,nD])*dscale
+                S = S*(2*tensor(tf.random.uniform([b*N,nD]) > flip*0.5)-1)
+                
+                A = tf.linalg.diag(tf.concat([S,tf.ones([b*N,1])],1))
+                A = tf.einsum('cxy,cyz->cxz',A,R1)
+                A = tf.einsum('cxy,cyz->cxz',R2,A)
+                R = tf.einsum('cxy,cyz->cxz',R2,R1)
+            else:
+                A = tf.tile(affine_augment,[N,1,1])
+                R = tf.tile(rot_augment,[N,1,1])
             
             vxsz = tf.expand_dims(tf.expand_dims(tf.concat([out_width/(out_shape-1),[1]],0),0),1) 
-            U = U * vxsz
+            U = A * vxsz
             
             # assemble homogenous coords
             offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([(out_shape-1)/2,[1]],0))
             E = U+tf.concat([tf.zeros([b*N,nD+1,nD]),tf.expand_dims(offs,2)],2)
             E = tf.reshape(E,[N,b,nD+1,nD+1])
                     
-            return E,R
+            return E,R,A
         
     
         if level == 0:        
@@ -1242,12 +1295,16 @@ class CropGenerator():
             last_width = src_width
             last_shape = src_shape
             last_label = src_labels
+            affine_augment = None
+            rot_augment = None
             N=num_patches
         else:
             last_boxes = crops['local_boxes']        
             last_width = patch_widths[level-1]
             last_shape = patch_shapes[level-1]
             last_label = crops['labels_cropped']
+            affine_augment = crops['affine_augment']
+            rot_augment = crops['rot_augment']
             N=branch_factor
             
         nD = len(last_width)
@@ -1258,16 +1315,16 @@ class CropGenerator():
                         
         start = timer()
           
-        local_boxes, orientations = draw_boxes(last_boxes, last_shape, 
-                                 last_width, patch_shapes[level], patch_widths[level], 
+        local_boxes, rot_augment, affine_augment = draw_boxes(
+                                 last_boxes, last_shape, last_width, 
+                                 patch_shapes[level], patch_widths[level], 
                                  last_label,
                                  N)
+        
     
-        # the index which crops the suboatch out of the last patch
+        # the index which crops the subpatch out of the last patch
         local_box_index = compindex(last_boxes,local_boxes,last_shape,patch_shapes[level],0,self.interp_type,0)
     
-
-
 
         local_boxes = tf.reshape(local_boxes,[
                         tf.reduce_prod(local_boxes.shape[0:2])/src_bdim, src_bdim ,
@@ -1277,14 +1334,21 @@ class CropGenerator():
         parent_box_index = compindex(src_boxes,local_boxes,src_shape,patch_shapes[level],
                                      pixel_noise,self.interp_type,0)
 
-        if src_labels is not None:                  
-            parent_box_index_label = parent_box_index            
+        if src_labels is not None:             
+            parent_box_index_label = parent_box_index
+            if src_boxes_labels is not None:
+                lbox,lshape = src_boxes_labels,src_shape_labels
+            else:                
+                lbox,lshape = src_boxes,src_shape
             if not tf.reduce_all(patch_shapes[level] == out_patch_shapes[level]):
-                  relwid = 1/tf.concat([out_patch_shapes[level]/patch_shapes[level],[1]],0)
-                  local_boxes_labels = tf.einsum('Nbxy,y->Nbxy',local_boxes,relwid)
-                  parent_box_index_label = compindex(src_boxes,local_boxes_labels,src_shape,out_patch_shapes[level],
+                relwid = 1/tf.concat([out_patch_shapes[level]/patch_shapes[level],[1]],0)
+                local_boxes_labels = tf.einsum('Nbxy,y->Nbxy',local_boxes,relwid)
+                parent_box_index_label = compindex(lbox,local_boxes_labels,lshape,out_patch_shapes[level],
                                                       pixel_noise,self.interp_type,0)
-
+            elif src_boxes_labels is not None:
+                parent_box_index_label = compindex(lbox,local_boxes,lshape,patch_shapes[level],
+                                     pixel_noise,self.interp_type,0)
+                
 
 
         # the index which scatters output into the global image        
@@ -1308,10 +1372,10 @@ class CropGenerator():
             
         ############## do the actual cropping
         res_data = self.crop(src_data,parent_box_index,relres,self.get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)       
-        res_data = fdim_transform(res_data,orientations,input_transform_behaviour)
+        res_data = fdim_transform(res_data,rot_augment,input_transform_behaviour)
         if src_labels is not None:                  
           res_labels = self.crop(src_labels,parent_box_index_label,relres,self.get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
-          res_labels = fdim_transform(res_labels,orientations,label_transform_behaviour)
+          res_labels = fdim_transform(res_labels,rot_augment,label_transform_behaviour)
         else:
             res_labels = None
 
@@ -1335,13 +1399,12 @@ class CropGenerator():
                   "local_box_index": local_box_index,
     
                   # these are crop coordinates refereing to the very original image
-          #        "parent_boxes": parent_boxes, 
                   "parent_box_index": parent_box_index,
                   "parent_box_scatter_index": parent_box_scatter_index,
                   "dest_full_size":dest_shapes[level],
+                  "affine_augment":affine_augment,
+                  "rot_augment":rot_augment,
     
-      #            "absolute_size_patch_mm":abssz,
-       #           "aspect_correction":forwarded_aspects
                   }
     
     
@@ -1358,6 +1421,8 @@ class CropGenerator():
                  'parent_boxes',
                  'parent_box_index',
                  'parent_box_scatter_index',
+                 'affine_augment',
+                 'rot_augment',
                  'class_labels']
         for p in props:
             if p in x:

@@ -267,7 +267,7 @@ if len(tset) == 0:
 
 if os.path.isfile(modelfi+".json") and not reinit_model:
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> model already existing, loading ")
-    themodel = patchwork.PatchWorkModel.load(modelfi,immediate_init=True,notmpfile=True,clsCreator=default_classifier)
+    themodel = patchwork.PatchWorkModel.load(modelfi,immediate_init=True,notmpfile=True)
 else:
 
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> creating new model")    
