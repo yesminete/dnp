@@ -269,6 +269,7 @@ class CropGenerator():
                     keepAspect = True,     # (deprecated)  in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     
                     transforms = None,
+                    snapper = None,
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
                     interp_type = 'NN',    # nearest Neighbor (NN) or linear (lin)
@@ -296,6 +297,7 @@ class CropGenerator():
     self.depth = depth
     self.ndim = ndim
     self.ftype=ftype
+    self.snapper = snapper
     self.dest_full_size = [None]*depth
 
 
@@ -439,6 +441,7 @@ class CropGenerator():
                'interp_type' :self.interp_type,
                'scatter_type' :self.scatter_type,
                'init_scale':self.init_scale,
+               'snapper':self.snapper,
                'smoothfac_data':self.smoothfac_data,
                'smoothfac_label':self.smoothfac_label,
                'normalize_input':self.normalize_input,
@@ -466,6 +469,7 @@ class CropGenerator():
              branch_factor=1,         #  if 'random' this gives the number of children for each random patch
              jitter=0,                #  if 'tree' this is the amount of random jitter
              jitter_border_fix=False,
+             snapper=None,
              patch_size_factor=1,
              dphi=0,
              overlap=0,
@@ -525,9 +529,16 @@ class CropGenerator():
     for k in range(self.depth):
         balances[k] = []
 
+    if snapper is None:
+        if self.snapper is None:
+            snapper = [0] + [1]*(self.depth-1)
+            self.snapper = snapper
+        else:
+            snapper = self.snapper
+
+
     for j in range(N):
-        
-        
+                
       # grep and prep the labels
       labels_ = None
       class_labels_ = None
@@ -624,6 +635,7 @@ class CropGenerator():
               print("input:  shape:"+ showten(tensor(input_shape),0)+
                     "  width(mm):"+showten(tensor(input_width),1) +
                     '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
+              print("snapper " + " ".join(str(x) for x in snapper))
     
           nD = len(resolution)        
           patch_shapes = list(map(lambda k: tensor(self.get_patchsize(k)),range(depth)))
@@ -722,21 +734,25 @@ class CropGenerator():
                   'depth' : self.depth,                  
                   }
 
-      if "input_edges" in resolution_:
-          def toboxes(edges):
-              i_ = [0,1,3] if self.ndim == 2 else [0,1,2,3]
-              boxes = edges[i_,:]
-              return tensor(boxes[:,i_])
+      def toboxes(edges):
+          i_ = [0,1,3] if self.ndim == 2 else [0,1,2,3]
+          boxes = edges[i_,:]
+          return tensor(boxes[:,i_])
+
+
+      if isinstance(resolution_,dict) and "input_edges" in resolution_:
           src_boxes = toboxes(resolution_['input_edges'])
+          src_voxsize = tf.math.sqrt(tf.reduce_sum(src_boxes[0:self.ndim,0:self.ndim]**2,0))
           src_width = tf.math.sqrt(tf.reduce_sum(src_boxes[0:self.ndim,0:self.ndim]**2,0))*(tensor(trainset_.shape[1:-1])-1)
           if "output_edges" in resolution_ and labels_ is not None:
               src_boxes_labels = toboxes(resolution_['output_edges'])
               src_width_labels = tf.math.sqrt(tf.reduce_sum(src_boxes_labels[0:self.ndim,0:self.ndim]**2,0))*(tensor(labels_.shape[1:-1])-1)                        
           else:                  
               src_boxes_labels = None
-              src_width_labels = None
-          
+              src_width_labels = None          
       else:
+          if isinstance(resolution_,dict):
+               resolution_ = resolution_['voxsize']
           src_width =  (tensor(trainset_.shape[1:-1])-1)*tensor(resolution_)
           src_boxes = tf.linalg.diag(tensor(list(resolution_)+[1]))
           src_boxes_labels = None
@@ -746,12 +762,17 @@ class CropGenerator():
       if src_boxes_labels is not None:
           src_boxes_labels = tf.tile(tf.expand_dims(src_boxes_labels,0),[trainset_.shape[0],1,1])
 
-
-
       patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],resolution_,self.depth)
 
-
+      if isinstance(resolution_,dict) and "input_edges" in resolution_:          
+          destboxes = patching_params['dest_edges']
+          worldtrafo = tf.einsum('ik,k->ik',toboxes(resolution_['input_edges']),1.0/tf.concat([src_voxsize,[1]],0))
+          for k in range(len(destboxes)):
+              destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
+        
+      
+        
       aug_fac = lambda level: 1.0
       if augment is not None:                  
           if isinstance(augment,dict):
@@ -769,6 +790,7 @@ class CropGenerator():
                          x, level,
                          patching_params,
                          generate_type=generate_type,
+                         snapper=snapper,
                          jitter = jitter,
                          overlap = overlap,
                          dphi1=dphi1*aug_fac(level),
@@ -1002,6 +1024,7 @@ class CropGenerator():
                          level,
                          patching_params,
                          generate_type='random',
+                         snapper = None,
                          jitter = 0,
                          overlap = 0,
                          dphi1=0,
@@ -1218,11 +1241,13 @@ class CropGenerator():
             w = (1-overlap)*out_width/width
         
             # rnd points inside patches
-            if generate_type == "random":
+            if generate_type == "random" or generate_type == "random_deprec":
                 if balance is not None:
                     points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
                 else:
                     points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
+#                    points = tf.random.uniform([N,b,nD],minval=-1,maxval=1,dtype=edges.dtype)
+ #                   points = 0.5*(1+tf.math.sign(points) * tf.math.pow(1-tf.math.abs(points),2))                    
                 points = points*(shape-1)
                                                 
             elif generate_type == "tree":
@@ -1244,10 +1269,11 @@ class CropGenerator():
                 assert False, "not a valid generate_type"
     
             # snap overlapping patches on edges
-            snap = ed((shape-1)*out_width/width*0.5)
-            points = tf.where(points < snap, snap,points)
-            points = tf.where(points > ed(shape)-snap, ed(shape)-snap,points)
-        
+            if snapper[level] == 1:
+                snap = ed((shape-1)*out_width/width*0.5)
+                points = tf.where(points < snap*1, snap,points)
+                points = tf.where(points > ed(shape-1)-snap*1, ed(shape-1)-snap,points)
+            
             points = tf.einsum('bxy,Nby->Nbx',edges[...,0:nD,0:nD],points) + tf.expand_dims(edges[...,0:nD,-1],0)
             points = tf.reshape(points,[b*N,nD])
             
@@ -1271,7 +1297,7 @@ class CropGenerator():
             U = A * vxsz
             
             # assemble homogenous coords
-            offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([out_shape/2,[1]],0))
+            offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([(out_shape-1)/2,[1]],0))
             E = U+tf.concat([tf.zeros([b*N,nD+1,nD]),tf.expand_dims(offs,2)],2)
             E = tf.reshape(E,[N,b,nD+1,nD+1])
                     

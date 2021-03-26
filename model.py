@@ -561,6 +561,7 @@ class PatchWorkModel(Model):
                  resolution=None,
                  level=-1,
                  generate_type='random',
+                 snapper=None,
                  jitter=0.05,
                  jitter_border_fix = False,
                  overlap=0,
@@ -600,7 +601,7 @@ class PatchWorkModel(Model):
      sumpred = [0.0]  * self.cropper.depth
      
      reps = 1
-     if generate_type == 'random':
+     if generate_type == 'random' or generate_type == 'random_deprec' :
          reps = repetitions
          repetitions = 1         
          
@@ -634,7 +635,7 @@ class PatchWorkModel(Model):
             if lazyEval is None:             
                 print(">>> sampling patches for testing")
                 start = timer()
-            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
+            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,snapper=snapper,
                                     resolutions=resolution,
                                     jitter = jitter,
                                     jitter_border_fix = jitter_border_fix,
@@ -718,9 +719,16 @@ class PatchWorkModel(Model):
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
              if generate_type == 'tree':
-                 res = zipper(pred,sumpred,lambda a,b : a/b)     
+                 if testIT:
+                     res = zipper(pred,sumpred,lambda a,b : b)     
+                 else:
+                     res = zipper(pred,sumpred,lambda a,b : a/b)     
              else:
-                 res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
+                 if testIT:
+                     res = zipper(pred,sumpred,lambda a,b : b)     
+                 else:
+              #       res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
+                     res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001))     
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
@@ -745,6 +753,7 @@ class PatchWorkModel(Model):
   # for multi-contrast data fname is a list
   def apply_on_nifti(self,fname, ofname=None,
                  generate_type='tree',
+                 snapper=None,
                  overlap=0,
                  jitter=0.05,
                  jitter_border_fix=False,
@@ -777,9 +786,12 @@ class PatchWorkModel(Model):
                 img = img[c[0],...]
                 img = img[:,c[1],...]
             if nD == 3:
-                img = img[c[0],...]
-                img = img[:,c[1],...]
-                img = img[:,:,c[2],...]
+                if c[0] is not None:
+                    img = img[c[0],...]
+                if c[1] is not None:
+                    img = img[:,c[1],...]
+                if c[2] is not None:
+                    img = img[:,:,c[2],...]
             return img,c
         else:
             return img,None
@@ -801,7 +813,8 @@ class PatchWorkModel(Model):
           img1 = nib.load(f)        
           if align_physical:
               img1 = align_to_physical_coords(img1)
-          resolution = img1.header['pixdim'][1:4]
+     #     resolution = img1.header['pixdim'][1:4]
+          resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
           
           a = img1.get_fdata()
           
@@ -825,20 +838,21 @@ class PatchWorkModel(Model):
 
 
       do_app = lambda x: self.apply_full(x,generate_type=generate_type,
-                                jitter=jitter,
-                                jitter_border_fix=jitter_border_fix,
-                                overlap=overlap,                            
-                                repetitions=repetitions,
-                                num_chunks=num_chunks,
-                                branch_factor=branch_factor,
-                                dphi=dphi,
-                                augment=augment,
-                                resolution = resolution,
-                                lazyEval = lazyEval,
-                                patch_size_factor=patch_size_factor,
-                                verbose=True,
-                                testIT=testIT,
-                                scale_to_original=scale_to_original)
+                                        snapper=snapper,
+                                        jitter=jitter,
+                                        jitter_border_fix=jitter_border_fix,
+                                        overlap=overlap,                            
+                                        repetitions=repetitions,
+                                        num_chunks=num_chunks,
+                                        branch_factor=branch_factor,
+                                        dphi=dphi,
+                                        augment=augment,
+                                        resolution = resolution,
+                                        lazyEval = lazyEval,
+                                        patch_size_factor=patch_size_factor,
+                                        verbose=True,
+                                        testIT=testIT,
+                                        scale_to_original=scale_to_original)
 
 
       if along4dim:
@@ -875,9 +889,9 @@ class PatchWorkModel(Model):
           else:
               facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],res.shape[2]/sz[2]]
           img1.header.set_data_shape(res.shape)
-          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,1],
-                                                      [0,1/facs[1],0,1],
-                                                      [0,0,1/facs[2],1],
+          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,0],
+                                                      [0,1/facs[1],0,0],
+                                                      [0,0,1/facs[2],0],
                                                       [0,0,0,1]]))
             
       
@@ -1147,8 +1161,8 @@ class PatchWorkModel(Model):
         ranking = tf.gather(y_true,idx)
         
         TP = tf.cumsum(ranking)
-        precision = TP / tf.range(1,len(ranking)+1,dtype=self.dtype)
-        recall = TP / tf.reduce_sum(ranking)
+        precision = TP / (kb.epsilon()+tf.range(1,(ranking.shape[0])+1,dtype=self.dtype))
+        recall = TP / (kb.epsilon()+tf.reduce_sum(ranking))
             
         f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
                 
@@ -1177,8 +1191,8 @@ class PatchWorkModel(Model):
             
         with tf.device(DEVCPU):    
     
-            if traintype == 'random':
-                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='random', 
+            if traintype == 'random' or traintype ==  'random_deprec' :
+                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype, 
                                         num_patches=np,augment=aug_,balance=balance,dphi=dphi,training=True)
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
