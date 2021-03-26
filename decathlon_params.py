@@ -61,9 +61,9 @@ l = tfa.losses.SigmoidFocalCrossEntropy(from_logits=True)
 t = tfa.losses.SigmoidFocalCrossEntropy(from_logits=False)
 
 #myloss = TopK_loss3D(K=1000,combi=True)
-#myloss = [l,l,l,l,t]
+myloss = [l,l,l,l,t]
 
-myloss = None
+#myloss = None
 myoptim = None #tfa.optimizers.AdamW()
 #myoptim = tf.optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=True)
 

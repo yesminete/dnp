@@ -537,7 +537,13 @@ class CropGenerator():
             snapper = self.snapper
 
 
+    # this the main loop running over the image list
     for j in range(N):
+        
+      if not verbose:
+          if j%round(N/20+1)==0:
+              print(("{:.0f}% ").format(100*j/N),end="" )
+          
                 
       # grep and prep the labels
       labels_ = None

@@ -63,27 +63,29 @@ cgen = patchwork.CropGenerator(
                   interp_type = 'NN',
                   keepAspect=True,
                   scatter_type = 'NN',
-                  depth=3)
+                  depth=1)
 
 
 
 
 model = patchwork.PatchWorkModel(cgen,
-                      blockCreator= lambda level,outK : customLayers.createUnet_bi(3,outK=outK,nD=nD),
+                      blockCreator= lambda level,outK : customLayers.createUnet_v2(2,1,nD=2,verbose=True),
                       intermediate_loss = True,
                        num_labels = 1,
-                       num_classes = 1           
+                       num_classes = 1       ,
+                       
                       )
+#%%
 
 
 s = 1
 xx = trainset[0][0:1,:,::s,...]
 res = model.apply_full(xx,resolution=[1,s],
-                       branch_factor=5,
+                       branch_factor=1,
                        generate_type='random',jitter=0.1,   repetitions=1,
-                       augment= {"independent_augmentation" : False,
+                       augment= {"independent_augmentation" : True,
                                  "dphi" : 0.1 },
-                       verbose=True,scale_to_original=False,testIT=True)
+                       verbose=True,scale_to_original=False,testIT=False)
 
 asp = xx.shape[1]/xx.shape[2]/res.shape[0]*res.shape[1]
 

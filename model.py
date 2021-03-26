@@ -1372,7 +1372,11 @@ class PatchWorkModel(Model):
 
     if not hasattr(self,'loss'):
         if loss is None:
+<<<<<<< HEAD
             print("using default bc loss")
+=======
+            print('using default bc loss')
+>>>>>>> 749285e31e63075e799f78aa3fca347d784422ec
             self.loss = createLossArray(tf.keras.losses.binary_crossentropy)
         else:
             if callable(loss):

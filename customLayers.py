@@ -885,7 +885,10 @@ class CNNblock(layers.Layer):
                     print("  " + f.name , "(bi) input_shape: " ,  alphas.shape)
             return f(x,alphas,training=training)
         else:
-            return f(x,training=training)
+            x=f(x,training=training)
+            if self.verbose:
+                print("   output_shape: " ,  x.shape)
+            return x
         
     
     x = inputs
