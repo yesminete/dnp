@@ -561,6 +561,7 @@ class PatchWorkModel(Model):
                  resolution=None,
                  level=-1,
                  generate_type='random',
+                 snapper=None,
                  jitter=0.05,
                  jitter_border_fix = False,
                  overlap=0,
@@ -634,7 +635,7 @@ class PatchWorkModel(Model):
             if lazyEval is None:             
                 print(">>> sampling patches for testing")
                 start = timer()
-            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,
+            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,snapper=snapper,
                                     resolutions=resolution,
                                     jitter = jitter,
                                     jitter_border_fix = jitter_border_fix,
@@ -752,6 +753,7 @@ class PatchWorkModel(Model):
   # for multi-contrast data fname is a list
   def apply_on_nifti(self,fname, ofname=None,
                  generate_type='tree',
+                 snapper=None,
                  overlap=0,
                  jitter=0.05,
                  jitter_border_fix=False,
@@ -836,20 +838,21 @@ class PatchWorkModel(Model):
 
 
       do_app = lambda x: self.apply_full(x,generate_type=generate_type,
-                                jitter=jitter,
-                                jitter_border_fix=jitter_border_fix,
-                                overlap=overlap,                            
-                                repetitions=repetitions,
-                                num_chunks=num_chunks,
-                                branch_factor=branch_factor,
-                                dphi=dphi,
-                                augment=augment,
-                                resolution = resolution,
-                                lazyEval = lazyEval,
-                                patch_size_factor=patch_size_factor,
-                                verbose=True,
-                                testIT=testIT,
-                                scale_to_original=scale_to_original)
+                                        snapper=snapper,
+                                        jitter=jitter,
+                                        jitter_border_fix=jitter_border_fix,
+                                        overlap=overlap,                            
+                                        repetitions=repetitions,
+                                        num_chunks=num_chunks,
+                                        branch_factor=branch_factor,
+                                        dphi=dphi,
+                                        augment=augment,
+                                        resolution = resolution,
+                                        lazyEval = lazyEval,
+                                        patch_size_factor=patch_size_factor,
+                                        verbose=True,
+                                        testIT=testIT,
+                                        scale_to_original=scale_to_original)
 
 
       if along4dim:

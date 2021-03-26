@@ -269,6 +269,7 @@ class CropGenerator():
                     keepAspect = True,     # (deprecated)  in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     
                     transforms = None,
+                    snapper = None,
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
                     interp_type = 'NN',    # nearest Neighbor (NN) or linear (lin)
@@ -296,6 +297,7 @@ class CropGenerator():
     self.depth = depth
     self.ndim = ndim
     self.ftype=ftype
+    self.snapper = snapper
     self.dest_full_size = [None]*depth
 
 
@@ -439,6 +441,7 @@ class CropGenerator():
                'interp_type' :self.interp_type,
                'scatter_type' :self.scatter_type,
                'init_scale':self.init_scale,
+               'snapper':self.snapper,
                'smoothfac_data':self.smoothfac_data,
                'smoothfac_label':self.smoothfac_label,
                'normalize_input':self.normalize_input,
@@ -466,6 +469,7 @@ class CropGenerator():
              branch_factor=1,         #  if 'random' this gives the number of children for each random patch
              jitter=0,                #  if 'tree' this is the amount of random jitter
              jitter_border_fix=False,
+             snapper=None,
              patch_size_factor=1,
              dphi=0,
              overlap=0,
@@ -525,9 +529,16 @@ class CropGenerator():
     for k in range(self.depth):
         balances[k] = []
 
+    if snapper is None:
+        if self.snapper is None:
+            snapper = [0] + [1]*(self.depth-1)
+            self.snapper = snapper
+        else:
+            snapper = self.snapper
+
+
     for j in range(N):
-        
-        
+                
       # grep and prep the labels
       labels_ = None
       class_labels_ = None
@@ -624,6 +635,7 @@ class CropGenerator():
               print("input:  shape:"+ showten(tensor(input_shape),0)+
                     "  width(mm):"+showten(tensor(input_width),1) +
                     '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
+              print("snapper " + " ".join(str(x) for x in snapper))
     
           nD = len(resolution)        
           patch_shapes = list(map(lambda k: tensor(self.get_patchsize(k)),range(depth)))
@@ -778,6 +790,7 @@ class CropGenerator():
                          x, level,
                          patching_params,
                          generate_type=generate_type,
+                         snapper=snapper,
                          jitter = jitter,
                          overlap = overlap,
                          dphi1=dphi1*aug_fac(level),
@@ -1011,6 +1024,7 @@ class CropGenerator():
                          level,
                          patching_params,
                          generate_type='random',
+                         snapper = None,
                          jitter = 0,
                          overlap = 0,
                          dphi1=0,
@@ -1255,7 +1269,7 @@ class CropGenerator():
                 assert False, "not a valid generate_type"
     
             # snap overlapping patches on edges
-            if level > 0 or generate_type == 'random_deprec' :
+            if snapper[level] == 1:
                 snap = ed((shape-1)*out_width/width*0.5)
                 points = tf.where(points < snap*1, snap,points)
                 points = tf.where(points > ed(shape-1)-snap*1, ed(shape-1)-snap,points)
