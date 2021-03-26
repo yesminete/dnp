@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 import patchwork2.model as patchwork
 import patchwork2.improc_utils
-import patchwork2.customLayers
+import patchwork2.customLayers as customLayers
 
 
 #%%
@@ -77,10 +77,10 @@ model = patchwork.PatchWorkModel(cgen,
 s = 1
 xx = trainset[0][0:1,:,::s,...]
 res = model.apply_full(xx,resolution=[1,s],
-                       generate_type='random',jitter=0.1,   repetitions=100,dphi=0,verbose=True,scale_to_original=False,testIT=True)
+                       generate_type='random',jitter=0.1,   repetitions=1000,dphi=0,verbose=True,scale_to_original=False,testIT=True)
 
 
 print(res.shape)
-plt.imshow(tf.squeeze(res),aspect=1/s)
-plt.pause(1)
-plt.imshow(tf.squeeze(xx),aspect=1/s)
+plt.imshow(tf.squeeze(res),aspect=1/s,vmin=0,vmax=100)
+#plt.pause(1)
+#plt.imshow(tf.squeeze(xx),aspect=1/s)

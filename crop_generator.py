@@ -1178,11 +1178,13 @@ class CropGenerator():
             w = (1-overlap)*out_width/width
         
             # rnd points inside patches
-            if generate_type == "random":
+            if generate_type == "random" or generate_type == "random_deprec":
                 if balance is not None:
                     points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
                 else:
                     points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
+#                    points = tf.random.uniform([N,b,nD],minval=-1,maxval=1,dtype=edges.dtype)
+ #                   points = 0.5*(1+tf.math.sign(points) * tf.math.pow(1-tf.math.abs(points),2))                    
                 points = points*(shape-1)
                                                 
             elif generate_type == "tree":
@@ -1204,10 +1206,11 @@ class CropGenerator():
                 assert False, "not a valid generate_type"
     
             # snap overlapping patches on edges
-            snap = ed((shape-1)*out_width/width*0.5)
-            points = tf.where(points < snap, snap,points)
-            points = tf.where(points > ed(shape)-snap, ed(shape)-snap,points)
-        
+            if level > 0 or generate_type == 'random_deprec' :
+                snap = ed((shape-1)*out_width/width*0.5)
+                points = tf.where(points < snap*1, snap,points)
+                points = tf.where(points > ed(shape-1)-snap*1, ed(shape-1)-snap,points)
+            
             points = tf.einsum('bxy,Nby->Nbx',edges[...,0:nD,0:nD],points) + tf.expand_dims(edges[...,0:nD,-1],0)
             points = tf.reshape(points,[b*N,nD])
             
@@ -1227,7 +1230,7 @@ class CropGenerator():
             U = U * vxsz
             
             # assemble homogenous coords
-            offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([out_shape/2,[1]],0))
+            offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([(out_shape-1)/2,[1]],0))
             E = U+tf.concat([tf.zeros([b*N,nD+1,nD]),tf.expand_dims(offs,2)],2)
             E = tf.reshape(E,[N,b,nD+1,nD+1])
                     
