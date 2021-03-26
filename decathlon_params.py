@@ -36,8 +36,9 @@ flips = [[1,0,0],  [1,0,0],  [1,0,0],  [0,0,0],  [1,0,0],
          [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0] ]
 
 theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
-                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False)
-
+                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[32,32,32,32,32],dropout=False)
+#theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
+ #                outK=outK,nD=3,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False)
 
 
 bala={"ratio":0.5}
@@ -75,7 +76,8 @@ def augmentP(task):
     if aniso[task] == 1:
         return { 'dphi': [0.1,0,0], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
     else:
-        return { 'dphi': [0.1,0.1,0.1], 'flip': flips[task], 'dscale':0 }
+  #     return { 'dphi': [0.1,0.1,0.1], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+        return { 'dphi': 0, 'flip': 0, 'dscale':0 }
 
 def preprocP(task):
     
