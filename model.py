@@ -327,10 +327,14 @@ class PatchWorkModel(Model):
     
     if self.block_out is None:
         self.block_out = []
-        for k in range(self.cropper.depth-1): 
-          self.block_out.append(num_labels+intermediate_out)
-        self.block_out.append(num_labels)
-
+        if num_labels != -1:
+            for k in range(self.cropper.depth-1): 
+              self.block_out.append(num_labels+intermediate_out)
+            self.block_out.append(num_labels)
+        else:
+            for k in range(self.cropper.depth): 
+              self.block_out.append(intermediate_out)
+    
     blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level])
 
     import inspect
@@ -413,7 +417,7 @@ class PatchWorkModel(Model):
     if not callable(inputs) and len(inputs['input0'].shape) > nD+2:
         original_shape = inputs['input0'].shape[1]
         for k in inputs:
-            if k != "dest_full_size" and k != 'parent_box_scatter_index':
+            if k != "dest_full_size" and k != 'parent_box_scatter_index' and k != 'batchindex':
                 sz = inputs[k].shape
                 if nD == 2:            
                     newsz = [-1, sz[2], sz[3], sz[4]]
@@ -508,9 +512,9 @@ class PatchWorkModel(Model):
          
       else:
          res = self.blocks[k](inp,training=training)      
-         if k < len(self.classifiers) and training:
-            # res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
-             res_nonspatial = self.classifiers[k](res,training=training) 
+         if k < len(self.classifiers) and (training or self.classifier_train):
+             res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
+             #res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
          
          if self.num_labels != -1:
@@ -519,14 +523,15 @@ class PatchWorkModel(Model):
              outs = res
              
          ## apply a finalBlock on the last spatial output    
-         if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
-               if isinstance(self.finalBlock,list):
-                   for fb in self.finalBlock:
-                       output.append(fb(outs))
-               else:                    
-                   output.append(self.finalBlock(outs,training=training))
-         else:
-             output.append(outs)
+         if self.spatial_train:
+             if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
+                   if isinstance(self.finalBlock,list):
+                       for fb in self.finalBlock:
+                           output.append(fb(outs))
+                   else:                    
+                       output.append(self.finalBlock(outs,training=training))
+             else:
+                 output.append(outs)
          
 
     ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
@@ -535,6 +540,7 @@ class PatchWorkModel(Model):
                stitched = stitchResult_withstride(output,-1,[inputs],'NN',stitch_immediate)
                output = [stitched]
         else:
+                                    
             for k in range(len(output)):
                 sz = output[k].shape
                 newsz = [-1,original_shape]
@@ -543,6 +549,13 @@ class PatchWorkModel(Model):
                 output[k] = tf.reshape(output[k],newsz)
                 output[k] = tf.reduce_max(output[k],axis=1)
                 
+            if len(output_nonspatial) > 0:
+                tmp = tf.concat(list(map(lambda x: tf.expand_dims(x,2),output_nonspatial)),2)
+                tmp = tf.reshape(tmp,[tmp.shape[0]//original_shape, original_shape] + tmp.shape[1:])                
+                tmp = tf.reduce_max(tmp,[1,3])
+                output = [tmp]
+                output_nonspatial = []
+                
     if not self.intermediate_loss:
          output = [output[-1]]          
                 
@@ -550,9 +563,13 @@ class PatchWorkModel(Model):
         for k in range(len(output)):
             output[k] = tf.reduce_max(output[k],axis=list(range(1,nD+1)))
             
-            
+
     if len(output_nonspatial) > 0:
-        output_nonspatial = [tf.reduce_max(tf.concat(output_nonspatial,1),1)]
+        output_nonspatial = [tf.reduce_max(tf.concat(list(map(lambda x: tf.expand_dims(x,2),output_nonspatial)),2),2)]
+            
+            
+    # if len(output_nonspatial) > 0:
+    #     output_nonspatial = [tf.reduce_max(tf.concat(output_nonspatial,1),1)]
             
     return output + output_nonspatial
 
@@ -813,8 +830,9 @@ class PatchWorkModel(Model):
           img1 = nib.load(f)        
           if align_physical:
               img1 = align_to_physical_coords(img1)
-     #     resolution = img1.header['pixdim'][1:4]
-          resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
+              resolution = img1.header['pixdim'][1:4]
+          else:
+              resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
           
           a = img1.get_fdata()
           
@@ -1457,7 +1475,7 @@ class PatchWorkModel(Model):
 
         if fit_type == 'custom':
             shuffle_buffer = max(2000,total_numpatches)
-            dataset = c_data.getDataset().shuffle(shuffle_buffer).batch(batch_size,drop_remainder=True)
+            dataset = c_data.getDataset(sampletyp=sampletyp).shuffle(shuffle_buffer).batch(batch_size,drop_remainder=True)
 
             if not "train_step" in self.compiled:
                 if debug:

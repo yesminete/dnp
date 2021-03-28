@@ -884,6 +884,8 @@ class CropGenerator():
             cur_ratio = tf.reduce_mean(tf.concat(balances[k],1),1)
             print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
         
+    if not verbose:
+        print("")
     
 
     return CropInstance(pool,self,intermediate_loss)
@@ -1402,7 +1404,7 @@ class CropGenerator():
             
         if verbose:
            end = timer()
-           print(" #patches:" + str(res_data.shape[0]) + " time/patch:" + ("{:.3f}ms").format(((end - start)/(res_data.shape[0]))) )
+           print(" #patches:" + str(res_data.shape[0]) + " time/patch:" + ("{:.3f}ms").format(1000*((end - start)/(res_data.shape[0]))) )
            print(" elapsed: " + ("{:.3f}ms").format(end - start) )
 
         
