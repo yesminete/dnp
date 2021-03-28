@@ -1376,7 +1376,7 @@ class PatchWorkModel(Model):
 
 
     def createLossArray(lossfun):
-        print("creating loss array from")
+        print("creating custom loss array from")
         print(lossfun)
         loss = []
         fin_on_app = self.finalizeOnApply
@@ -1390,13 +1390,13 @@ class PatchWorkModel(Model):
 
     if not hasattr(self,'loss'):
         if loss is None:
-            print('using default bc loss')
+            print("using default bc loss")
             self.loss = createLossArray(tf.keras.losses.binary_crossentropy)
         else:
             if callable(loss):
                 self.loss = createLossArray(loss)
             else:            
-                print("using passed loss array")
+                print("using custom loss array")
                 self.loss = loss
     
     loss = self.loss
