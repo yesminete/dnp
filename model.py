@@ -512,7 +512,7 @@ class PatchWorkModel(Model):
          
       else:
          res = self.blocks[k](inp,training=training)      
-         if k < len(self.classifiers) and (training or self.classifier_train):
+         if k < len(self.classifiers) and self.classifier_train:
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              #res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
@@ -547,16 +547,16 @@ class PatchWorkModel(Model):
                 for j in range(len(sz)-1):
                     newsz.append(sz[j+1])
                 output[k] = tf.reshape(output[k],newsz)
-                output[k] = tf.reduce_max(output[k],axis=1)
+                #output[k] = tf.reduce_max(output[k],axis=1)
                 
             if len(output_nonspatial) > 0:
                 tmp = tf.concat(list(map(lambda x: tf.expand_dims(x,2),output_nonspatial)),2)
                 tmp = tf.reshape(tmp,[tmp.shape[0]//original_shape, original_shape] + tmp.shape[1:])                
                 tmp = tf.reduce_max(tmp,[1,3])
-                output = [tmp]
-                output_nonspatial = []
+                output_nonspatial = [tmp]
                 
-    if not self.intermediate_loss:
+                
+    if not self.intermediate_loss and len(output)>0:
          output = [output[-1]]          
                 
     if self.spatial_max_train:
@@ -564,14 +564,18 @@ class PatchWorkModel(Model):
             output[k] = tf.reduce_max(output[k],axis=list(range(1,nD+1)))
             
 
-    if len(output_nonspatial) > 0:
-        output_nonspatial = [tf.reduce_max(tf.concat(list(map(lambda x: tf.expand_dims(x,2),output_nonspatial)),2),2)]
+    #if len(output_nonspatial) > 0:
+    #    output_nonspatial = [tf.reduce_max(tf.concat(list(map(lambda x: tf.expand_dims(x,2),output_nonspatial)),2),2)]
             
             
-    # if len(output_nonspatial) > 0:
-    #     output_nonspatial = [tf.reduce_max(tf.concat(output_nonspatial,1),1)]
+    if len(output_nonspatial) > 0 and not training:
+        output_nonspatial = [tf.reduce_max(tf.concat(output_nonspatial,1),1,keepdims=True)]
+        return output_nonspatial
             
-    return output + output_nonspatial
+    
+    
+    
+    return output_nonspatial + output
 
 
   def apply_full(self, data,
@@ -1131,6 +1135,7 @@ class PatchWorkModel(Model):
             valid_num_patches=None,
             hard_mining = 0,
             hard_mining_maxage=50,
+            shuffle_buffer_size=1000,
             self_validation=False,
             batch_size=32,
             verbose=1,
@@ -1147,6 +1152,7 @@ class PatchWorkModel(Model):
             rot_intrinsic=0,
             loss=None,
             optimizer=None,
+            recompile_loss_optim=True,
             patch_on_cpu=True,
             fit_type='custom',
             train_S = True,
@@ -1265,7 +1271,7 @@ class PatchWorkModel(Model):
                         hist['output_' + str(k+1) + '_f1'] = 10**f1
                         hist['output_' + str(k+1) + '_threshold'] = 10**th
                                                                        
-#                        hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+                        #         hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
                         
                         if hard_mining > 0:
                             if len(lmat.shape) < self.cropper.ndim+1:
@@ -1367,7 +1373,7 @@ class PatchWorkModel(Model):
     if valid_num_patches is None:
         valid_num_patches = num_patches
  
-    if not hasattr(self,'optimizer') or self.optimizer is None:    
+    if recompile_loss_optim or (not hasattr(self,'optimizer') or self.optimizer is None):    
         if optimizer is None:
             optimizer = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
         else:
@@ -1388,7 +1394,7 @@ class PatchWorkModel(Model):
         
 
 
-    if not hasattr(self,'loss'):
+    if recompile_loss_optim or not hasattr(self,'loss'):
         if loss is None:
             print("using default bc loss")
             self.loss = createLossArray(tf.keras.losses.binary_crossentropy)
@@ -1474,10 +1480,10 @@ class PatchWorkModel(Model):
 
 
         if fit_type == 'custom':
-            shuffle_buffer = max(2000,total_numpatches)
+            shuffle_buffer = max(shuffle_buffer_size,total_numpatches)
             dataset = c_data.getDataset(sampletyp=sampletyp).shuffle(shuffle_buffer).batch(batch_size,drop_remainder=True)
 
-            if not "train_step" in self.compiled:
+            if (not "train_step" in self.compiled) or recompile_loss_optim:
                 if debug:
                     self.compiled["train_step"] = train_step_supervised
                 else:
@@ -1495,7 +1501,7 @@ class PatchWorkModel(Model):
                 numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy() * batch_size
                 infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
 
-            if not "train_step_discrim" in self.compiled:
+            if (not "train_step_discrim" in self.compiled) or recompile_loss_optim:
                 if debug:
                     self.compiled["train_step_discrim"] = (train_step_discriminator)
                     self.compiled["train_step_unsuper"] = (train_step_unsupervised)

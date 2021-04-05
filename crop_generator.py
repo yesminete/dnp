@@ -109,6 +109,10 @@ class CropInstance:
 
     return inp
 
+  def getInputDataset(self,sampletyp=None):                    
+      a = self.getInputData(sampletyp)
+      return tf.data.Dataset.from_tensor_slices(a)
+
   def getDataset(self,sampletyp=None):                    
       a = self.getInputData(sampletyp)
       b = self.getTargetData(sampletyp)
@@ -146,16 +150,18 @@ class CropInstance:
             out.append(x['class_labels'])            
         if intermediate_loss and spatial_train:
             out.append(x['labels_cropped'])
-        
-    if classifier_train or spatial_max_train:
-        out.append(self.scales[-1]['class_labels'])
     if spatial_train and not spatial_max_train:
         out.append(self.scales[-1]['labels_cropped'])
-    
+
+
     if batchdim2 != -1:
         for k in range(len(out)):
             out[k] = self.extb2dim(out[k],batchdim2)
-            out[k] = tf.reduce_max(out[k],axis=1)
+    #        out[k] = tf.reduce_max(out[k],axis=1)
+
+    if classifier_train or spatial_max_train:
+        out = [self.scales[-1]['class_labels']] + out
+    
 
     if sampletyp[0] is not None:      
         for k in range(len(out)):
@@ -849,15 +855,15 @@ class CropGenerator():
       if reptree:
         scales = self.tree_complete(scales)
 
-      # for repmatting the classlabels
-      if scales[k]['class_labels'] is not None and (self.model.classifier_train or self.model.spatial_max_train):
-          for k in range(len(scales)):
-              m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
-              tmp = scales[k]['class_labels']
-              if len(tmp.shape) == 1:
-                  tmp = tf.expand_dims(tmp,1)
-              tmp = tf.reshape(tf.tile(tf.expand_dims(tmp,1),[1,m,1]),[m*tmp.shape[0],tmp.shape[1]])              
-              scales[k]['class_labels'] = tmp
+      # # for repmatting the classlabels
+      # if scales[k]['class_labels'] is not None and (self.model.classifier_train or self.model.spatial_max_train):
+      #     for k in range(len(scales)):
+      #         m = scales[k]['data_cropped'].shape[0] // scales[k]['class_labels'].shape[0]              
+      #         tmp = scales[k]['class_labels']
+      #         if len(tmp.shape) == 1:
+      #             tmp = tf.expand_dims(tmp,1)
+      #         tmp = tf.reshape(tf.tile(tf.expand_dims(tmp,1),[1,m,1]),[m*tmp.shape[0],tmp.shape[1]])              
+      #         scales[k]['class_labels'] = tmp
 
         
 
@@ -878,15 +884,15 @@ class CropGenerator():
     intermediate_loss = True     # whether we save output of intermediate layers
     if self.model is not None:
       intermediate_loss = self.model.intermediate_loss
+
+    print("")
+
       
     if len(balances[0]) > 0:
         for k in range(self.depth):
             cur_ratio = tf.reduce_mean(tf.concat(balances[k],1),1)
             print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
         
-    if not verbose:
-        print("")
-    
 
     return CropInstance(pool,self,intermediate_loss)
 
@@ -1405,7 +1411,7 @@ class CropGenerator():
         if verbose:
            end = timer()
            print(" #patches:" + str(res_data.shape[0]) + " time/patch:" + ("{:.3f}ms").format(1000*((end - start)/(res_data.shape[0]))) )
-           print(" elapsed: " + ("{:.3f}ms").format(end - start) )
+           print(" elapsed: " + ("{:.3f}ms").format(1000*(end - start)) )
 
         
         if training:

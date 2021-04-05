@@ -21,11 +21,12 @@ import matplotlib.pyplot as plt
 
 
 
-sys.path.append("/home/reisertm")
+sys.path.append("/software")
 import patchwork2 as patchwork
 
 
 
+#%%
 
 #% definition data sources
 
@@ -43,7 +44,6 @@ subjects = [ 'subj1', 'subj2', 'subj3'];
 
 # define ou want some validation dta
 valid_ids = []
-
 
 modelfi = "models/yourmodel"
 
@@ -88,7 +88,7 @@ nD = 2
 patching = {        
     "depth":2,                    
     "scheme":{ 
-        "patch_size":[32,32],                
+        "patch_size":[128,128],                
         "destvox_mm": None,
         "destvox_rel":[1,1],
         "fov_mm":None,
@@ -111,9 +111,10 @@ patching = {
 
 network = {    
     "blockCreator": lambda level,outK,input_shape : 
-        patchwork.customLayers.createUnet_v2(depth=3,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,8,8,8,8]),            
+        patchwork.customLayers.createUnet_v2(depth=5,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,8,8,8,8],dropout=True),            
     "classifierCreator": lambda level,outK: patchwork.customLayers.simpleClassifier(outK=outK,nD=nD,depth=4),
 #    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),    
+     "finalBlock":layers.Activation('sigmoid'), 
     "intermediate_out":8,
     "intermediate_loss":True,          
     }
@@ -244,7 +245,7 @@ else:
 
  
 
-#%
+#%%
 
 loading['nD'] = nD
 
@@ -254,8 +255,8 @@ def get_data(n=None):
 
 print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> loading first example for init.")
 
-with tf.device("/cpu:0"):    
-    tset,lset,rset,subjs = get_data(1)
+#with tf.device("/cpu:0"):    
+#    tset,lset,rset,subjs = get_data(1)
     
 if len(tset) == 0:
     print("Error: No data found!")
@@ -286,8 +287,8 @@ else:
     
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> initializing network")
     dataexample = tset[0][0:1,...]    
-    cc = themodel.apply_full(dataexample,resolution=rset[0],repetitions=80,generate_type='random',verbose=True,
-                             max_patching =True  )
+   # cc = themodel.apply_full(dataexample,resolution=rset[0],repetitions=80,generate_type='random',verbose=True,
+    #                         max_patching =True  )
 # max_patching    
     
     print(cc.shape)
@@ -307,6 +308,17 @@ if "align_physical" in loading:
 #%% start training    
 
 
+training = {
+   "num_patches":30,
+   #"augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
+   "epochs":50,
+   "num_its":100,                
+   "loss": tf.keras.losses.binary_crossentropy,
+   }
+
+
+
+
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
 import gc
 for i in range(0,outer_num_its):
@@ -316,26 +328,26 @@ for i in range(0,outer_num_its):
     if mem is not None:
         print("free GPU mem:" + str(mem) + "MB")
 
-    with tf.device("/cpu:0"):    
-        if "use_unlabeled_data" in loading and loading["use_unlabeled_data"]:
-            tset,lset,cset,rset,subjs = get_data(num_samp)
-            unlabeled_ids = list(tf.squeeze(tf.where(tf.concat(cset,0)==0)).numpy())
-        else:
-            unlabeled_ids = []
-            tset,lset,rset,subjs = get_data(num_samp)
+    #with tf.device("/cpu:0"):    
+        # if "use_unlabeled_data" in loading and loading["use_unlabeled_data"]:
+        #     tset,lset,cset,rset,subjs = get_data(num_samp)
+        #     unlabeled_ids = list(tf.squeeze(tf.where(tf.concat(cset,0)==0)).numpy())
+        # else:
+        #     unlabeled_ids = []
+        #     tset,lset,rset,subjs = get_data(num_samp)
         
-  #  lset = [tf.cast([[1,0]],tf.float32),tf.cast([[0,1]],tf.float32)]
-    lset = [tf.cast([[1]],tf.float32),
-            tf.cast([[0]],tf.float32),
-            tf.cast([[0]],tf.float32)]
-    ff = 0.001;
-    tset[0] =tset[0]*ff
-    tset[1] =tset[1]*ff+100
-    tset[2] =tset[2]*ff+100
+    # lset = [tf.cast([[1,0]],tf.float32),tf.cast([[0,1]],tf.float32)]
+    # lset = [tf.cast([[1]],tf.float32),
+    #         tf.cast([[0]],tf.float32),
+    #         tf.cast([[0]],tf.float32)]
+    # ff = 0.001;
+    # tset[0] =tset[0]*ff
+    # tset[1] =tset[1]*ff+100
+    # tset[2] =tset[2]*ff+100
 
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=True,
-                   batch_size=2,
+                   batch_size=10,
                    max_agglomerative=True,
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
