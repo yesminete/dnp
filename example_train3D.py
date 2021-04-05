@@ -113,6 +113,7 @@ patching = {
 network = {    
     "blockCreator": lambda level,outK,input_shape : 
         patchwork.customLayers.createUnet_v2(depth=5,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,16,32,64]),
+     "finalBlock":layers.Activation('sigmoid'),         
 #    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),    
     "intermediate_out":8,
     "intermediate_loss":True,          
