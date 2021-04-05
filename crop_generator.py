@@ -1118,10 +1118,11 @@ class CropGenerator():
                 A[k] = tf.expand_dims(tf.expand_dims(A[k],0),nD+1)
             R = tf.concat(A,nD+1)
             R = tf.tile(R, [edges.shape[0]] + [1]*(nD+1) )
-            R = tf.einsum('bxy,b...y->b...x',edges[...,0:nD,0:nD],R) 
             if nD == 2:
+                R = tf.einsum('bxy,bijy->bijx',edges[...,0:nD,0:nD],R) 
                 R = R+ex1(ex1(edges[:,0:nD,-1]))
             else:
+                R = tf.einsum('bxy,bijky->bijkx',edges[...,0:nD,0:nD],R) 
                 R = R+ex1(ex1(ex1(edges[:,0:nD,-1])))
             return R
     
@@ -1130,19 +1131,18 @@ class CropGenerator():
             nD = len(sz)
             
             if interp_type == 'NN': # cast index to int
-                R = tf.dtypes.cast(tf.floor(R+0.5),dtype=tf.int32)
+                R = tf.dtypes.cast(tf.floor(R+0.5),dtype=tf.int32)            
+                uplim = tf.cast(sz,tf.int32)-1
+            else:
+                uplim = tf.cast(sz,tf.int32)-2
+            ex = lambda x: tf.expand_dims(x,0)
+            uplim = ex(ex(ex(uplim)))
+            if nD == 3:
+                uplim = ex(uplim)
             
-            ## clip indices
-            lind = []
-            for k in range(nD):
-                  tmp = R[...,k:(k+1)]
-                  tmp = tf.math.maximum(tmp,0)
-                  if interp_type == 'NN': 
-                     tmp = tf.math.minimum(tmp,tf.cast(sz[k]-1,tf.int32))
-                  else:
-                     tmp = tf.math.minimum(tmp,tensor(sz[k]-2))
-                  lind.append(tmp)
-            R = tf.concat(lind,nD+1)
+            R = tf.where(R<0,0,R)
+            R = tf.where(R>uplim,uplim,R)
+                            
             return R
         
         

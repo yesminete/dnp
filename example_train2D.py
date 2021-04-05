@@ -282,7 +282,7 @@ else:
     
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> initializing network")
     dataexample = tset[0][0:1,...]    
-    themodel.apply_full(dataexample,resolution=rset[0],repetitions=1,generate_type='random',verbose=True)
+    themodel.apply_full(dataexample,resolution=rset[0],repetitions=100,generate_type='random',verbose=True)
     
     
 
