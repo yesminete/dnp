@@ -188,11 +188,11 @@ class myHistory :
                     cnt+=1
 
  
+            fig, ax = plt.subplots()
             if hasattr(self,'age'):
                 gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1]) 
                 ax = plt.subplot(gs[0])
-            else:
-                fig, ax = plt.subplots()
+           
 
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
@@ -739,23 +739,17 @@ class PatchWorkModel(Model):
              res = r
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
-             if generate_type == 'tree':
-                 if testIT:
-                     res = zipper(pred,sumpred,lambda a,b : b)     
-                 else:
-                     res = zipper(pred,sumpred,lambda a,b : a/b)     
-             else:
-                 if testIT:
-                     res = zipper(pred,sumpred,lambda a,b : b)     
-                 else:
-              #       res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
-                     res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001))     
+            if testIT:
+                res = zipper(pred,sumpred,lambda a,b : b)     
+            else:
+                res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
-             for k in level:
-                res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+             with tf.device("/cpu:0"):                             
+                 for k in level:
+                    res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
          if single:
            res = res[level[0]]
      
@@ -788,6 +782,7 @@ class PatchWorkModel(Model):
                  along4dim=False,
                  align_physical=None,
                  patch_size_factor=1,
+                 out_typ='int16',
                  crop_fdim=None,
                  crop_sdim=None,
                  testIT=False,
@@ -917,36 +912,37 @@ class PatchWorkModel(Model):
                                                       [0,0,0,1]]))
             
       
-      img1.header.set_data_dtype('int16')          
-
       pred_nii = None
 
       if ofname is not None:
     
-          if isinstance(ofname,list):
-             #if len(res.shape) == 5:
-                  for s in range(len(ofname)):
-                      res_ = res[...,s]
-                      img1.header.set_data_shape(res_.shape)
-                      pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
-                      pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
-                      pred_nii.header['cal_max'] = 1
-                      pred_nii.header['cal_min'] = 0
-                      pred_nii.header['glmax'] = 1
-                      pred_nii.header['glmin'] = 0
-                      if ofname is not None:
-                          nib.save(pred_nii,ofname[s])
-     
-          else:
-             pred_nii = nib.Nifti1Image(res*fac, newaffine, img1.header)
+          def savenii(name,res_):
+                
+             if out_typ == 'int16':
+                 fac = 32000/maxi                    
+             elif out_typ == 'uint8':
+                 fac = 255/maxi                    
+             else:
+                 assert(False,"out_typ not implemented")
+             pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
+             pred_nii.header.set_data_dtype(out_typ)                     
              pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
+                 
              pred_nii.header['cal_max'] = 1
              pred_nii.header['cal_min'] = 0
              pred_nii.header['glmax'] = 1
              pred_nii.header['glmin'] = 0
-             if ofname is not None:
-                  nib.save(pred_nii,ofname)
+             if name is not None:
+                 nib.save(pred_nii,name)
+             return pred_nii
+                        
+          if isinstance(ofname,list):
+             for s in range(len(ofname)):                    
+                 pred_nii = savenii(ofname[s],res[...,s])
+          else:
+             pred_nii = savenii(ofname,res)
               
+
 
             
       if pred_nii is not None:        
@@ -1382,14 +1378,14 @@ class PatchWorkModel(Model):
 
 
     def createLossArray(lossfun):
-        print("creating custom loss array from")
-        print(lossfun)
         loss = []
-        fin_on_app = self.finalizeOnApply
         if self.intermediate_loss:
             for k in range(self.cropper.depth-1):
                 loss.append(lambda x,y: lossfun(x,y,from_logits=True))
-        loss.append(lambda x,y: lossfun(x,y,from_logits=fin_on_app))
+        if self.finalizeOnApply:
+            loss.append(lambda x,y: lossfun(x,y,from_logits=True))
+        else:
+            loss.append(lambda x,y: lossfun(x,y,from_logits=False))
         return loss
         
 
@@ -1400,6 +1396,7 @@ class PatchWorkModel(Model):
             self.loss = createLossArray(tf.keras.losses.binary_crossentropy)
         else:
             if callable(loss):
+                print("creating custom loss array")                
                 self.loss = createLossArray(loss)
             else:            
                 print("using custom loss array")

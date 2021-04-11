@@ -318,7 +318,7 @@ for i in range(0,outer_num_its):
         else:
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
-        
+    training['hard_mining'] = 0.2
         
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=False,
