@@ -903,11 +903,11 @@ class PatchWorkModel(Model):
       if not scale_to_original:
           vsz = img1.header['pixdim'][1:nD+1]
           sz = a.shape[1:nD+1]
-          if nD == 2:
-              facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],1]
-          else:
-              facs = [(res.shape[0]-1)/(sz[0]-1),(res.shape[1]-1)/(sz[1]-1),(res.shape[2]-1)/(sz[2]-1)]
-              offs = [vsz[0]*(1-facs[0]),vsz[1]*(1-facs[1]),vsz[2]*(1-facs[2])]
+          facs = [1]*nD
+          offs = [0]*nD
+          for k in range(nD):
+              facs[k] = (res.shape[k]-1)/(sz[k]-1)
+              offs[k] = vsz[k]*(1-facs[k])
           img1.header.set_data_shape(res.shape)
           newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,offs[0]],
                                                       [0,1/facs[1],0,offs[1]],
