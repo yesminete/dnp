@@ -9,6 +9,7 @@ This is a temporary script file.
 # pip install tensorflow==2.1.0 matplotlib pillow opencv-python  nibabel
 
 
+
 #%%
 
 import numpy as np
@@ -40,7 +41,7 @@ from .customLayers import *
 
 class FilterOut(object):
     def __init__(self, filterstr, *args):
-        self.handles = [sys.__stdout__]
+        self.handles = [sys.__stderr__]
         self.omitted = 0
         self.omitted_line = ""
         self.filterstr = filterstr
@@ -517,21 +518,23 @@ class PatchWorkModel(Model):
              #res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
          
-         if self.num_labels != -1:
-             outs = res[...,0:self.num_labels]
-         else:
-             outs = res
+         def croplabeldim(res):
+             if self.num_labels != -1:
+                 outs = res[...,0:self.num_labels]
+             else:
+                 outs = res
+             return outs
              
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
              if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
                    if isinstance(self.finalBlock,list):
                        for fb in self.finalBlock:
-                           output.append(fb(outs))
+                           output.append(croplabeldim(fb(res)))
                    else:                    
-                       output.append(self.finalBlock(outs,training=training))
+                       output.append(croplabeldim(self.finalBlock(res,training=training)))
              else:
-                 output.append(outs)
+                 output.append(croplabeldim(res))
          
 
     ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
@@ -890,7 +893,6 @@ class PatchWorkModel(Model):
           img1.header.set_data_shape(res.shape)
           
       maxi = tf.reduce_max(tf.abs(res))
-      fac = 32000/maxi
       
       newaffine = img1.affine
       if scrop is not None:
@@ -904,11 +906,12 @@ class PatchWorkModel(Model):
           if nD == 2:
               facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],1]
           else:
-              facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],res.shape[2]/sz[2]]
+              facs = [(res.shape[0]-1)/(sz[0]-1),(res.shape[1]-1)/(sz[1]-1),(res.shape[2]-1)/(sz[2]-1)]
+              offs = [vsz[0]*(1-facs[0]),vsz[1]*(1-facs[1]),vsz[2]*(1-facs[2])]
           img1.header.set_data_shape(res.shape)
-          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,0],
-                                                      [0,1/facs[1],0,0],
-                                                      [0,0,1/facs[2],0],
+          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,offs[0]],
+                                                      [0,1/facs[1],0,offs[1]],
+                                                      [0,0,1/facs[2],offs[2]],
                                                       [0,0,0,1]]))
             
       
@@ -922,16 +925,18 @@ class PatchWorkModel(Model):
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
+             elif out_typ == 'float32':
+                 fac = 1                   
              else:
                  assert(False,"out_typ not implemented")
              pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
              pred_nii.header.set_data_dtype(out_typ)                     
              pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
-                 
-             pred_nii.header['cal_max'] = 1
-             pred_nii.header['cal_min'] = 0
-             pred_nii.header['glmax'] = 1
-             pred_nii.header['glmin'] = 0
+             if out_typ != 'float32':
+                 pred_nii.header['cal_max'] = 1
+                 pred_nii.header['cal_min'] = 0
+                 pred_nii.header['glmax'] = 1
+                 pred_nii.header['glmin'] = 0
              if name is not None:
                  nib.save(pred_nii,name)
              return pred_nii
