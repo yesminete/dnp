@@ -625,9 +625,18 @@ class ct_preproc(layers.Layer):
   def call(self, image):       
       x = tf.math.log(tf.math.maximum(image+200,0.001))
       return tf.math.maximum(x-4,0)
-
-    
 custom_layers['ct_preproc'] = ct_preproc
+
+class sigmoid_window(layers.Layer):
+
+  def __init__(self,**kwargs):
+      super().__init__(**kwargs)
+  def call(self, image):       
+      x = image[...,0:-1] * tf.sigmoid(image[...,-2:-1])
+      return x
+
+custom_layers['sigmoid_window'] = sigmoid_window
+    
 
 
 
@@ -1082,7 +1091,10 @@ def createCNNBlockFromObj(obj,custom_objects=None):
   def tolayer(x):
       if isinstance(x,dict):
           if 'keras_layer' in x:
-              return layers.deserialize({'class_name':x['name'],'config':x['keras_layer']},
+              tmp = x['keras_layer']
+              if 'groups' in tmp:
+                  del tmp['groups']
+              return layers.deserialize({'class_name':x['name'],'config':tmp},
                                         custom_objects=custom_objects)
           if 'CNNblock' in x:
               return createCNNBlockFromObj(x['CNNblock'],custom_objects=custom_objects)            

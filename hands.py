@@ -32,6 +32,7 @@ from DPX_core import *
 from DPX_improc import *
 from patchwork2 import *
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 #%%
 

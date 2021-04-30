@@ -589,7 +589,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
                            crop_only_nonzero=False,
-                           reslice_labels=False,
+                           reslice_labels=True,
+                           label_transform=None,
                            verbose=False,
                            threshold=0.5,
                            label_cval=np.nan,
@@ -918,7 +919,25 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if threshold is not None and one_hot_index_list is not None:
                              assert 0,"not possible to use threshold and one_hot_index_list"
                             
-                        if threshold is not None:
+                            
+                        if label_transform is not None:
+                          if label_transform == 'vector_to_tensor':
+                              img = tf.where(tf.math.is_nan(img), 0, img)
+                              img = img[...,0:3]
+                              img = tf.concat([ img[...,0:1]**2,
+                                                img[...,1:2]**2,
+                                                img[...,2:3]**2,
+                                                img[...,0:1]*img[...,1:2],
+                                                img[...,0:1]*img[...,2:3],
+                                                img[...,1:2]*img[...,2:3] ],3);
+                              imgnorm = tf.reduce_sum(img,axis=-1,keepdims=True)
+                              img = img / (10+imgnorm)
+                              
+                          else:
+                              assert(False,"given label transform not implemented")
+                            
+                          
+                        elif threshold is not None:
                             img = (img>threshold)*1
 
     
@@ -1011,8 +1030,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             tmp = tf.convert_to_tensor(classes[k],dtype=ftype)
             tmp = tf.expand_dims(tmp,0)
             classset.append(tmp)
-        if labels is not None and len(labs) > 0:                    
-            labs = tf.concat(labs,nD+1)
+        if labels is not None and len(labs) > 0:                
+            try:
+                labs = tf.concat(labs,nD+1)
+            except Exception as e:
+                    print('label matrix inconsistent: ' + fname)
+                
             labelset.append(labs)
 
         resolutions.append(resolution)

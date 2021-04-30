@@ -842,7 +842,10 @@ class CropGenerator():
               label_range = None
               if balance is not None and 'label_range' in balance:
                     label_range = tf.cast(balance['label_range'],dtype=tf.int32)
-                    labs = tf.gather(labs,label_range,axis=self.ndim+1)                            
+                    labs = tf.gather(labs,label_range,axis=self.ndim+1)           
+              if balance is not None and 'label_reduce' in balance:
+                  labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
+                    
               indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
@@ -1186,6 +1189,9 @@ class CropGenerator():
               ratio = balance['ratio']
               label_range = balance['label_range']
               label_weight = balance['label_weight']
+              label_reduce = None
+              if 'label_reduce' in balance:
+                  label_reduce = balance['label_reduce']
               if 'label_weight' in balance and balance['label_weight'] is not None:
                   for k in range(nD):
                       label_weight = tf.expand_dims(label_weight,0)
@@ -1197,6 +1203,8 @@ class CropGenerator():
                       L = tf.gather(L,label_range,axis=nD)
                   if label_weight is not None:
                       L = L*label_weight
+                  if label_reduce is not None:
+                      L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)
                   L = 1.0*(L>0)
                   sz = L.shape
@@ -1396,7 +1404,6 @@ class CropGenerator():
         if verbose:
           print("--------- cropping, level ",level)
           
-        import matplotlib.pyplot as plt
             
         ############## do the actual cropping
         res_data = self.crop(src_data,parent_box_index,relres,self.get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)       
