@@ -1149,6 +1149,7 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None,
             recompile_loss_optim=True,
+            dontcare=True,
             patch_on_cpu=True,
             fit_type='custom',
             train_S = True,
@@ -1258,7 +1259,12 @@ class PatchWorkModel(Model):
         depth = len(labels)
         for k in range(depth):
             if lossfun[k] is not None:
-                lmat = lossfun[k](labels[k],preds[k])
+                if dontcare is not None:
+                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                    masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
+                    lmat = lossfun[k](masked_pred,masked_label)
+                else:
+                    lmat = lossfun[k](labels[k],preds[k])
                 l = tf.reduce_mean(lmat)
                 if depth > 1:
                     if k == depth-1:

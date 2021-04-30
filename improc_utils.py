@@ -592,6 +592,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            reslice_labels=False,
                            verbose=False,
                            threshold=0.5,
+                           label_cval=np.nan,
                            nD=3,ftype=tf.float32):
 
     
@@ -901,9 +902,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if reslice_labels:
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
                                 if len(img.shape) == 3:
-                                    img= resample_from_to(img, (template_shape ,template_affine),order=3)                                    
+                                    img= resample_from_to(img, (template_shape ,template_affine),order=3,cval=label_cval)                                    
                                 else:
-                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3)
+                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3,cval=label_cval)
                         else:
                             resolution['output_edges'] = img.affine
                             
