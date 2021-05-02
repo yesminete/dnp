@@ -408,8 +408,19 @@ class PatchWorkModel(Model):
 
 
 
-  def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, testIT=False):
+  def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, batch_size=None, testIT=False):
 
+
+    def batcher(x,fun,bsize):
+        if batch_size is not None:          
+            d = x.shape[0]
+            n = d//bsize + 1
+            r = []
+            for i in range(n):
+                r.append(fun(x[i*bsize:min((i+1)*bsize,d)]))
+            return tf.concat(r,0)
+        else:
+            return fun(x)
   
     nD = self.cropper.ndim
     
@@ -512,7 +523,8 @@ class PatchWorkModel(Model):
          output.append(res)
          
       else:
-         res = self.blocks[k](inp,training=training)      
+          
+         res = batcher(inp,lambda x: self.blocks[k](x,training=training),batch_size)
          if k < len(self.classifiers) and self.classifier_train:
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              #res_nonspatial = self.classifiers[k](res,training=training) 
@@ -690,7 +702,11 @@ class PatchWorkModel(Model):
 
             print(">>> applying network -------------------------------------------------")
             start = timer()
-            r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
+            if generate_type=='tree':
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
+            else:
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init,batch_size=32)
+                
             print(">>> time elapsed, network application: " + str(timer() - start) )
             if max_patching:
                 
