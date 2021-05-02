@@ -35,20 +35,53 @@ ct = [0,0,1,0,0, 1,1,1,1,1]
 flips = [[1,0,0],  [1,0,0],  [1,0,0],  [0,0,0],  [1,0,0],
          [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0],  [1,0,0] ]
 
+nD=3
+
+"""
+# V1
 theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
                  outK=outK,nD=3,input_shape=input_shape,feature_dim=[32,32,32,32,32],dropout=False)
+patch_size = [96,96,32]
+bala={"ratio":0.5}
+snapper=None
+
+# V2
+theblock = lambda level,outK,input_shape : createUnet_v3(depth=5,outK=outK,nD=nD,input_shape=input_shape,self_att=True)
+patch_size = [96,96,32]
+bala={"ratio":0.5}
+snapper=None
+
+
+# V3
+theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
+                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[32,32,32,32,32],dropout=False)
+patch_size = [64,64,64]
+bala={"ratio":0.5}
+snapper=None
+
+"""
+
+
+# V4
+theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
+                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[32,32,32,32,32],dropout=False)
+patch_size = [64,64,64]
+bala=None
+snapper=[1,1,1,1,1]
+
+
+##
 #theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
  #                outK=outK,nD=3,input_shape=input_shape,feature_dim=[8,16,16,32,64],dropout=False)
 
 
-bala={"ratio":0.5}
 schemeP = lambda task : { 
     "destvox_mm": vsizes[task],
     "destvox_rel": None,
     "fov_mm":wid80[task],
     "fov_rel":None,
 }
-depth=5
+depth=2
 ident=False
 fittyp = 'custom'
 
@@ -61,9 +94,9 @@ l = tfa.losses.SigmoidFocalCrossEntropy(from_logits=True)
 t = tfa.losses.SigmoidFocalCrossEntropy(from_logits=False)
 
 #myloss = TopK_loss3D(K=1000,combi=True)
-myloss = [l,l,l,l,t]
+#myloss = [l,l,l,l,t]
 
-#myloss = None
+myloss = None
 myoptim = None #tfa.optimizers.AdamW()
 #myoptim = tf.optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
@@ -72,12 +105,13 @@ myoptim = None #tfa.optimizers.AdamW()
 
 
 def augmentP(task):
+    return { 'dphi': 0.25, 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
 
-    if aniso[task] == 1:
-        return { 'dphi': [0.1,0,0], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
-    else:
+#    if aniso[task] == 1:
+#        return { 'dphi': 0.25, 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+#    else:
   #     return { 'dphi': [0.1,0.1,0.1], 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
-        return { 'dphi': 0, 'flip': 0, 'dscale':0 }
+#        return { 'dphi': 0, 'flip': 0, 'dscale':0 }
 
 def preprocP(task):
     
