@@ -92,7 +92,7 @@ patching = {
         "fov_rel":[0.5,0.5],
      },
     "smoothfac_data" : 0,   
-    "smoothfac_label" : 0, 
+    "smoothfac_label" : 'globalmax', 
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',

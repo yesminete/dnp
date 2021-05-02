@@ -136,6 +136,11 @@ def conv_gauss3D_fft(img,std):
   return r
 
 
+def globalmax(x,dummy):
+    s = x.shape
+    axis = range(1,len(s)-1)
+    return x*0.0 + tf.reduce_max(x,axis=axis,keepdims=True)
+
 
 def gaussian3D(std):  
   size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()+1

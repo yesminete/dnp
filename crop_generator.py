@@ -414,7 +414,13 @@ class CropGenerator():
             if isinstance(sm,list):
                 return sm[level]
             else:
-                return sm
+                if sm == 'globalmax' and which == 'label':
+                    if level == self.depth-1:
+                        return None
+                    else:
+                        return sm                    
+                else:
+                   return sm
   
   @staticmethod
   def getTransform(transform,qdir):
@@ -936,7 +942,7 @@ class CropGenerator():
             if verbose:
                 print(' Gaussian smooth: ', sigmas)
             data_smoothed =  conv_gauss(data_parent,tf.constant(sigmas,dtype=self.ftype))
-        elif smoothfac == 'boxcar' or smoothfac == 'max' or smoothfac == 'mixture':
+        elif smoothfac == 'boxcar' or smoothfac == 'max' or smoothfac == 'mixture'  or smoothfac == 'globalmax':
             if smoothfac == 'boxcar':
                 if self.ndim == 2:
                       conv_box = conv_boxcar2D
@@ -952,6 +958,8 @@ class CropGenerator():
                       conv_box = poolmax_boxcar2D
                 elif self.ndim == 3:
                       conv_box = poolmax_boxcar3D                            
+            if smoothfac == 'globalmax':
+                conv_box = globalmax
             sz = np.round(resolution)
             sz[sz<1] = 1
             if np.max(sz) > 1:        
