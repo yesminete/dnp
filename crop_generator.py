@@ -415,7 +415,13 @@ class CropGenerator():
             if isinstance(sm,list):
                 return sm[level]
             else:
-                return sm
+                if sm == 'globalmax' and which == 'label':
+                    if level == self.depth-1:
+                        return None
+                    else:
+                        return sm                    
+                else:
+                   return sm
   
   @staticmethod
   def getTransform(transform,qdir):
@@ -843,7 +849,10 @@ class CropGenerator():
               label_range = None
               if balance is not None and 'label_range' in balance:
                     label_range = tf.cast(balance['label_range'],dtype=tf.int32)
-                    labs = tf.gather(labs,label_range,axis=self.ndim+1)                            
+                    labs = tf.gather(labs,label_range,axis=self.ndim+1)           
+              if balance is not None and 'label_reduce' in balance:
+                  labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
+                    
               indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
@@ -934,7 +943,7 @@ class CropGenerator():
             if verbose:
                 print(' Gaussian smooth: ', sigmas)
             data_smoothed =  conv_gauss(data_parent,tf.constant(sigmas,dtype=self.ftype))
-        elif smoothfac == 'boxcar' or smoothfac == 'max' or smoothfac == 'mixture':
+        elif smoothfac == 'boxcar' or smoothfac == 'max' or smoothfac == 'mixture'  or smoothfac == 'globalmax':
             if smoothfac == 'boxcar':
                 if self.ndim == 2:
                       conv_box = conv_boxcar2D
@@ -950,6 +959,8 @@ class CropGenerator():
                       conv_box = poolmax_boxcar2D
                 elif self.ndim == 3:
                       conv_box = poolmax_boxcar3D                            
+            if smoothfac == 'globalmax':
+                conv_box = globalmax
             sz = np.round(resolution)
             sz[sz<1] = 1
             if np.max(sz) > 1:        
@@ -1187,6 +1198,9 @@ class CropGenerator():
               ratio = balance['ratio']
               label_range = balance['label_range']
               label_weight = balance['label_weight']
+              label_reduce = None
+              if 'label_reduce' in balance:
+                  label_reduce = balance['label_reduce']
               if 'label_weight' in balance and balance['label_weight'] is not None:
                   for k in range(nD):
                       label_weight = tf.expand_dims(label_weight,0)
@@ -1198,6 +1212,8 @@ class CropGenerator():
                       L = tf.gather(L,label_range,axis=nD)
                   if label_weight is not None:
                       L = L*label_weight
+                  if label_reduce is not None:
+                      L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)
                   L = 1.0*(L>0)
                   sz = L.shape
@@ -1397,7 +1413,6 @@ class CropGenerator():
         if verbose:
           print("--------- cropping, level ",level)
           
-        import matplotlib.pyplot as plt
             
         ############## do the actual cropping
         res_data = self.crop(src_data,parent_box_index,relres,self.get_smoothing(level,'data'),interp_type=self.interp_type,verbose=verbose)       

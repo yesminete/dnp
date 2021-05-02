@@ -285,6 +285,91 @@ def createUnet_v3(depth=5,outK=1,feature_dim=None,nD=3,
 
 
 
+    
+
+
+class simple_self_att(layers.Layer):
+
+  def __init__(self,**kwargs):
+    super().__init__(**kwargs)
+    self.conv = None
+  def call(self, image):         
+      if self.conv is None:
+          self.conv = layers.Conv3D(image.shape[4],1,strides=(1,1,1))
+          
+      x = self.conv(image)
+      g = (tf.sign(x)+1.0)*0.5 + 0.05*x
+      
+      return g*image
+  
+custom_layers['simple_self_att'] = simple_self_att
+
+
+def createUnet_v3(depth=5,outK=1,feature_dim=None,nD=3,
+                  padding='SAME',verbose=False,input_shape=None,self_att=False):
+  if nD == 3:
+      strides = [2,2,2]
+      _convS = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs)
+      _convD = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=strides)
+      _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=strides)
+  elif nD == 2:
+      strides = [2,2]
+      _convS = lambda *args, **kwargs: layers.Conv2D(*args, **kwargs)
+      _convD = lambda *args, **kwargs: layers.Conv2D(*args, **kwargs,strides=strides)
+      _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=strides)
+    
+  if self_att:
+      nlin = simple_self_att
+  else:
+      nlin = layers.LeakyReLU
+    
+    
+  def conv_down(fdim):
+         return [ _convD(fdim,2,padding='SAME'), layers.BatchNormalization(), nlin()] 
+  def conv_up(fdim):
+         return [ _convT(fdim,2,padding='SAME'), layers.BatchNormalization(), nlin()] 
+  def conv(outK):
+         return [ _convS(fdim,3,padding='SAME'), layers.BatchNormalization(), nlin()] 
+   
+      
+  if feature_dim is None:
+      fdims = [16,16,32,32,64,64,128,128]
+
+  if input_shape is not None:
+     tmp = input_shape
+     input_shape = []
+     input_shape.extend(tmp)
+      
+      
+  theLayers = {}
+  for z in range(depth):
+      
+      
+    fdim = fdims[z]
+    id_d = str(1000 + z+1)
+    id_u = str(2000 + depth-z+1)
+    
+    theLayers[id_d+"0_conv"] = conv(fdim)
+    theLayers[id_d+"1_conv"] = [{'f': conv_down(fdim) } , {'f': conv(fdim), 'dest':id_u+"1_conv" }  ]
+                
+    
+    theLayers[id_u+"0_conv"] = conv_up(fdim)
+    theLayers[id_u+"1_conv"] = conv(fdim)
+    
+    if input_shape is not None:
+        for r in range(len(input_shape)):
+            input_shape[r] = input_shape[r]//strides[r]
+            if input_shape[r] == 1:
+                strides[r] = 1
+                
+  theLayers["9_final"] = _convS(outK,1,padding='SAME')
+      
+  return CNNblock(theLayers,verbose=verbose)
+
+
+
+
+
 def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False):
 
           
@@ -442,7 +527,6 @@ def createTnet(nD=3, depth=2,fdims=None,out=1,ind=3,noise=0.5,ksize=3,padding='S
 custom_layers['createTnet'] = createTnet
 
 
-
 class identity(layers.Layer):
 
   def __init__(self,**kwargs):
@@ -586,7 +670,7 @@ class HistoMaker(layers.Layer):
         } )    
         return config                  
       
-  def call(self, image):    
+  def call(self, image,training=False):    
       x = image*self.scaling
       x = self.conv(x)
       if self.typ == 'acos':
@@ -597,7 +681,7 @@ class HistoMaker(layers.Layer):
           assert False, 'invalid typ'
           
       if self.dropout_layer is not None:
-          ch = self.dropout_layer(ch)
+          ch = self.dropout_layer(ch,training=True)
       if self.normalize:
           return ch / tf.reduce_sum(ch,axis=-1,keepdims=True)
       else:
@@ -625,9 +709,18 @@ class ct_preproc(layers.Layer):
   def call(self, image):       
       x = tf.math.log(tf.math.maximum(image+200,0.001))
       return tf.math.maximum(x-4,0)
-
-    
 custom_layers['ct_preproc'] = ct_preproc
+
+class sigmoid_window(layers.Layer):
+
+  def __init__(self,**kwargs):
+      super().__init__(**kwargs)
+  def call(self, image):       
+      x = image[...,0:-1] * tf.sigmoid(image[...,-2:-1])
+      return x
+
+custom_layers['sigmoid_window'] = sigmoid_window
+    
 
 
 
@@ -1029,6 +1122,8 @@ class CNNblock(layers.Layer):
           for j in range(0,len(a)):
             d = a[j]
             fun = d['f'] 
+            if self.verbose:
+                print("---")
             res = x
             if isinstance(fun,list):
               for f in fun:
@@ -1080,7 +1175,10 @@ def createCNNBlockFromObj(obj,custom_objects=None):
   def tolayer(x):
       if isinstance(x,dict):
           if 'keras_layer' in x:
-              return layers.deserialize({'class_name':x['name'],'config':x['keras_layer']},
+              tmp = x['keras_layer']
+              if 'groups' in tmp:
+                  del tmp['groups']
+              return layers.deserialize({'class_name':x['name'],'config':tmp},
                                         custom_objects=custom_objects)
           if 'CNNblock' in x:
               return createCNNBlockFromObj(x['CNNblock'],custom_objects=custom_objects)            

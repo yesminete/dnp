@@ -255,8 +255,8 @@ def get_data(n=None):
 
 print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> loading first example for init.")
 
-#with tf.device("/cpu:0"):    
-#    tset,lset,rset,subjs = get_data(1)
+with tf.device("/cpu:0"):    
+    tset,lset,rset,subjs = get_data(1)
     
 if len(tset) == 0:
     print("Error: No data found!")
@@ -287,11 +287,9 @@ else:
     
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> initializing network")
     dataexample = tset[0][0:1,...]    
-   # cc = themodel.apply_full(dataexample,resolution=rset[0],repetitions=80,generate_type='random',verbose=True,
-    #                         max_patching =True  )
-# max_patching    
+    cc = themodel.apply_full(dataexample,resolution=rset[0],repetitions=80,generate_type='random',verbose=True,
+                             max_patching =True  )
     
-    print(cc.shape)
 
 print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> model summary")
 themodel.summary()

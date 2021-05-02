@@ -9,6 +9,7 @@ This is a temporary script file.
 # pip install tensorflow==2.1.0 matplotlib pillow opencv-python  nibabel
 
 
+
 #%%
 
 import numpy as np
@@ -40,7 +41,7 @@ from .customLayers import *
 
 class FilterOut(object):
     def __init__(self, filterstr, *args):
-        self.handles = [sys.__stdout__]
+        self.handles = [sys.__stderr__]
         self.omitted = 0
         self.omitted_line = ""
         self.filterstr = filterstr
@@ -192,6 +193,10 @@ class myHistory :
             if hasattr(self,'age'):
                 gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1]) 
                 ax = plt.subplot(gs[0])
+<<<<<<< HEAD
+=======
+           
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
 
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
@@ -406,8 +411,19 @@ class PatchWorkModel(Model):
 
 
 
-  def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, testIT=False):
+  def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, batch_size=None, testIT=False):
 
+
+    def batcher(x,fun,bsize):
+        if batch_size is not None:          
+            d = x.shape[0]
+            n = d//bsize + 1
+            r = []
+            for i in range(n):
+                r.append(fun(x[i*bsize:min((i+1)*bsize,d)]))
+            return tf.concat(r,0)
+        else:
+            return fun(x)
   
     nD = self.cropper.ndim
     
@@ -510,27 +526,30 @@ class PatchWorkModel(Model):
          output.append(res)
          
       else:
-         res = self.blocks[k](inp,training=training)      
+          
+         res = batcher(inp,lambda x: self.blocks[k](x,training=training),batch_size)
          if k < len(self.classifiers) and self.classifier_train:
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              #res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
          
-         if self.num_labels != -1:
-             outs = res[...,0:self.num_labels]
-         else:
-             outs = res
+         def croplabeldim(res):
+             if self.num_labels != -1:
+                 outs = res[...,0:self.num_labels]
+             else:
+                 outs = res
+             return outs
              
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
              if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
                    if isinstance(self.finalBlock,list):
                        for fb in self.finalBlock:
-                           output.append(fb(outs))
+                           output.append(croplabeldim(fb(res)))
                    else:                    
-                       output.append(self.finalBlock(outs,training=training))
+                       output.append(croplabeldim(self.finalBlock(res,training=training)))
              else:
-                 output.append(outs)
+                 output.append(croplabeldim(res))
          
 
     ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
@@ -686,10 +705,18 @@ class PatchWorkModel(Model):
 
             print(">>> applying network -------------------------------------------------")
             start = timer()
+<<<<<<< HEAD
             #fblock = self.finalBlock
             #self.finalBlock = None
             r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
             #self.finalBlock = fblock
+=======
+            if generate_type=='tree':
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
+            else:
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init,batch_size=32)
+                
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
             print(">>> time elapsed, network application: " + str(timer() - start) )
             if max_patching:
                 
@@ -741,16 +768,27 @@ class PatchWorkModel(Model):
              res = r
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
+<<<<<<< HEAD
              if testIT:
                  res = zipper(pred,sumpred,lambda a,b : b)     
              else:
           #       res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
                  res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001))     
+=======
+            if testIT:
+                res = zipper(pred,sumpred,lambda a,b : b)     
+            else:
+                res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
+<<<<<<< HEAD
              with tf.device("/cpu:0"):                
+=======
+             with tf.device("/cpu:0"):                             
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
                  for k in level:
                     res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
          if single:
@@ -785,6 +823,7 @@ class PatchWorkModel(Model):
                  along4dim=False,
                  align_physical=None,
                  patch_size_factor=1,
+                 out_typ='int16',
                  crop_fdim=None,
                  crop_sdim=None,
                  out_typ='int16',
@@ -903,33 +942,58 @@ class PatchWorkModel(Model):
       if not scale_to_original:
           vsz = img1.header['pixdim'][1:nD+1]
           sz = a.shape[1:nD+1]
-          if nD == 2:
-              facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],1]
-          else:
-              facs = [res.shape[0]/sz[0],res.shape[1]/sz[1],res.shape[2]/sz[2]]
+          facs = [1]*nD
+          offs = [0]*nD
+          for k in range(nD):
+              facs[k] = (res.shape[k]-1)/(sz[k]-1)
+              offs[k] = vsz[k]*(1-facs[k])
           img1.header.set_data_shape(res.shape)
-          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,0],
-                                                      [0,1/facs[1],0,0],
-                                                      [0,0,1/facs[2],0],
+          newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,offs[0]],
+                                                      [0,1/facs[1],0,offs[1]],
+                                                      [0,0,1/facs[2],offs[2]],
                                                       [0,0,0,1]]))
+<<<<<<< HEAD
                   
+=======
+            
+      
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
       pred_nii = None
       if ofname is not None:
+<<<<<<< HEAD
           def savenii(name,res_):                
+=======
+    
+          def savenii(name,res_):
+                
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              if out_typ == 'int16':
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
+<<<<<<< HEAD
+=======
+             elif out_typ == 'float32':
+                 fac = 1                   
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              else:
                  assert(False,"out_typ not implemented")
              pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
              pred_nii.header.set_data_dtype(out_typ)                     
              pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
+<<<<<<< HEAD
                  
              pred_nii.header['cal_max'] = 1
              pred_nii.header['cal_min'] = 0
              pred_nii.header['glmax'] = 1
              pred_nii.header['glmin'] = 0
+=======
+             if out_typ != 'float32':
+                 pred_nii.header['cal_max'] = 1
+                 pred_nii.header['cal_min'] = 0
+                 pred_nii.header['glmax'] = 1
+                 pred_nii.header['glmin'] = 0
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              if name is not None:
                  nib.save(pred_nii,name)
              return pred_nii
@@ -940,6 +1004,11 @@ class PatchWorkModel(Model):
           else:
              pred_nii = savenii(ofname,res)
               
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
             
       if pred_nii is not None:        
           if return_nibabel:
@@ -1145,6 +1214,7 @@ class PatchWorkModel(Model):
             loss=None,
             optimizer=None,
             recompile_loss_optim=True,
+            dontcare=True,
             patch_on_cpu=True,
             fit_type='custom',
             train_S = True,
@@ -1254,7 +1324,12 @@ class PatchWorkModel(Model):
         depth = len(labels)
         for k in range(depth):
             if lossfun[k] is not None:
-                lmat = lossfun[k](labels[k],preds[k])
+                if dontcare is not None:
+                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                    masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
+                    lmat = lossfun[k](masked_pred,masked_label)
+                else:
+                    lmat = lossfun[k](labels[k],preds[k])
                 l = tf.reduce_mean(lmat)
                 if depth > 1:
                     if k == depth-1:
@@ -1374,8 +1449,6 @@ class PatchWorkModel(Model):
 
 
     def createLossArray(lossfun):
-        print("creating custom loss array from")
-        print(lossfun)
         loss = []
         if self.intermediate_loss:
             for k in range(self.cropper.depth-1):
@@ -1394,6 +1467,7 @@ class PatchWorkModel(Model):
             self.loss = createLossArray(tf.keras.losses.binary_crossentropy)
         else:
             if callable(loss):
+                print("creating custom loss array")                
                 self.loss = createLossArray(loss)
             else:            
                 print("using custom loss array")

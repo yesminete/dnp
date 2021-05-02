@@ -136,6 +136,11 @@ def conv_gauss3D_fft(img,std):
   return r
 
 
+def globalmax(x,dummy):
+    s = x.shape
+    axis = range(1,len(s)-1)
+    return x*0.0 + tf.reduce_max(x,axis=axis,keepdims=True)
+
 
 def gaussian3D(std):  
   size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()+1
@@ -589,9 +594,11 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
                            crop_only_nonzero=False,
-                           reslice_labels=False,
+                           reslice_labels=True,
+                           label_transform=None,
                            verbose=False,
                            threshold=0.5,
+                           label_cval=np.nan,
                            nD=3,ftype=tf.float32):
 
     
@@ -901,9 +908,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if reslice_labels:
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
                                 if len(img.shape) == 3:
-                                    img= resample_from_to(img, (template_shape ,template_affine),order=3)                                    
+                                    img= resample_from_to(img, (template_shape ,template_affine),order=3,cval=label_cval)                                    
                                 else:
-                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3)
+                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3,cval=label_cval)
                         else:
                             resolution['output_edges'] = img.affine
                             
@@ -917,7 +924,25 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if threshold is not None and one_hot_index_list is not None:
                              assert 0,"not possible to use threshold and one_hot_index_list"
                             
-                        if threshold is not None:
+                            
+                        if label_transform is not None:
+                          if label_transform == 'vector_to_tensor':
+                              img = tf.where(tf.math.is_nan(img), 0, img)
+                              img = img[...,0:3]
+                              img = tf.concat([ img[...,0:1]**2,
+                                                img[...,1:2]**2,
+                                                img[...,2:3]**2,
+                                                img[...,0:1]*img[...,1:2],
+                                                img[...,0:1]*img[...,2:3],
+                                                img[...,1:2]*img[...,2:3] ],3);
+                              imgnorm = tf.reduce_sum(img,axis=-1,keepdims=True)
+                              img = img / (10+imgnorm)
+                              
+                          else:
+                              assert(False,"given label transform not implemented")
+                            
+                          
+                        elif threshold is not None:
                             img = (img>threshold)*1
 
     
@@ -1010,8 +1035,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             tmp = tf.convert_to_tensor(classes[k],dtype=ftype)
             tmp = tf.expand_dims(tmp,0)
             classset.append(tmp)
-        if labels is not None and len(labs) > 0:                    
-            labs = tf.concat(labs,nD+1)
+        if labels is not None and len(labs) > 0:                
+            try:
+                labs = tf.concat(labs,nD+1)
+            except Exception as e:
+                    print('label matrix inconsistent: ' + fname)
+                
             labelset.append(labs)
 
         resolutions.append(resolution)

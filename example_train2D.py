@@ -92,7 +92,7 @@ patching = {
         "fov_rel":[0.5,0.5],
      },
     "smoothfac_data" : 0,   
-    "smoothfac_label" : 0, 
+    "smoothfac_label" : 'globalmax', 
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -318,7 +318,7 @@ for i in range(0,outer_num_its):
         else:
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
-        
+    training['hard_mining'] = 0.2
         
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=False,
