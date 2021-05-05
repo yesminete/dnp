@@ -193,10 +193,6 @@ class myHistory :
             if hasattr(self,'age'):
                 gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1]) 
                 ax = plt.subplot(gs[0])
-<<<<<<< HEAD
-=======
-           
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
 
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
@@ -414,13 +410,13 @@ class PatchWorkModel(Model):
   def call(self, inputs, training=False, lazyEval=None, stitch_immediate=False, batch_size=None, testIT=False):
 
 
-    def batcher(x,fun,bsize):
+    def batcher(x,fun):
         if batch_size is not None:          
             d = x.shape[0]
-            n = d//bsize + 1
+            n = d//batch_size + 1
             r = []
             for i in range(n):
-                r.append(fun(x[i*bsize:min((i+1)*bsize,d)]))
+                r.append(fun(x[i*batch_size:min((i+1)*batch_size,d)]))
             return tf.concat(r,0)
         else:
             return fun(x)
@@ -526,8 +522,9 @@ class PatchWorkModel(Model):
          output.append(res)
          
       else:
-          
-         res = batcher(inp,lambda x: self.blocks[k](x,training=training),batch_size)
+                    
+         res = batcher(inp,lambda x: self.blocks[k](x,training=training))
+         #res = self.blocks[k](inp,training=training)
          if k < len(self.classifiers) and self.classifier_train:
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              #res_nonspatial = self.classifiers[k](res,training=training) 
@@ -705,18 +702,12 @@ class PatchWorkModel(Model):
 
             print(">>> applying network -------------------------------------------------")
             start = timer()
-<<<<<<< HEAD
-            #fblock = self.finalBlock
-            #self.finalBlock = None
-            r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
-            #self.finalBlock = fblock
-=======
+
             if generate_type=='tree':
-                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
-            else:
                 r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init,batch_size=32)
+            else:
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
                 
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
             print(">>> time elapsed, network application: " + str(timer() - start) )
             if max_patching:
                 
@@ -768,27 +759,17 @@ class PatchWorkModel(Model):
              res = r
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
-<<<<<<< HEAD
+
              if testIT:
                  res = zipper(pred,sumpred,lambda a,b : b)     
              else:
           #       res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
                  res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001))     
-=======
-            if testIT:
-                res = zipper(pred,sumpred,lambda a,b : b)     
-            else:
-                res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
-<<<<<<< HEAD
              with tf.device("/cpu:0"):                
-=======
-             with tf.device("/cpu:0"):                             
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
                  for k in level:
                     res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
          if single:
@@ -823,7 +804,6 @@ class PatchWorkModel(Model):
                  along4dim=False,
                  align_physical=None,
                  patch_size_factor=1,
-                 out_typ='int16',
                  crop_fdim=None,
                  crop_sdim=None,
                  out_typ='int16',
@@ -952,48 +932,26 @@ class PatchWorkModel(Model):
                                                       [0,1/facs[1],0,offs[1]],
                                                       [0,0,1/facs[2],offs[2]],
                                                       [0,0,0,1]]))
-<<<<<<< HEAD
-                  
-=======
-            
-      
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
       pred_nii = None
       if ofname is not None:
-<<<<<<< HEAD
           def savenii(name,res_):                
-=======
-    
-          def savenii(name,res_):
-                
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              if out_typ == 'int16':
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
-<<<<<<< HEAD
-=======
              elif out_typ == 'float32':
                  fac = 1                   
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
              else:
                  assert(False,"out_typ not implemented")
              pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
              pred_nii.header.set_data_dtype(out_typ)                     
              pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
-<<<<<<< HEAD
                  
              pred_nii.header['cal_max'] = 1
              pred_nii.header['cal_min'] = 0
              pred_nii.header['glmax'] = 1
              pred_nii.header['glmin'] = 0
-=======
-             if out_typ != 'float32':
-                 pred_nii.header['cal_max'] = 1
-                 pred_nii.header['cal_min'] = 0
-                 pred_nii.header['glmax'] = 1
-                 pred_nii.header['glmin'] = 0
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
+
              if name is not None:
                  nib.save(pred_nii,name)
              return pred_nii
@@ -1004,11 +962,6 @@ class PatchWorkModel(Model):
           else:
              pred_nii = savenii(ofname,res)
               
-<<<<<<< HEAD
-=======
-
-
->>>>>>> bfe7de67625a20301209ac94122e5bcb6f040846
             
       if pred_nii is not None:        
           if return_nibabel:
@@ -1213,7 +1166,7 @@ class PatchWorkModel(Model):
             rot_intrinsic=0,
             loss=None,
             optimizer=None,
-            recompile_loss_optim=True,
+            recompile_loss_optim=False,
             dontcare=True,
             patch_on_cpu=True,
             fit_type='custom',
