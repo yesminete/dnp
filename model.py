@@ -1282,23 +1282,14 @@ class PatchWorkModel(Model):
                 else:
                     lmat = lossfun[k](labels[k],preds[k])
                 l = tf.reduce_mean(lmat)
-                if depth > 1:
-                    if k == depth-1:
-                        hist['output_' + str(k+1) + '_loss'] = l
-                        f1,th = f1_metric_best(labels[k],preds[k])
-                        hist['output_' + str(k+1) + '_f1'] = 10**f1
-                        hist['output_' + str(k+1) + '_threshold'] = 10**th
-                                                                       
-                        #         hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
-                        
-                        if hard_mining > 0:
-                            if len(lmat.shape) < self.cropper.ndim+1:
-                                hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)
-                            else:
-                                hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=list(range(1,self.cropper.ndim+1)))
-                else:
-                    hist['output_loss'] = l
-                    hist['output_f1'] = 10**f1_metric(labels[k],preds[k])
+                if k == depth-1:
+                    hist['output_' + str(k+1) + '_loss'] = l
+                    f1,th = f1_metric_best(labels[k],preds[k])
+                    hist['output_' + str(k+1) + '_f1'] = 10**f1
+                    hist['output_' + str(k+1) + '_threshold'] = 10**th
+                                                                   
+                    #         hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
+                    
                     if hard_mining > 0:
                         if len(lmat.shape) < self.cropper.ndim+1:
                             hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)
