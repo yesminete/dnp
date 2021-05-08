@@ -622,8 +622,8 @@ class CropGenerator():
       if augment is not None:                  
           if isinstance(augment,dict):
               if 'dphi' in augment:
-                  dphi1 = tensor(augment['dphi'])
-                  dphi2 = tensor(augment['dphi'])
+                  dphi1 = tensor(augment['dphi'])*0.5
+                  dphi2 = tensor(augment['dphi'])*0.5
               if 'dphi1' in augment:
                   dphi1 = tensor(augment['dphi1'])
               if 'dphi2' in augment:
@@ -645,14 +645,15 @@ class CropGenerator():
 
 
 
-      def getPatchingParams(input_width,input_shape,resolution,depth):
+      def getPatchingParams(input_width,input_shape,input_edges,resolution,depth):
 
           showten = lambda a,n: "["+ (",".join(map(lambda x: ("{:."+str(n)+"f}").format(x), a.numpy()))) + "]"
 
+          input_voxsize = tensor(input_width)/(tensor(input_shape)-1);
           if verbose:
               print("input:  shape:"+ showten(tensor(input_shape),0)+
                     "  width(mm):"+showten(tensor(input_width),1) +
-                    '  voxsize:' +  showten(tensor(input_width)/tensor(input_shape),2) )
+                    '  voxsize:' +  showten(input_voxsize,2) )
               print("snapper " + " ".join(str(x) for x in snapper))
     
           nD = len(resolution)        
@@ -671,9 +672,9 @@ class CropGenerator():
                   patch_widths = [tensor(fov_rel)*input_width]
             
               if destvox_mm is not None:
-                  final_width = out_patch_shapes[-1]*tensor(destvox_mm)
+                  final_width = (out_patch_shapes[-1]-1)*tensor(destvox_mm)
               else:
-                  final_width = out_patch_shapes[-1]*input_width/tensor(input_shape)*tensor(destvox_rel)
+                  final_width = (out_patch_shapes[-1]-1)*input_width/(tensor(input_shape)-1)*tensor(destvox_rel)
               
               if depth == 1:
                   patch_widths = [tensor(final_width)]
@@ -729,16 +730,20 @@ class CropGenerator():
             w = patch_widths[k]/(out_patch_shapes[k]-1)*1
             dshape = int32(input_width/w)
             vsz =  input_width/tensor(dshape-1)
-            dest_edges.append(tf.expand_dims(tf.linalg.diag(tf.concat([vsz,[1]],0)),0))
+            dedge = tf.matmul(input_edges[0,:,:],tf.linalg.diag(tf.concat([vsz/input_voxsize,[1]],0)))
+            #dedge = tf.linalg.diag(tf.concat([vsz,[1]],0))
+            ##bug 
+            dest_edges.append(tf.expand_dims(dedge,0))
             dest_shapes.append(dshape)
 
           if verbose:
             for k in range(depth):
                outvoxstr = ""
                if not tf.reduce_all(patch_shapes[k] == out_patch_shapes[k]):
-                   outvoxstr = '  outvoxsize:' +  showten((patch_widths[k]/out_patch_shapes[k]),2)
+                   outvoxstr = '  outvoxsize:' +  showten((patch_widths[k]/(out_patch_shapes[k]-1)),2)
                print("level "+str(k) + ":  shape:"+ showten(patch_shapes[k],0)+ "->"+ showten(out_patch_shapes[k],0)+ "  width(mm):"+showten(patch_widths[k],1) + "\n" +
-                    '  voxsize:' +  showten((patch_widths[k]/patch_shapes[k]),2) + '  (rel. to input:' +  showten((patch_widths[k]/patch_shapes[k])/(input_width/tensor(input_shape) ),2) + ')' +
+                    '  voxsize:' +  showten((patch_widths[k]/(patch_shapes[k]-1)),2) +
+                    '  (rel. to input:' +  showten((patch_widths[k]/(patch_shapes[k]-1))/(input_width/(tensor(input_shape)-1) ),2) + ')' +
                     " " + outvoxstr 
                      )
                print('  dest_shape:' + showten(dest_shapes[k],0))
@@ -780,13 +785,15 @@ class CropGenerator():
       if src_boxes_labels is not None:
           src_boxes_labels = tf.tile(tf.expand_dims(src_boxes_labels,0),[trainset_.shape[0],1,1])
 
-      patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],resolution_,self.depth)
+      patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],src_boxes,resolution_,self.depth)
 
-      if isinstance(resolution_,dict) and "input_edges" in resolution_:          
-          destboxes = patching_params['dest_edges']
-          worldtrafo = tf.einsum('ik,k->ik',toboxes(resolution_['input_edges']),1.0/tf.concat([src_voxsize,[1]],0))
-          for k in range(len(destboxes)):
-              destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
+
+      # if isinstance(resolution_,dict) and "input_edges" in resolution_:          
+      #     destboxes = patching_params['dest_edges']
+      #     ##bug
+      #     worldtrafo = tf.einsum('ik,k->ik',toboxes(resolution_['input_edges']),1.0/tf.concat([src_voxsize,[1]],0))
+      #     for k in range(len(destboxes)):
+      #         destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
         
       
@@ -1257,8 +1264,10 @@ class CropGenerator():
                                tf.concat([0*phi,0*phi,1+phi*0],1)],               2)
                 return U
         
-            def randU3d(dphi):
+            def randU3d(dphi):                
                 phi = tf.random.normal([b*N,3])*dphi
+                phi = phi / (tf.keras.backend.epsilon()+tf.math.sqrt(tf.reduce_sum(phi**2,1,keepdims=True)))
+                phi = phi * tf.random.uniform([b*N,1])*tf.math.sin(tf.reduce_sum(dphi) )
                 U = quaternion(phi)
                 return U
                 
@@ -1324,7 +1333,12 @@ class CropGenerator():
                 R = tf.tile(rot_augment,[N,1,1])
             
             vxsz = tf.expand_dims(tf.expand_dims(tf.concat([out_width/(out_shape-1),[1]],0),0),1) 
-            U = A * vxsz
+
+          #  U = A * vxsz
+            ##bug
+            src_vxsz = tf.concat([tf.math.sqrt(tf.reduce_sum(src_boxes[0,:,0:nD]**2,0)),[1]],0)            
+            U = tf.matmul(A,src_boxes/src_vxsz*vxsz)
+            
             
             # assemble homogenous coords
             offs = tf.concat([points,tf.ones([b*N,1])],1) - tf.einsum('bxy,y->bx',U,tf.concat([(out_shape-1)/2,[1]],0))
