@@ -759,13 +759,10 @@ class PatchWorkModel(Model):
              res = r
              res[0] = tf.reduce_mean(res[0],axis=0)
          else:
-
-             if testIT:
-                 res = zipper(pred,sumpred,lambda a,b : b)     
-             else:
-          #       res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b*b+3))     
-                 res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001))     
-              #   res = zipper(pred,sumpred,lambda a,b : (b+0.00001))     
+            if testIT == 2:
+                res = zipper(pred,sumpred,lambda a,b : (b+0.00001) )     
+            else:
+                res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
