@@ -966,7 +966,7 @@ def Maxpool_loss3D(K=1,losstype='bc',threshold=1):
     
     return theloss
         
-def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,nD=3):
+def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalty=False,nD=3):
     sz = y.shape
     if nD==2:
         nvx = sz[1]*sz[2]
@@ -986,7 +986,7 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,nD=3):
         else:
             loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5))
 
-    sumloss = 0
+    sumloss = 0.0
     if combi:
         sumloss = tf.reduce_mean(loss,axis=list(range(1,len(sz))))*ncl
         
@@ -995,24 +995,49 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,nD=3):
     x = tf.reshape(x,isz)
     y = tf.reshape(y,isz)
     
-    neg = tf.where(y<0.5,loss,0)
-    pos = tf.where(y>0.5,loss,0)
+    vpos=y>0.5
+    vneg=y<0.5
+
+    if mismatch_penalty:    
+        if from_logits:
+           vpos = tf.math.logical_and(vpos,x<0)     # false negatives
+           vneg = tf.math.logical_and(vneg,x>0)     # false positives
+        else:
+           vpos = tf.math.logical_and(vpos,x<0.5)
+           vneg = tf.math.logical_and(vneg,x>0.5)
+        
+    neg = tf.where(vpos,loss,0)
+    pos = tf.where(vneg,loss,0)
     
     for j in range(ncl):
-        valspos,_ = tf.nn.top_k(pos[...,j],k=K)
-        valsneg,_ = tf.nn.top_k(neg[...,j],k=K)
-        sumloss = sumloss + tf.reduce_mean(valspos+valsneg,axis=1)
+        numpos = int(tf.reduce_sum(tf.where(vpos[...,j],1.0,0)))
+        if numpos > 0:
+            if K == "inf":
+                sumloss = sumloss + tf.reduce_mean(pos[...,j],axis=1)            
+            else:
+                mK = tf.math.minimum(K,numpos)
+                valspos,_ = tf.nn.top_k(pos[...,j],k=mK)
+                sumloss = sumloss + tf.reduce_mean(valspos,axis=1)
 
-    return tf.expand_dims(sumloss,1)
+        numneg = int(tf.reduce_sum(tf.where(vneg[...,j],1.0,0)))
+        if numneg > 0:
+            if K == "inf":
+                sumloss = sumloss + tf.reduce_mean(neg[...,j],axis=1)            
+            else:
+                mK = tf.math.minimum(K,numneg)
+                valsneg,_ = tf.nn.top_k(neg[...,j],k=mK)
+                sumloss = sumloss + tf.reduce_mean(valsneg,axis=1)
 
-def TopK_loss3D(K=1,losstype='bc',combi=False):
+    return tf.expand_dims(sumloss,1)*0.01
+
+def TopK_loss3D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
     def loss(x,y,from_logits=True):
-        return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=3)
+        return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=3,mismatch_penalty=mismatch_penalty)
     return loss   
 
-def TopK_loss2D(K=1,losstype='bc',combi=False):
+def TopK_loss2D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
     def loss(x,y,from_logits=True):
-        return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=2)
+        return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=2,mismatch_penalty=mismatch_penalty)
     return loss   
 
 #%%###############################################################################################

@@ -158,7 +158,7 @@ training = {
    "epochs":5,
    "num_its":100,                
    "balance":{"ratio":0.5},
-   "loss": tf.keras.losses.binary_crossentropy,
+   "loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
    "reload_after_it":5,
@@ -318,10 +318,9 @@ for i in range(0,outer_num_its):
         else:
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
-    training['hard_mining'] = 0.2
         
     themodel.train(tset,lset,resolutions=rset,**training,
-                   debug=False,
+                   debug=True,
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     
