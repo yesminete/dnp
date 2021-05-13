@@ -278,6 +278,7 @@ class PatchWorkModel(Model):
                train_cycle = None,
                augment = None,
                align_physical = None,
+               crop_fdim = None,
                input_fdim = None
                ):
     super().__init__()
@@ -316,6 +317,7 @@ class PatchWorkModel(Model):
     self.saved_points = saved_points
     self.augment = augment
     self.align_physical = align_physical
+    self.crop_fdim = crop_fdim
     self.input_fdim = input_fdim
     self.compiled = {}
     
@@ -397,6 +399,7 @@ class PatchWorkModel(Model):
                'train_cycle':self.train_cycle,
                'augment':self.augment,
                'align_physical':self.align_physical,
+               'crop_fdim':self.crop_fdim,
                'input_fdim':self.input_fdim
             }
 
@@ -834,10 +837,15 @@ class PatchWorkModel(Model):
     
       if align_physical is None:
           align_physical = self.align_physical
-
       if align_physical is None:
-          align_physical = True
+          align_physical = False
               
+      if crop_fdim is None:
+          crop_fdim = self.crop_fdim
+      if align_physical is None:
+          crop_fdim = False
+
+        
       scrop = None
      
       nD = self.cropper.ndim
@@ -847,17 +855,25 @@ class PatchWorkModel(Model):
       
       for f in fname:          
           img1 = nib.load(f)        
-          if align_physical:
-              img1 = align_to_physical_coords(img1)
-              resolution = img1.header['pixdim'][1:4]
-          else:
-              resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
           
+          if img1.shape[2] == 1:
+              resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
+          else:
+              if align_physical:
+                  img1 = align_to_physical_coords(img1)
+                  resolution = img1.header['pixdim'][1:4]
+              else:
+                  resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
+
+
           a = img1.get_fdata()
           
           if crop_fdim is not None:
              if len(a.shape) > nD:
-                a = a[...,crop_fdim]
+                if crop_fdim == 'mean':
+                    a = np.mean(a,axis=-1)
+                else:                    
+                    a = a[...,crop_fdim]
 
         
           a,scrop = crop_spatial(a,scrop)
@@ -1278,7 +1294,7 @@ class PatchWorkModel(Model):
                 if dontcare is not None:
                     masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
                     masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
-                    lmat = lossfun[k](masked_pred,masked_label)
+                    lmat = lossfun[k](masked_label,masked_pred)
                 else:
                     lmat = lossfun[k](labels[k],preds[k])
                 l = tf.reduce_mean(lmat)

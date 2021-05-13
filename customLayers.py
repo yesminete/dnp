@@ -1010,23 +1010,23 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalt
     pos = tf.where(vneg,loss,0)
     
     for j in range(ncl):
-        numpos = int(tf.reduce_sum(tf.where(vpos[...,j],1.0,0)))
-        if numpos > 0:
-            if K == "inf":
-                sumloss = sumloss + tf.reduce_mean(pos[...,j],axis=1)            
-            else:
-                mK = tf.math.minimum(K,numpos)
-                valspos,_ = tf.nn.top_k(pos[...,j],k=mK)
-                sumloss = sumloss + tf.reduce_mean(valspos,axis=1)
+        numpos = tf.cast(tf.reduce_sum(tf.where(vpos[...,j],1.0,0)),dtype=tf.int32)+1
+#        if numpos > 0:
+        if K == "inf":
+            sumloss = sumloss + tf.reduce_mean(pos[...,j],axis=1)            
+        else:
+            mK = tf.math.minimum(K,numpos)
+            valspos,_ = tf.nn.top_k(pos[...,j],k=mK)
+            sumloss = sumloss + tf.reduce_mean(valspos,axis=1)
 
-        numneg = int(tf.reduce_sum(tf.where(vneg[...,j],1.0,0)))
-        if numneg > 0:
-            if K == "inf":
-                sumloss = sumloss + tf.reduce_mean(neg[...,j],axis=1)            
-            else:
-                mK = tf.math.minimum(K,numneg)
-                valsneg,_ = tf.nn.top_k(neg[...,j],k=mK)
-                sumloss = sumloss + tf.reduce_mean(valsneg,axis=1)
+        numneg = tf.cast(tf.reduce_sum(tf.where(vneg[...,j],1.0,0)),dtype=tf.int32)+1
+        #if numneg > 0:
+        if K == "inf":
+            sumloss = sumloss + tf.reduce_mean(neg[...,j],axis=1)            
+        else:
+            mK = tf.math.minimum(K,numneg)
+            valsneg,_ = tf.nn.top_k(neg[...,j],k=mK)
+            sumloss = sumloss + tf.reduce_mean(valsneg,axis=1)
 
     return tf.expand_dims(sumloss,1)*0.01
 

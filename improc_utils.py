@@ -698,9 +698,11 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             img = load_nifti(fname)      
             if verbose:            
                     print("   loading file:" + fname)           
-
-            resolution = {"voxsize": img.header['pixdim'][1:4], "input_edges":img.affine}
- #           resolution = img.header['pixdim'][1:4]
+                
+            if img.shape[2] == 1:
+                resolution = np.sqrt(np.sum(img.affine[:,0:2]**2,axis=0))
+            else:    
+                resolution = {"voxsize": img.header['pixdim'][1:4], "input_edges":img.affine}
             
             if len(img.header.extensions) > 0:
                 try:
@@ -733,7 +735,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             img = np.squeeze(img.get_fdata())
             if crop_fdim is not None:
                 if len(img.shape) > nD:
-                    img = img[...,crop_fdim]
+                    if crop_fdim == 'mean':
+                        img = np.mean(img,axis=-1)
+                    else:
+                        img = img[...,crop_fdim]
             img,scrop = crop_spatial(img,scrop)
             
             img = np.expand_dims(np.squeeze(img),0)
