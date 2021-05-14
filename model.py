@@ -1265,12 +1265,18 @@ class PatchWorkModel(Model):
       preds = self(data, training=True)
       loss = 0
       for k in range(len(labels)):          
-            l = lossfun[k](labels[k],preds[k])
+            if dontcare is not None:
+                masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
+            else:
+                masked_pred = preds[k]
+                masked_label = labels[k]
+            l = lossfun[k](masked_label,masked_pred)
             l = tf.reduce_mean(l)
             loss += l
             if k == len(labels)-1:
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                f1,th = f1_metric_best(labels[k],preds[k],valid=False)
+                f1,th = f1_metric_best(masked_label,masked_pred,valid=False)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
                 hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**th
       return hist
@@ -1294,13 +1300,14 @@ class PatchWorkModel(Model):
                 if dontcare is not None:
                     masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
                     masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
-                    lmat = lossfun[k](masked_label,masked_pred)
                 else:
-                    lmat = lossfun[k](labels[k],preds[k])
+                    masked_pred = preds[k]
+                    masked_label = labels[k]
+                lmat = lossfun[k](masked_label,masked_pred)
                 l = tf.reduce_mean(lmat)
                 if k == depth-1:
                     hist['output_' + str(k+1) + '_loss'] = l
-                    f1,th = f1_metric_best(labels[k],preds[k])
+                    f1,th = f1_metric_best(masked_label,masked_pred)
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
                     hist['output_' + str(k+1) + '_threshold'] = 10**th
                                                                    

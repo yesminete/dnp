@@ -670,7 +670,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
 
         crop_idx = []
 
-        if exclude_incomplete_labels and not use_unlabeled_data:
+        if (exclude_incomplete_labels == 1) and not use_unlabeled_data:
             incomplete = False
             for j in range(len(labels)):
                 if not k in labels[j]:
@@ -981,8 +981,12 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         
                 else:
                     notfound = False
-                    print("  missing label " + str(j) + " for subject " + k + ", extending with zeros")
-                    img = tf.zeros(imgs[0].shape,dtype=ftype)
+                    if exclude_incomplete_labels == -1:
+                        print("  missing label " + str(j) + " for subject " + k + ", extending with nans (dont care label)")
+                        img = tf.zeros(imgs[0].shape,dtype=ftype)+np.nan
+                    else:
+                        print("  missing label " + str(j) + " for subject " + k + ", extending with zeros")
+                        img = tf.zeros(imgs[0].shape,dtype=ftype)
                     labs.append(img)
                     if use_unlabeled_data:
                         classes[k] = 0
