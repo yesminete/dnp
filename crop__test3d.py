@@ -61,7 +61,7 @@ nD=3
 cgen = patchwork.CropGenerator(
                   scheme = {
                       #"destvox_mm": [1,1,1],
-                      "destvox_rel": [3,1,1],
+                      "destvox_rel": [5,1,1],
                       "fov_mm":[100,100,150],
                       #"fov_rel":[0.5,0.5,0.5],
                       "patch_size":[32,32,32]
@@ -69,7 +69,7 @@ cgen = patchwork.CropGenerator(
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',
-                  depth=1)
+                  depth=3)
 
 
 
@@ -87,7 +87,8 @@ s = 1
 xx = trainset[0]
 res = model.apply_full(xx,resolution=resolutions[0],
                        branch_factor=1,
-                       generate_type='random',jitter=0.1,   repetitions=1,
+                       level='mix',
+                       generate_type='random',jitter=0.1,   repetitions=10,
                        augment= {"independent_augmentation" : False,
                                  "dphi" : [0,0.4 ,0] },
                        verbose=True,scale_to_original=False,testIT=1)

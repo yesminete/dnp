@@ -109,7 +109,9 @@ class myHistory :
             loss_hist[k] = []                    
       for k in loss_hist:
          if k in cur_hist:
-             loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
+         #    loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs)),cur_hist[k]))
+             bsize = epochs//len(cur_hist[k])
+             loss_hist[k] += list(zip(list(range(self.model.trained_epochs,self.model.trained_epochs+epochs,bsize)),cur_hist[k]))
              
      
       new_minimum = False
@@ -166,7 +168,7 @@ class myHistory :
                 cols = 'rbmckrbmck'   
                 cnt = 0
                 for k in sorted(loss_hist):
-                    x = [ i for i, j in loss_hist[k] ]
+                    x = [ i/1000 for i, j in loss_hist[k] ]
                     y = [ j for i, j in loss_hist[k] ]
                     n = int(np.ceil(len(y)/20.0))
                     y = np.convolve(y,np.ones([n])/n,mode='valid')
@@ -200,7 +202,7 @@ class myHistory :
             
             if self.model.saved_points is not None:
                 for k in self.model.saved_points:
-                    xx = int(self.model.saved_points[k])
+                    xx = int(self.model.saved_points[k]/1000)
                     plt.axvline(x=xx)
                     plt.text(int(xx), 14,k)
             
@@ -662,7 +664,7 @@ class PatchWorkModel(Model):
      if augment is None:
           augment = self.augment
 
-
+     mix_levels = False
               
      pstats = [None]*len(level)
 
@@ -747,7 +749,12 @@ class PatchWorkModel(Model):
                 start = timer()
                 r = r[0:self.cropper.depth]
                 if (self.spatial_train or max_patching) and not self.spatial_max_train:
+                    if level[0] == 'mix':
+                        level = list(range(0,self.cropper.depth))
+                        mix_levels = True
                     for k in level:            
+                      if k < self.cropper.depth-1 or self.finalizeOnApply:
+                          r[k] = tf.nn.sigmoid(r[k])                        
                       a,b = x.stitchResult(r,k)
                       pred[k] += a
                       sumpred[k] += b                
@@ -765,7 +772,18 @@ class PatchWorkModel(Model):
             if testIT == 2:
                 res = zipper(pred,sumpred,lambda a,b : (b+0.00001) )     
             else:
-                res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
+                if mix_levels:
+                    pred_aggr = 0
+                    pred_votes = 0
+                    dest_shape = pred[-1].shape
+                    for k in range(len(pred)):
+                        fac = np.math.pow(0.2,len(pred)-1-k)
+                        pred_aggr = pred_aggr + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
+                        pred_votes = pred_votes + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k],0),dest_shape,True,nD,edge_center=False))
+                    res = [pred_aggr/(pred_votes+0.0001)]
+                    level = [0]                    
+                else:
+                    res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
              
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
@@ -801,6 +819,7 @@ class PatchWorkModel(Model):
                  scale_to_original=True,
                  scalevalue=None,
                  dphi=0,
+                 level=-1,
                  augment=None,
                  along4dim=False,
                  align_physical=None,
@@ -901,6 +920,7 @@ class PatchWorkModel(Model):
                                         dphi=dphi,
                                         augment=augment,
                                         resolution = resolution,
+                                        level = level,
                                         lazyEval = lazyEval,
                                         patch_size_factor=patch_size_factor,
                                         verbose=False,
@@ -917,7 +937,9 @@ class PatchWorkModel(Model):
       else:         
           res = do_app(a)
           
-      res = res.numpy()
+      if hasattr(res,'numpy'):
+          res = res.numpy()
+          
       if nD == 2:
           if len(res.shape) == 3:         
               res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
@@ -1576,8 +1598,10 @@ class PatchWorkModel(Model):
                     print('.', end='') 
                 
                 
-                log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
-                self.trained_epochs+=1
+                log, new_min = self.myhist.accum('train',log,numsamples,tensors=True,mean=True)
+                self.trained_epochs+=numsamples
+#                log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
+ #               self.trained_epochs+=1
                 end = timer()
                 print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
                 for k in log:

@@ -1478,7 +1478,7 @@ class CropGenerator():
                  'local_box_index',
                  'parent_boxes',
                  'parent_box_index',
-                 'parent_box_scatter_index',
+                 #'parent_box_scatter_index',
                  'affine_augment',
                  'rot_augment',
                  'class_labels']
