@@ -839,17 +839,18 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                                 if 'thresh' in a:
                                                     p.append(a['thresh'])
                                                 points.append(p)
-                                            else:
-                                                print(key[1] + ' not present for ' + fname)
                                     if notfound:
                                         break
                                     if len(points) == 0:
+                                        print('key(s) not present for ' + fname)
                                         notfound=True
-                                        break
+                                        if exclude_incomplete_labels:
+                                            break
                                 print('rendering ' + str(len(points)) + ' markers')
                                 img = renderpoints(points, header,ftype,nD,normalize,img_inputcontrast)
-                                img,_ = crop_spatial(img,scrop)
-                            
+                                if notfound:
+                                    img = img*0 + label_cval                                                                    
+                                img,_ = crop_spatial(img,scrop)                            
                                 img = np.expand_dims(img,0)
                                 img = np.expand_dims(img,nD+1)
                                 labs.append(img)

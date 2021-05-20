@@ -752,9 +752,10 @@ class PatchWorkModel(Model):
                     if level[0] == 'mix':
                         level = list(range(0,self.cropper.depth))
                         mix_levels = True
+                        for k in level:            
+                          if k < self.cropper.depth-1 or self.finalizeOnApply:
+                              r[k] = tf.nn.sigmoid(r[k])                        
                     for k in level:            
-                      if k < self.cropper.depth-1 or self.finalizeOnApply:
-                          r[k] = tf.nn.sigmoid(r[k])                        
                       a,b = x.stitchResult(r,k)
                       pred[k] += a
                       sumpred[k] += b                
