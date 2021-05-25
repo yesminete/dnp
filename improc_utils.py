@@ -596,6 +596,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_only_nonzero=False,
                            reslice_labels=True,
                            label_transform=None,
+                           binary_labels=False,
                            verbose=False,
                            threshold=0.5,
                            label_cval=np.nan,
@@ -1035,7 +1036,6 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             labs = labs_
             
             
-        
                 
         imgs = tf.concat(imgs,nD+1)        
         trainset.append(imgs)
@@ -1049,6 +1049,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                 labs = tf.concat(labs,nD+1)
             except Exception as e:
                     print('label matrix inconsistent: ' + fname)
+
+            if binary_labels:
+                labs = tf.cast(labs,dtype=tf.uint8)
+                
                 
             labelset.append(labs)
 

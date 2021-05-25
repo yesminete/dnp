@@ -39,7 +39,8 @@ img = nib.load('t1.nii')
 ie = img.affine
 img = img.get_fdata()
 
-ie = np.array([[0,0,2,100],[1,0,0,0],[0,1,0,-500],[0,0,0,1]])
+#ie = np.array([[-1,0,0,100],[0,-1,0,-10000],[0,0,-1,-500],[0,0,0,1]])
+ie = np.array([[-3,0,0,100],[0,-1,0,-10000],[0,0,1,-500],[0,0,0,1]])
 img = img[:,:,::2]
 
 img = tf.cast(tf.expand_dims(tf.expand_dims(img,0),4),dtype=tf.float32)
@@ -59,17 +60,18 @@ trainset = [img]
 #tf.random.set_seed(2)
 nD=3
 cgen = patchwork.CropGenerator(
+    snapper = [0,1,1],
                   scheme = {
                       #"destvox_mm": [1,1,1],
                       "destvox_rel": [3,1,1],
-                      "fov_mm":[100,100,150],
-                      #"fov_rel":[0.5,0.5,0.5],
+                      #"fov_mm":[100,100,150],
+                      "fov_rel":[0.5,0.5,0.5],
                       "patch_size":[32,32,32]
                       },
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',
-                  depth=1)
+                  depth=3)
 
 
 
@@ -87,9 +89,9 @@ s = 1
 xx = trainset[0]
 res = model.apply_full(xx,resolution=resolutions[0],
                        branch_factor=1,
-                       generate_type='random',jitter=0.1,   repetitions=1,
+                       generate_type='random',jitter=0.1,   repetitions=100,
                        augment= {"independent_augmentation" : False,
-                                 "dphi" : [0,0.4 ,0] },
+                                 "dphi" : [0,0 ,0] },
                        verbose=True,scale_to_original=False,testIT=1)
 
 

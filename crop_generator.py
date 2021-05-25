@@ -570,6 +570,9 @@ class CropGenerator():
           else:
               class_labels_ = labelset[j]
 
+          if labels_.dtype != 'float32':
+              labels_ = tf.cast(labels_,tf.float32)
+
       # get the data 
       trainset_ = trainset[j]
       
@@ -1338,6 +1341,7 @@ class CropGenerator():
           #  U = A * vxsz
             ##bug
             src_vxsz = tf.concat([tf.math.sqrt(tf.reduce_sum(src_boxes[0,:,0:nD]**2,0)),[1]],0)            
+            src_vxsz = tf.expand_dims(tf.expand_dims(src_vxsz,0),0)
             U = tf.matmul(A,src_boxes/src_vxsz*vxsz)
             
             

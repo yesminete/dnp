@@ -137,7 +137,8 @@ loading = {
     "crop_only_nonzero":False,
     "threshold":0.5,
     "add_inverted_label":False,
-    "one_hot_index_list":None
+    "one_hot_index_list":None,
+    "binary_labels":True
     }
 
 
