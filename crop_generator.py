@@ -180,6 +180,7 @@ def stitchResult(r,level, scales,scatter_type):
     sc = scales[level]
     pbox_index = sc['parent_box_scatter_index']
     sha = tf.concat([sc['dest_full_size'],[numlabels]],0)
+    sha = tf.cast(sha,dtype=pbox_index.dtype)
     if scatter_type=='NN':        
         return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
     else:
@@ -997,7 +998,7 @@ class CropGenerator():
 
            _parent_box_index = []
          
-           bdidx = tf.range(ds0)
+           bdidx = tf.range(ds0,dtype=parent_box_index.dtype)
            for i in range(self.ndim+1):
                bdidx = tf.expand_dims(bdidx,1)
            bdidx = tf.tile(bdidx,[1] + parent_box_index.shape[1:-1]+ [1])
@@ -1158,11 +1159,16 @@ class CropGenerator():
         def clip(R,sz,interp_type):
             nD = len(sz)
             
-            if interp_type == 'NN': # cast index to int
-                R = tf.dtypes.cast(tf.floor(R+0.5),dtype=tf.int32)            
-                uplim = tf.cast(sz,tf.int32)-1
+            if level == 0:
+                itype = tf.int64
             else:
-                uplim = tf.cast(sz,tf.int32)-2
+                itype = tf.int32
+            
+            if interp_type == 'NN': # cast index to int
+                R = tf.dtypes.cast(tf.floor(R+0.5),dtype=itype)            
+                uplim = tf.cast(sz,itype)-1
+            else:
+                uplim = tf.cast(sz,itype)-2
             ex = lambda x: tf.expand_dims(x,0)
             uplim = ex(ex(ex(uplim)))
             if nD == 3:
