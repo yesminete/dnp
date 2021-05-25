@@ -1032,7 +1032,7 @@ class PatchWorkModel(Model):
 
   @staticmethod
   def load(name,custom_objects={},show_history=False,immediate_init=True,notmpfile=False,train_cycle=-1,
-           clsCreator=None     ):
+           clsCreator=None ,dummyData=None    ):
 
     custom_objects = custom_layers
 
@@ -1108,10 +1108,13 @@ class PatchWorkModel(Model):
         
         
         try:
-            if model.cropper.ndim == 3:
-                initdat = tf.ones([1,32,32,32, model.input_fdim])
+            if dummyData is None:
+                if model.cropper.ndim == 3:
+                    initdat = tf.ones([1,32,32,32, model.input_fdim])
+                else:
+                    initdat = tf.ones([1,32,32, model.input_fdim])    
             else:
-                initdat = tf.ones([1,32,32, model.input_fdim])    
+                initdat = dummyData
             print("----------------- load/init network by minimal application")
             dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=True,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
             print("----------------- model and weights loaded")
