@@ -1313,16 +1313,15 @@ class PatchWorkModel(Model):
       hist = {}
       
       data = images[0]
-      labels = images[1]
-      
+      labels = images[1]      
      
       preds = self(data, training=True)
       loss = 0
       for k in range(len(labels)):          
             if dontcare is not None:
                 if self.cropper.categorial_label is not None:
-                    masked_pred = tf.where(labels[k]==-1,0,preds[k])
-                    masked_label = tf.where(labels[k]==-1,0,labels[k])
+                    masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
+                    masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
                 else:                
                     masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
                     masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
@@ -1357,8 +1356,8 @@ class PatchWorkModel(Model):
             if lossfun[k] is not None:
                 if dontcare is not None:
                     if self.cropper.categorial_label is not None:
-                        masked_pred = tf.where(labels[k]==-1,0,preds[k])
-                        masked_label = tf.where(labels[k]==-1,0,labels[k])
+                        masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
+                        masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
                     else:
                         masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
                         masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
