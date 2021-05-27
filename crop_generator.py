@@ -280,6 +280,7 @@ class CropGenerator():
                     snapper = None,
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
+                    categorial_label = None,
                     interp_type = 'NN',    # nearest Neighbor (NN) or linear (lin)
                     scatter_type = 'NN',
                     normalize_input = None,
@@ -296,6 +297,7 @@ class CropGenerator():
     self.scale_fac_ref = scale_fac_ref
     self.smoothfac_data = smoothfac_data
     self.smoothfac_label = smoothfac_label
+    self.categorial_label = categorial_label
     self.interp_type = interp_type
     self.scatter_type = scatter_type
     self.init_scale = init_scale
@@ -456,6 +458,7 @@ class CropGenerator():
                'scatter_type' :self.scatter_type,
                'init_scale':self.init_scale,
                'snapper':self.snapper,
+               'categorial_label':self.categorial_label,
                'smoothfac_data':self.smoothfac_data,
                'smoothfac_label':self.smoothfac_label,
                'normalize_input':self.normalize_input,
@@ -571,8 +574,9 @@ class CropGenerator():
           else:
               class_labels_ = labelset[j]
 
-          if labels_.dtype != 'float32':
-              labels_ = tf.cast(labels_,tf.float32)
+          if self.categorial_label is not None:
+              if labels_.dtype != 'float32':
+                 labels_ = tf.cast(labels_,tf.float32)
 
       # get the data 
       trainset_ = trainset[j]
@@ -1224,10 +1228,14 @@ class CropGenerator():
               points_tot = []
               for k in range(label.shape[0]):
                   L = label[k,...]
-                  if label_range is not None:
-                      L = tf.gather(L,label_range,axis=nD)
-                  if label_weight is not None:
-                      L = L*label_weight
+
+                  if self.categorial_label is not None:
+                      if label_range is not None:
+                          L = tf.gather(L,label_range,axis=nD)
+                      if label_weight is not None:
+                          L = L*label_weight
+                  else:
+                      L = tf.where(L>0,tf.cast(1.0,dtype=tf.float32),tf.cast(0,dtype=tf.float32))
                   if label_reduce is not None:
                       L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)
@@ -1256,7 +1264,7 @@ class CropGenerator():
                   R = R + np.random.uniform(low=0,high=1,size=R.shape)
                   points = R/sz
                   
-                  points = tf.expand_dims(tf.cast(points,dtype=label.dtype),1)
+                  points = tf.expand_dims(tf.cast(points,dtype=tf.float32),1)
                               
                   points_tot.append(points)
               

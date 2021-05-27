@@ -1279,7 +1279,35 @@ class PatchWorkModel(Model):
                 
         return c
     
-    @tf.function
+    
+    def computeloss(fun,label,pred):
+        if self.cropper.categorial_label is not None:
+            lmat = 0.0
+            cnt = 0
+            for j in self.cropper.categorial_label:
+                lmat += fun(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1])
+                cnt=cnt+1
+        else:                       
+            lmat = lossfun[k](label,pred)
+        return lmat
+
+    def computeF1perf(label,pred,valid=False):
+        if self.cropper.categorial_label is not None:
+            f1=0
+            th=0
+            cnt = 0
+            for j in self.cropper.categorial_label:
+                f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
+                f1+=f1_
+                th+=th_                
+                cnt=cnt+1
+            f1 /= cnt
+            th /= cnt
+        else:                       
+            f1,th = f1_metric_best(masked_label,masked_pred)
+
+        return f1,th
+    
     def valid_step_supervised(images,lossfun,prefix):
             
       hist = {}
@@ -1292,17 +1320,21 @@ class PatchWorkModel(Model):
       loss = 0
       for k in range(len(labels)):          
             if dontcare is not None:
-                masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
-                masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
+                if self.cropper.categorial_label is not None:
+                    masked_pred = tf.where(labels[k]==-1,0,preds[k])
+                    masked_label = tf.where(labels[k]==-1,0,labels[k])
+                else:                
+                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                    masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
             else:
                 masked_pred = preds[k]
                 masked_label = labels[k]
-            l = lossfun[k](masked_label,masked_pred)
+            l = computeloss(lossfun[k],masked_label,masked_pred)            
             l = tf.reduce_mean(l)
             loss += l
             if k == len(labels)-1:
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                f1,th = f1_metric_best(masked_label,masked_pred,valid=False)
+                f1,th = computeF1perf(masked_label,masked_pred,valid=False)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
                 hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**th
       return hist
@@ -1324,21 +1356,24 @@ class PatchWorkModel(Model):
         for k in range(depth):
             if lossfun[k] is not None:
                 if dontcare is not None:
-                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
-                    masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
+                    if self.cropper.categorial_label is not None:
+                        masked_pred = tf.where(labels[k]==-1,0,preds[k])
+                        masked_label = tf.where(labels[k]==-1,0,labels[k])
+                    else:
+                        masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                        masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
                 else:
                     masked_pred = preds[k]
                     masked_label = labels[k]
-                lmat = lossfun[k](masked_label,masked_pred)
+                lmat = computeloss(lossfun[k],masked_label,masked_pred)
                 l = tf.reduce_mean(lmat)
                 if k == depth-1:
-                    hist['output_' + str(k+1) + '_loss'] = l
-                    f1,th = f1_metric_best(masked_label,masked_pred)
+                    hist['output_' + str(k+1) + '_loss'] = l                    
+                    f1,th = computeF1perf(masked_label,masked_pred)
+                                        
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
                     hist['output_' + str(k+1) + '_threshold'] = 10**th
-                                                                   
-                    #         hist['output_' + str(k+1) + '_f1'] = 10**f1_metric(labels[k],preds[k])
-                    
+                                                                                       
                     if hard_mining > 0:
                         if len(lmat.shape) < self.cropper.ndim+1:
                             hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)

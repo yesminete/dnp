@@ -25,7 +25,7 @@ sys.path.append("/home/reisertm")
 import patchwork2 as patchwork
 
 
-
+#%%
 
 #% definition data sources
 
@@ -93,6 +93,7 @@ patching = {
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 'globalmax', 
+    "categorial_label" : list(range(1,4)),
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -158,7 +159,7 @@ training = {
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
    "epochs":5,
    "num_its":100,                
-   "balance":{"ratio":0.5},
+   "balance":{"ratio":0.5,"label_range":[0],"label_weight":1},
    "loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
@@ -297,8 +298,7 @@ themodel.train_cycle += 1
 if "align_physical" in loading:
     themodel.align_physical = loading["align_physical"]
 
-
-    
+#%%
     
 #%% start training    
 
@@ -319,6 +319,10 @@ for i in range(0,outer_num_its):
         else:
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
+        
+    lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
+    lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
+
         
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=True,
