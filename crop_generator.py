@@ -1228,8 +1228,7 @@ class CropGenerator():
               points_tot = []
               for k in range(label.shape[0]):
                   L = label[k,...]
-
-                  if self.categorial_label is not None:
+                  if self.categorial_label is None:
                       if label_range is not None:
                           L = tf.gather(L,label_range,axis=nD)
                       if label_weight is not None:
