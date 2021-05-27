@@ -1222,9 +1222,10 @@ class PatchWorkModel(Model):
         true_positives = kb.sum(kb.round(kb.clip(y_true * y_pred, 0, 1)))
         possible_positives = kb.sum(kb.round(kb.clip(y_true, 0, 1)))
         predicted_positives = kb.sum(kb.round(kb.clip(y_pred, 0, 1)))
-        precision = true_positives / (predicted_positives + kb.epsilon())
-        recall = true_positives / (possible_positives + kb.epsilon())
-        f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
+        #precision = true_positives / (predicted_positives + kb.epsilon())
+        #recall = true_positives / (possible_positives + kb.epsilon())
+        #f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
+        f1_val = 2*(true_positives+1)/(possible_positives+predicted_positives+1)
         return f1_val      
       
     def f1_metric_best(y_true, y_pred,valid=False):
