@@ -1225,7 +1225,7 @@ class PatchWorkModel(Model):
         #precision = true_positives / (predicted_positives + kb.epsilon())
         #recall = true_positives / (possible_positives + kb.epsilon())
         #f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
-        f1_val = 2*(true_positives+1)/(possible_positives+predicted_positives+1)
+        f1_val = 2*(true_positives+1)/(possible_positives+predicted_positives+2)
         return f1_val      
       
     def f1_metric_best(y_true, y_pred,valid=False):
