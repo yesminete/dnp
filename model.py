@@ -1288,6 +1288,7 @@ class PatchWorkModel(Model):
             for j in self.cropper.categorial_label:
                 lmat += fun(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1])
                 cnt=cnt+1
+            lmat = lmat/cnt
         else:                       
             lmat = lossfun[k](label,pred)
         return lmat
