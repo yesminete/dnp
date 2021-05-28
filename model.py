@@ -1241,10 +1241,14 @@ class PatchWorkModel(Model):
         ranking = tf.gather(y_true,idx)
         
         TP = tf.cumsum(ranking)
-        precision = TP / (kb.epsilon()+tf.range(1,(ranking.shape[0])+1,dtype=self.dtype))
-        recall = TP / (kb.epsilon()+tf.reduce_sum(ranking))
+        predicted_positives = tf.range(1,(ranking.shape[0])+1,dtype=self.dtype)
+        possible_positives = tf.reduce_sum(ranking)
+        f1_val = 2*(TP+1)/(possible_positives+predicted_positives+2)
+       #  precision = TP / (kb.epsilon()+tf.range(1,(ranking.shape[0])+1,dtype=self.dtype))
+       #  recall = TP / (kb.epsilon()+tf.reduce_sum(ranking))
+       #  f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
+
             
-        f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
                 
         best_idx = tf.argmax(f1_val)
         f1 = f1_val[best_idx]
@@ -1290,7 +1294,7 @@ class PatchWorkModel(Model):
                 cnt=cnt+1
             lmat = lmat/cnt
         else:                       
-            lmat = lossfun[k](label,pred)
+            lmat = fun(label,pred)
         return lmat
 
     def computeF1perf(label,pred,valid=False):
@@ -1306,7 +1310,7 @@ class PatchWorkModel(Model):
             f1 /= cnt
             th /= cnt
         else:                       
-            f1,th = f1_metric_best(masked_label,masked_pred)
+            f1,th = f1_metric_best(label,pred)
 
         return f1,th
     
