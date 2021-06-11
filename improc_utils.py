@@ -915,6 +915,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         if reslice_labels:
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
                                 if len(img.shape) == 3:
+                                    print("reslicing label")
                                     img= resample_from_to(img, (template_shape ,template_affine),order=3,cval=label_cval)                                    
                                 else:
                                     img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3,cval=label_cval)
@@ -1160,26 +1161,34 @@ def loadAnnotation(annos,asdict=True):
                 
             
         
-def getLocalMaximas(res,affine,threshold):
+def getLocalMaximas(res,affine,threshold,namemap=None,maxpoints=50):
 
     x = tf.expand_dims(res,0)
-    a = x==tf.nn.max_pool3d(x,3,1,'SAME')
-    a = tf.math.logical_and(a,x>threshold)
-    idx = tf.where(a)
-    maxis = tf.gather_nd(x,idx)
 
-    maxpoints = 50
     points = []
-    sorted_ = tf.argsort(maxis,-1,'DESCENDING')
-    for j in range(min(maxis.shape[0],maxpoints)):
-        k = sorted_[j]
-        p = tf.concat([idx[k,1:4],[1]],0).numpy()
-        p = np.matmul(affine,p)
-        #p = idx[k,1:4].numpy()
-        points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
-                        'name': 'score:'+str(maxis[k].numpy()),
-                        'size': 2                                
-            })
+    for s in range(0,x.shape[4]):
+        a = x==tf.nn.max_pool3d(x[...,s:s+1],3,1,'SAME')
+        a = tf.math.logical_and(a,x>threshold)
+        idx = tf.where(a)
+        maxis = tf.gather_nd(x,idx)
+    
+        sorted_ = tf.argsort(maxis,-1,'DESCENDING')
+        for j in range(min(maxis.shape[0],maxpoints)):
+            k = sorted_[j]
+            p = tf.concat([idx[k,1:4],[1]],0).numpy()
+            p = np.matmul(affine,p)
+            #p = idx[k,1:4].numpy()
+            
+            score = maxis[k].numpy()
+            
+            name = 'L'+str(s)+' score:'+str(score)
+            if namemap is not None:
+                name = namemap(s,score)
+            
+            points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
+                            'name': name,
+                            'size': 2                                
+                })
         
     annotation = { "type":"pointset",
                    "state":{},

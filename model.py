@@ -746,21 +746,25 @@ class PatchWorkModel(Model):
                      
             if not stitch_immediate>1:
                 print(">>> stitching result")
-                start = timer()
-                r = r[0:self.cropper.depth]
-                if (self.spatial_train or max_patching) and not self.spatial_max_train:
-                    if level[0] == 'mix':
-                        level = list(range(0,self.cropper.depth))
-                        mix_levels = True
-                        for k in level:            
-                          if k < self.cropper.depth-1 or self.finalizeOnApply:
-                              r[k] = tf.nn.sigmoid(r[k])                        
-                    for k in level:            
-                      a,b = x.stitchResult(r,k)
-                      pred[k] += a
-                      sumpred[k] += b                
-                print(">>> time elapsed, stitching: " + str(timer() - start) )
-                  
+                with tf.device("/cpu:0"):                
+                    
+                    start = timer()
+                    r = r[0:self.cropper.depth]
+                    if (self.spatial_train or max_patching) and not self.spatial_max_train:
+                        if level[0] == 'mix':
+                            level_to_stitch = list(range(0,self.cropper.depth))
+                            mix_levels = True
+                            for k in level_to_stitch:            
+                              if k < self.cropper.depth-1 or self.finalizeOnApply:
+                                  r[k] = tf.nn.sigmoid(r[k])        
+                        else:
+                            level_to_stitch = level
+                        for k in level_to_stitch:            
+                          a,b = x.stitchResult(r,k)
+                          pred[k] += a
+                          sumpred[k] += b                
+                    print(">>> time elapsed, stitching: " + str(timer() - start) )
+                      
          if (np.amin(sumpred[-1])) > 0:
              break
 
