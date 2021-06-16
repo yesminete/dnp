@@ -574,9 +574,9 @@ class CropGenerator():
           else:
               class_labels_ = labelset[j]
 
-          if self.categorial_label is not None:
-              if labels_.dtype != 'float32':
-                 labels_ = tf.cast(labels_,tf.float32)
+     #     if self.categorial_label is not None:
+     #         if labels_.dtype != 'float32':
+     #            labels_ = tf.cast(labels_,tf.float32)
 
       # get the data 
       trainset_ = trainset[j]
@@ -862,13 +862,20 @@ class CropGenerator():
           if scales[k]['labels_cropped'] is not None:
               labs = scales[k]['labels_cropped']
               label_range = None
-              if balance is not None and 'label_range' in balance:
-                    label_range = tf.cast(balance['label_range'],dtype=tf.int32)
-                    labs = tf.gather(labs,label_range,axis=self.ndim+1)           
-              if balance is not None and 'label_reduce' in balance:
-                  labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
+                           
+              if self.categorial_label is None:
+                  if balance is not None and 'label_range' in balance:
+                        label_range = tf.cast(balance['label_range'],dtype=tf.int32)
+                        labs = tf.gather(labs,label_range,axis=self.ndim+1)           
+                  #if balance is not None and 'label_reduce' in balance:
+                  #    labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
+                  indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
+              else:
+                  tmp = []
+                  for j in self.categorial_label:
+                      tmp.append(tf.reduce_max(tf.cast(labs==j,dtype=tf.float32),list(range(1,self.ndim+1))))
+                  indicator = tf.concat(tmp,1)
                     
-              indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
               balances[k].append(cur_ratio)
@@ -1234,7 +1241,10 @@ class CropGenerator():
                       if label_weight is not None:
                           L = L*label_weight
                   else:
-                      L = tf.where(L>0,tf.cast(1.0,dtype=tf.float32),tf.cast(0,dtype=tf.float32))
+                      tmp = 0;
+                      for j in self.categorial_label:
+                            tmp = tmp + tf.cast(L==j,dtype=tf.float32)
+                      L = tmp
                   if label_reduce is not None:
                       L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)

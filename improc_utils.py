@@ -596,7 +596,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_only_nonzero=False,
                            reslice_labels=True,
                            label_transform=None,
-                           binary_labels=False,
+                           integer_labels=False,
                            verbose=False,
                            threshold=0.5,
                            label_cval=np.nan,
@@ -907,18 +907,22 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     
                     else:
                         img = load_nifti(fname)   
-                        if verbose:
+                        if verbose: 
                             print("   loading file:" + fname)
                         #if nD == 3:
                         sz1 = img.header.get_data_shape()
                         sz2 = template_nii.header.get_data_shape()
                         if reslice_labels:
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
-                                if len(img.shape) == 3:
-                                    print("reslicing label")
-                                    img= resample_from_to(img, (template_shape ,template_affine),order=3,cval=label_cval)                                    
+                                print("reslicing label")
+                                if integer_labels:
+                                    order = 0
                                 else:
-                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=3,cval=label_cval)
+                                    order = 1
+                                if len(img.shape) == 3:
+                                    img= resample_from_to(img, (template_shape ,template_affine),order=order,cval=label_cval)                                    
+                                else:
+                                    img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=order,cval=label_cval)
                         else:
                             resolution['output_edges'] = img.affine
                             
@@ -1052,7 +1056,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             except Exception as e:
                     print('label matrix inconsistent: ' + fname)
 
-            if binary_labels:
+            if integer_labels:
                 labs = tf.cast(labs,dtype=tf.uint8)
                 
                 

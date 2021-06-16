@@ -1302,19 +1302,25 @@ class PatchWorkModel(Model):
         return lmat
 
     def computeF1perf(label,pred,valid=False):
+        f1=0
+        th=0
+        cnt = 0
         if self.cropper.categorial_label is not None:
-            f1=0
-            th=0
-            cnt = 0
             for j in self.cropper.categorial_label:
                 f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
                 f1+=f1_
                 th+=th_                
                 cnt=cnt+1
-            f1 /= cnt
-            th /= cnt
         else:                       
-            f1,th = f1_metric_best(label,pred)
+            for j in range(0,self.num_labels):
+                f1_,th_ = f1_metric_best(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid)
+                f1+=f1_
+                th+=th_                
+                cnt=cnt+1
+
+        f1 /= cnt
+        th /= cnt
+
 
         return f1,th
     
