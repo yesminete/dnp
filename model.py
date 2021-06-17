@@ -1549,12 +1549,17 @@ class PatchWorkModel(Model):
         ### sampling
         print("sampling patches for training")
         start = timer()
-        c_data = getSample(trainidx,num_patches)      
+        c_data = getSample(trainidx,num_patches)    
+        print("balances")
+        self.cropper.computeBalances(c_data.scales,True)
+
         end = timer()
         print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
         
         if hard_data is not None:
-           with tf.device(DEVCPU):                
+           with tf.device(DEVCPU):              
+               print("balance hard data")
+               self.cropper.computeBalances(hard_data.scales,True)               
                c_data.merge(hard_data)
         
         total_numpatches = c_data.num_patches()
