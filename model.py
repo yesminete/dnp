@@ -1193,6 +1193,7 @@ class PatchWorkModel(Model):
             valid_num_patches=None,
             hard_mining = 0,
             hard_mining_maxage=50,
+            hard_mining_order='loss',
             shuffle_buffer_size=1000,
             self_validation=False,
             batch_size=32,
@@ -1221,11 +1222,16 @@ class PatchWorkModel(Model):
             ):
       
     def f1_metric(y_true, y_pred,valid=False):
+        
+        sz = y_true.shape
+        def sumy(x):
+            return tf.reduce_sum(x,axis=list(range(1,self.cropper.ndim+1)))
+        
         if self.finalizeOnApply and not valid:
             y_pred = tf.nn.sigmoid(y_pred)
-        true_positives = kb.sum(kb.round(kb.clip(y_true * y_pred, 0, 1)))
-        possible_positives = kb.sum(kb.round(kb.clip(y_true, 0, 1)))
-        predicted_positives = kb.sum(kb.round(kb.clip(y_pred, 0, 1)))
+        true_positives = sumy(kb.round(kb.clip(y_true * y_pred, 0, 1)))
+        possible_positives = sumy(kb.round(kb.clip(y_true, 0, 1)))
+        predicted_positives = sumy(kb.round(kb.clip(y_pred, 0, 1)))
         #precision = true_positives / (predicted_positives + kb.epsilon())
         #recall = true_positives / (possible_positives + kb.epsilon())
         #f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
@@ -1317,12 +1323,26 @@ class PatchWorkModel(Model):
                 f1+=f1_
                 th+=th_                
                 cnt=cnt+1
-
         f1 /= cnt
         th /= cnt
-
-
         return f1,th
+
+    def computeF1perf_center(label,pred,valid=False):
+        f1=0
+        th=0
+        cnt = 0
+        if self.cropper.categorial_label is not None:
+            for j in self.cropper.categorial_label:
+                f1_ = f1_metric(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
+                f1+=f1_
+                cnt=cnt+1
+        else:                       
+            for j in range(0,self.num_labels):
+                f1_ = f1_metric(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid)
+                f1+=f1_
+                cnt=cnt+1
+        f1 /= cnt
+        return f1
     
     def valid_step_supervised(images,lossfun,prefix):
             
@@ -1388,12 +1408,16 @@ class PatchWorkModel(Model):
                                         
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
                     hist['output_' + str(k+1) + '_threshold'] = 10**th
-                                                                                       
+                                                                                   
                     if hard_mining > 0:
-                        if len(lmat.shape) < self.cropper.ndim+1:
-                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=1)
+                        order = lmat
+                        if hard_mining_order=='f1':
+                            order = computeF1perf_center(masked_label,masked_pred)
+                            
+                        if len(order.shape) < self.cropper.ndim+1:
+                            hist['loss_per_patch'] = tf.reduce_mean(order,axis=1)
                         else:
-                            hist['loss_per_patch'] = tf.reduce_mean(lmat,axis=list(range(1,self.cropper.ndim+1)))
+                            hist['loss_per_patch'] = tf.reduce_mean(order,axis=list(range(1,self.cropper.ndim+1)))
                     
                 loss += l
             
