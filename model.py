@@ -609,7 +609,7 @@ class PatchWorkModel(Model):
                  repetitions=1,           
                  dphi=0,
                  augment=None,
-                 branch_factor=1,
+                 branch_factor=None,
                  scale_to_original=True,
                  verbose=False,
                  init=False,
@@ -656,10 +656,14 @@ class PatchWorkModel(Model):
          if 'attentionFun' not in lazyEval:
              lazyEval['attentionFun'] = tf.math.sigmoid
          if 'fraction' not in lazyEval:
-             lazyEval['fraction'] = 0.2
+             lazyEval['fraction'] = 0.5
+         if branch_factor is None:
+             branch_factor = round(1/lazyEval['fraction']             
          if 'label' not in lazyEval:
              lazyEval['label'] = None
 
+     if branch_factor is None:
+         branch_factor = 1
 
      if augment is None:
           augment = self.augment
@@ -1589,7 +1593,7 @@ class PatchWorkModel(Model):
         start = timer()
         c_data = getSample(trainidx,num_patches)    
         print("balances")
-        self.cropper.computeBalances(c_data.scales,True)
+        self.cropper.computeBalances(c_data.scales,True,balance)
 
         end = timer()
         print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
@@ -1597,7 +1601,7 @@ class PatchWorkModel(Model):
         if hard_data is not None:
            with tf.device(DEVCPU):              
                print("balance hard data")
-               self.cropper.computeBalances(hard_data.scales,True)               
+               self.cropper.computeBalances(hard_data.scales,True,balance)               
                c_data.merge(hard_data)
         
         total_numpatches = c_data.num_patches()

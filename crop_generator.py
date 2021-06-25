@@ -469,7 +469,7 @@ class CropGenerator():
                'ndim':self.ndim
             }
 
-  def computeBalances(self,scales,verbose):
+  def computeBalances(self,scales,verbose,balance):
       # print balance info
       balances = [None]*self.depth
 
