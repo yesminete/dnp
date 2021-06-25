@@ -876,9 +876,21 @@ class PatchWorkModel(Model):
       if not isinstance(fname,list):
           fname = [fname]
       ims = []
-      
+
+
+      template_nii = None      
       for f in fname:          
           img1 = nib.load(f)        
+        
+          if template_nii is not None:
+              sz1 = img1.header.get_data_shape()
+              sz2 = template_nii.header.get_data_shape()
+              if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img1.affine)) > 0.01:                           
+                  img1 = resample_from_to(img1, template_nii,order=3)
+
+          
+          if template_nii is None:
+              template_nii = img1
           
           if img1.shape[2] == 1:
               resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
@@ -888,6 +900,8 @@ class PatchWorkModel(Model):
                   resolution = img1.header['pixdim'][1:4]
               else:
                   resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
+
+
 
 
           a = img1.get_fdata()

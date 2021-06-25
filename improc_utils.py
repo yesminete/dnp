@@ -1168,6 +1168,9 @@ def loadAnnotation(annos,asdict=True):
 def getLocalMaximas(res,affine,threshold,namemap=None,maxpoints=50):
 
     x = tf.expand_dims(res,0)
+    if len(x.shape) < 5:
+        x = tf.expand_dims(x,4)
+        
 
     points = []
     for s in range(0,x.shape[4]):
