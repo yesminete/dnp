@@ -659,7 +659,7 @@ class PatchWorkModel(Model):
              lazyEval['fraction'] = 0.5
          if branch_factor is None:
              branch_factor = round(1/lazyEval['fraction']             
-         if 'label' not in lazyEval:
+         if 'label' is not in lazyEval:
              lazyEval['label'] = None
 
      if branch_factor is None:
