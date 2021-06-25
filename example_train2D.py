@@ -139,7 +139,7 @@ loading = {
     "threshold":0.5,
     "add_inverted_label":False,
     "one_hot_index_list":None,
-    "binary_labels":True
+    "integer_labels":True
     }
 
 
@@ -298,7 +298,7 @@ themodel.train_cycle += 1
 if "align_physical" in loading:
     themodel.align_physical = loading["align_physical"]
 
-#%%
+
     
 #%% start training    
 
@@ -326,6 +326,8 @@ for i in range(0,outer_num_its):
         
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=True,
+                   hard_mining=0.2,
+                   hard_mining_order='f1',
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     

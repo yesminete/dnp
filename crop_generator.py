@@ -469,6 +469,34 @@ class CropGenerator():
                'ndim':self.ndim
             }
 
+  def computeBalances(self,scales,verbose):
+      # print balance info
+      balances = [None]*self.depth
+
+      for k in range(self.depth):
+          if scales[k]['labels_cropped'] is not None:
+              labs = scales[k]['labels_cropped']
+              label_range = None
+                           
+              if self.categorial_label is None:
+                  if balance is not None and 'label_range' in balance:
+                        label_range = tf.cast(balance['label_range'],dtype=tf.int32)
+                        labs = tf.gather(labs,label_range,axis=self.ndim+1)           
+                  #if balance is not None and 'label_reduce' in balance:
+                  #    labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
+                  indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
+              else:
+                  tmp = []
+                  for j in self.categorial_label:
+                      tmp.append(tf.reduce_max(tf.cast(labs==j,dtype=tf.float32),list(range(1,self.ndim+1))))
+                  indicator = tf.concat(tmp,1)
+                    
+              indicator = tf.cast(indicator>0,dtype=tf.float32)                                
+              cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
+              balances[k]= cur_ratio
+              if verbose:
+                  print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
+      return balances
 
   # generates cropped data structure
   # input:
@@ -542,9 +570,9 @@ class CropGenerator():
 
     pool = []
     
-    balances = [None]*self.depth
-    for k in range(self.depth):
-        balances[k] = []
+#    balances = [[]]*self.depth
+#    for k in range(self.depth):
+#        balances[k] = []
 
     if snapper is None:
         if self.snapper is None:
@@ -857,30 +885,12 @@ class CropGenerator():
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
 
-      # print balance info
-      for k in range(self.depth):
-          if scales[k]['labels_cropped'] is not None:
-              labs = scales[k]['labels_cropped']
-              label_range = None
-                           
-              if self.categorial_label is None:
-                  if balance is not None and 'label_range' in balance:
-                        label_range = tf.cast(balance['label_range'],dtype=tf.int32)
-                        labs = tf.gather(labs,label_range,axis=self.ndim+1)           
-                  #if balance is not None and 'label_reduce' in balance:
-                  #    labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
-                  indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
-              else:
-                  tmp = []
-                  for j in self.categorial_label:
-                      tmp.append(tf.reduce_max(tf.cast(labs==j,dtype=tf.float32),list(range(1,self.ndim+1))))
-                  indicator = tf.concat(tmp,1)
-                    
-              indicator = tf.cast(indicator>0,dtype=tf.float32)                                
-              cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
-              balances[k].append(cur_ratio)
-              if verbose:
-                  print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
+      # cmp balances
+      # if labels_ is not None:
+      #     b = self.computeBalances(scales,verbose)
+      #     for k in range(self.depth):
+      #         balances[k].append(b[k])
+
 
         
       # if we want to train in tree mode we have to complete the tree
@@ -920,10 +930,10 @@ class CropGenerator():
     print("")
 
       
-    if len(balances[0]) > 0:
-        for k in range(self.depth):
-            cur_ratio = tf.reduce_mean(tf.concat(balances[k],1),1)
-            print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
+    # if len(balances[0]) > 0:
+    #     for k in range(self.depth):
+    #         cur_ratio = tf.reduce_mean(tf.concat(balances[k],1),1)
+    #         print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
         
 
     return CropInstance(pool,self,intermediate_loss)
