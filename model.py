@@ -659,6 +659,7 @@ class PatchWorkModel(Model):
              lazyEval['fraction'] = 0.5
          if branch_factor is None:
              branch_factor = round(1/lazyEval['fraction'])
+             print("branch factor is " + str(branch_factor))
          if 'label' not in lazyEval:
              lazyEval['label'] = None
 
@@ -782,14 +783,25 @@ class PatchWorkModel(Model):
                 res = zipper(pred,sumpred,lambda a,b : (b+0.00001) )     
             else:
                 if mix_levels:
-                    pred_aggr = 0
                     pred_votes = 0
+                    pred_on = 0
                     dest_shape = pred[-1].shape
                     for k in range(len(pred)):
                         fac = np.math.pow(0.2,len(pred)-1-k)
-                        pred_aggr = pred_aggr + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
-                        pred_votes = pred_votes + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k],0),dest_shape,True,nD,edge_center=False))
-                    res = [pred_aggr/(pred_votes+0.0001)]
+                        pr = tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
+                        vr = tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k],0),dest_shape,True,nD,edge_center=False))
+                        pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
+                        pred_votes = pred_votes + fac*tf.squeeze(pr/(vr+0.00001))
+                    res = [pred_votes / (pred_on+0.00001)]
+                    # pred_aggr = 0
+                    # pred_votes = 0
+                    # dest_shape = pred[-1].shape
+                    # for k in range(len(pred)):
+                    #     fac = np.math.pow(0.2,len(pred)-1-k)
+                    #     pred_aggr = pred_aggr + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
+                    #     pred_votes = pred_votes + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k],0),dest_shape,True,nD,edge_center=False))
+                    # res = [pred_aggr/(pred_votes+0.0001)]
+
                     level = [0]                    
                 else:
                     res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
@@ -823,7 +835,7 @@ class PatchWorkModel(Model):
                  jitter=0.05,
                  jitter_border_fix=False,
                  repetitions=5,
-                 branch_factor=1,
+                 branch_factor=None,
                  num_chunks=1,
                  scale_to_original=True,
                  scalevalue=None,
@@ -896,14 +908,14 @@ class PatchWorkModel(Model):
           if template_nii is None:
               template_nii = img1
           
-          if img1.shape[2] == 1:
-              resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
-          else:
-              if align_physical:
-                  img1 = align_to_physical_coords(img1)
-                  resolution = img1.header['pixdim'][1:4]
+              if img1.shape[2] == 1:
+                  resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
               else:
-                  resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
+                  if align_physical:
+                      img1 = align_to_physical_coords(img1)
+                      resolution = img1.header['pixdim'][1:4]
+                  else:
+                      resolution = {"voxsize":img1.header['pixdim'][1:4],"input_edges":img1.affine}
 
 
 
@@ -993,23 +1005,39 @@ class PatchWorkModel(Model):
                                                       [0,0,0,1]]))
       pred_nii = None
       if ofname is not None:
-          def savenii(name,res_):                
+          def savenii(name,res_,out_typ):                
+             threshold = None
              if out_typ == 'int16':
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
              elif out_typ == 'float32':
-                 fac = 1                   
+                 fac = 1        
+             elif out_typ.find('mask') != -1:
+                 fac = 1
+                 if len(out_typ) > 4:
+                     threshold = float(out_typ[5:])
+                 else:
+                     threshold = 0.5
+                 out_typ = 'uint8';
+                 
              else:
                  assert(False,"out_typ not implemented")
-             pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
+                 
+             if threshold is not None:
+                 pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
+                 pred_nii.header.set_slope_inter(1,0)
+             else:    
+                 pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
+                 pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
+
              pred_nii.header.set_data_dtype(out_typ)                     
-             pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
                  
              pred_nii.header['cal_max'] = 1
              pred_nii.header['cal_min'] = 0
              pred_nii.header['glmax'] = 1
              pred_nii.header['glmin'] = 0
+             pred_nii.header['descrip'] = 'hlim:[0,1]'
 
              if name is not None:
                  nib.save(pred_nii,name)
@@ -1017,9 +1045,9 @@ class PatchWorkModel(Model):
                         
           if isinstance(ofname,list):
              for s in range(len(ofname)):                    
-                 pred_nii = savenii(ofname[s],res[...,s])
+                 pred_nii = savenii(ofname[s],res[...,s],out_typ)
           else:
-             pred_nii = savenii(ofname,res)
+             pred_nii = savenii(ofname,res,out_typ)
               
             
       if pred_nii is not None:        
@@ -1138,7 +1166,8 @@ class PatchWorkModel(Model):
             else:
                 initdat = dummyData
             print("----------------- load/init network by minimal application")
-            dummy = model.apply_full(initdat,resolution=[1,1,1],verbose=True,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
+            dummy = model.apply_full(initdat,resolution={"input_edges":np.eye(4),"voxsize":[1,1,1]},
+                                     verbose=True,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
             print("----------------- model and weights loaded")
         except:
             if not notmpfile:

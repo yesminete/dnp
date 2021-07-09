@@ -277,6 +277,7 @@ class CropGenerator():
                     keepAspect = True,     # (deprecated)  in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     
                     transforms = None,
+                    system = 'matrix',
                     snapper = None,
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
@@ -293,6 +294,7 @@ class CropGenerator():
     self.scheme = scheme
     self.transforms = transforms
     self.patch_size = patch_size
+    self.system = system
     self.scale_fac = scale_fac
     self.scale_fac_ref = scale_fac_ref
     self.smoothfac_data = smoothfac_data
@@ -465,6 +467,7 @@ class CropGenerator():
                'create_indicator_classlabels':self.create_indicator_classlabels,
                'keepAspect':self.keepAspect,
                'transforms':self.transforms,
+               'system':self.system,
                'depth':self.depth,
                'ndim':self.ndim
             }
@@ -629,9 +632,7 @@ class CropGenerator():
               resolution_ = resolutions[j]
               if 'bval' in resolutions[j]:
                   qdir = tf.math.sqrt(tensor(resolutions[j]['bval'])/1000)*tensor(resolutions[j]['bvec'])              
-                  
-                  
-                  
+                                   
           else:
               resolution_ = resolutions[j]
               resolution_ = resolution_[0:self.ndim]
@@ -836,12 +837,14 @@ class CropGenerator():
       
         
       aug_fac = lambda level: 1.0
+      vscale = 0
       if augment is not None:                  
           if isinstance(augment,dict):
+              if 'vscale' in augment:
+                  vscale = augment['vscale']
               if 'gamma' in augment:
                   aug_fac = lambda level: ((level+1)/self.depth)**augment['gamma']
 
-     
     
       localCrop = lambda x,level : self.createCropsLocal(trainset_,
                          src_boxes,
@@ -859,6 +862,7 @@ class CropGenerator():
                          dphi2=dphi2*aug_fac(level),
                          flip=flip,
                          dscale = dscale*aug_fac(level),
+                         vscale = vscale,
                          independent_augmentation=independent_augmentation,
                          pixel_noise = pixel_noise,
                          input_transform_behaviour = input_transform_behaviour,
@@ -1089,6 +1093,7 @@ class CropGenerator():
                          dphi2=0,
                          flip=None,                         
                          dscale = 0,
+                         vscale = 0,
                          independent_augmentation = False,
                          pixel_noise = 0,
                          input_transform_behaviour = None,
@@ -1375,7 +1380,14 @@ class CropGenerator():
             ##bug
             src_vxsz = tf.concat([tf.math.sqrt(tf.reduce_sum(src_boxes[0,:,0:nD]**2,0)),[1]],0)            
             src_vxsz = tf.expand_dims(tf.expand_dims(src_vxsz,0),0)
-            U = tf.matmul(A,src_boxes/src_vxsz*vxsz)
+            
+            if self.system == 'matrix':
+                Def = src_boxes/src_vxsz
+            else:                
+                tmp = tf.concat([tf.linalg.diag(tf.ones([src_boxes.shape[0],nD])),tf.zeros([src_boxes.shape[0],1,nD])],1)
+                Def = tf.concat([ tmp,  src_boxes[:,:,nD:nD+1] ],2)
+
+            U = tf.matmul(A,Def*vxsz)
             
             
             # assemble homogenous coords
@@ -1420,7 +1432,7 @@ class CropGenerator():
     
         # the index which crops the subpatch out of the last patch
         local_box_index = compindex(last_boxes,local_boxes,last_shape,patch_shapes[level],0,self.interp_type,0)
-    
+
 
         local_boxes = tf.reshape(local_boxes,[
                         tf.reduce_prod(local_boxes.shape[0:2])/src_bdim, src_bdim ,
@@ -1474,7 +1486,11 @@ class CropGenerator():
         else:
             res_labels = None
 
-            
+        if vscale > 0:
+            afac = 2**(tf.random.uniform([res_data.shape[0]] + [1]*nD + [res_data.shape[-1]],minval=-1,maxval=1)*vscale)
+            res_data = afac*res_data
+
+
         if verbose:
            end = timer()
            print(" #patches:" + str(res_data.shape[0]) + " time/patch:" + ("{:.3f}ms").format(1000*((end - start)/(res_data.shape[0]))) )
