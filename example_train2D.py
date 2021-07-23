@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 
 
 sys.path.append("/home/reisertm")
+sys.path.append("/software")
 import patchwork2 as patchwork
 
 
@@ -93,7 +94,7 @@ patching = {
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 'globalmax', 
-    "categorial_label" : list(range(1,4)),
+    "categorial_label" :None,
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -139,7 +140,7 @@ loading = {
     "threshold":0.5,
     "add_inverted_label":False,
     "one_hot_index_list":None,
-    "integer_labels":True
+   # "integer_labels":True
     }
 
 
@@ -159,8 +160,8 @@ training = {
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
    "epochs":5,
    "num_its":100,                
-   "balance":{"ratio":0.5,"label_range":[0],"label_weight":1},
-   "loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
+   #"balance":{"ratio":0.5},
+   #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
    "reload_after_it":5,
@@ -320,15 +321,14 @@ for i in range(0,outer_num_its):
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
         
-    lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
-    lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
+    #lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
+    #lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
-                   debug=True,
-                   augment= {'grayscale':0.2},
-                   hard_mining=0.2,
-                   hard_mining_order='f1',
+                   debug=True,                 
+                   #hard_mining=0.2,
+                   #hard_mining_order='f1',
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     
@@ -343,7 +343,8 @@ for i in range(0,outer_num_its):
 
 
 
-
+#%%
+    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='atls',repetitions=100,generate_type='random')
 
 
 

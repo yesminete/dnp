@@ -168,6 +168,8 @@ class myHistory :
                 cols = 'rbmckrbmck'   
                 cnt = 0
                 for k in sorted(loss_hist):
+                    if k.find('nodisplay') > -1:
+                        continue
                     x = [ i/1000 for i, j in loss_hist[k] ]
                     y = [ j for i, j in loss_hist[k] ]
                     n = int(np.ceil(len(y)/20.0))
@@ -675,7 +677,7 @@ class PatchWorkModel(Model):
 
      for w in range(num_chunks):
          if w > 0:
-             print('gathering more to get full coverage: ' + str(w) + "/" +  str(num_chunks))
+             print('chunks: ' + str(w) + "/" +  str(num_chunks))
          for i in range(repetitions):
              
             if lazyEval is None:             
@@ -848,6 +850,7 @@ class PatchWorkModel(Model):
                  crop_fdim=None,
                  crop_sdim=None,
                  out_typ='int16',
+                 label_names=None,
                  testIT=False,
                  return_nibabel=True,
                  lazyEval = None):
@@ -997,7 +1000,10 @@ class PatchWorkModel(Model):
           offs = [0]*nD
           for k in range(nD):
               facs[k] = (res.shape[k]-1)/(sz[k]-1)
-              offs[k] = vsz[k]*(1-facs[k])
+              offs[k] = vsz[k]*(1-facs[k])*0
+          if nD ==2:
+             facs.append(1)              
+             offs.append(0)
           img1.header.set_data_shape(res.shape)
           newaffine = np.matmul(img1.affine,np.array([[1/facs[0],0,0,offs[0]],
                                                       [0,1/facs[1],0,offs[1]],
@@ -1005,7 +1011,7 @@ class PatchWorkModel(Model):
                                                       [0,0,0,1]]))
       pred_nii = None
       if ofname is not None:
-          def savenii(name,res_,out_typ):                
+          def savenii(name,res_,out_typ):       
              threshold = None
              if out_typ == 'int16':
                  fac = 32000/maxi                    
@@ -1013,26 +1019,59 @@ class PatchWorkModel(Model):
                  fac = 255/maxi                    
              elif out_typ == 'float32':
                  fac = 1        
-             elif out_typ.find('mask') != -1:
+             elif (out_typ.find('mask') != -1) | (out_typ.find('atls') != -1):
+
                  fac = 1
                  if len(out_typ) > 4:
-                     threshold = float(out_typ[5:])
+                     ths = list(map(float,out_typ[5:].split(",")))
+                     if len(ths) == 1:
+                         threshold = ths[0]*np.ones([self.num_labels])
+                     else:
+                         threshold = np.array(ths)
                  else:
-                     threshold = 0.5
-                 out_typ = 'uint8';
+                     threshold = 0.5*np.ones([self.num_labels])
+                     if 'valid_nodisplay_class_threshold' in self.myhist.validloss_hist :
+                         th = self.myhist.validloss_hist['valid_nodisplay_class_threshold']
+                         threshold = th[-1][1]
+                 threshold = np.expand_dims(threshold,[0,1,2])
+
                  
              else:
                  assert(False,"out_typ not implemented")
                  
              if threshold is not None:
-                 pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
+                 if out_typ.find('mask') != -1:
+                     out_typ = 'uint8';                     
+                     pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
+                 if out_typ.find('atls') != -1:
+                     out_typ = 'uint16';                     
+                     tmp = res_>threshold
+                     tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
+                     pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
+                     
+                     
+                     colors = [[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255],[0,255,255],[255,128,0],[255,0,128],[128,255,128],[0,128,255],[128,128,128],[185,170,155]]
+                     xmlpre = '<?xml version="1.0" encoding="UTF-8"?> <CaretExtension>  <Date><![CDATA[2013-07-14T05:45:09]]></Date>   <VolumeInformation Index="0">   <LabelTable>'
+                     body = ''
+                     for k in range(0,self.num_labels):
+                        key = k+1
+                        if label_names is None:
+                            labelname = "label_" + str(k+1)
+                        else:
+                            labelname = label_names[k]
+                        rgb = colors[k%len(colors)]
+                        body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
+                     xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
+                     xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n"
+                     pred_nii.header.extensions.append(nib.nifti1.Nifti1Extension(0,bytes(xml,'utf-8')))
+
+                     
                  pred_nii.header.set_slope_inter(1,0)
              else:    
                  pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
                  pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
 
              pred_nii.header.set_data_dtype(out_typ)                     
-                 
              pred_nii.header['cal_max'] = 1
              pred_nii.header['cal_min'] = 0
              pred_nii.header['glmax'] = 1
@@ -1356,22 +1395,21 @@ class PatchWorkModel(Model):
 
     def computeF1perf(label,pred,valid=False):
         f1=0
-        th=0
+        th=[]
         cnt = 0
         if self.cropper.categorial_label is not None:
             for j in self.cropper.categorial_label:
                 f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
                 f1+=f1_
-                th+=th_                
+                th.append(th_)
                 cnt=cnt+1
         else:                       
             for j in range(0,self.num_labels):
                 f1_,th_ = f1_metric_best(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid)
                 f1+=f1_
-                th+=th_                
+                th.append(th_)
                 cnt=cnt+1
         f1 /= cnt
-        th /= cnt
         return f1,th
 
     def computeF1perf_center(label,pred,valid=False):
@@ -1418,7 +1456,9 @@ class PatchWorkModel(Model):
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
                 f1,th = computeF1perf(masked_label,masked_pred,valid=False)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
-                hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**th
+                hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**sum(th)/len(th)
+                hist[prefix+'_nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
+                
       return hist
     
     def train_step_supervised(images,lossfun):
@@ -1454,7 +1494,8 @@ class PatchWorkModel(Model):
                     f1,th = computeF1perf(masked_label,masked_pred)
                                         
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
-                    hist['output_' + str(k+1) + '_threshold'] = 10**th
+                    hist['output_' + str(k+1) + '_threshold'] = 10**sum(th)/len(th)
+                    hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                                                                                    
                     if hard_mining > 0:
                         order = lmat
