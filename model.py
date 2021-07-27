@@ -1047,6 +1047,12 @@ class PatchWorkModel(Model):
                      out_typ = 'uint16';                     
                      tmp = res_>threshold
                      tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
+                     
+                     if self.cropper.categorial_label is not None:
+                         idxmap = tf.cast([0] + self.cropper.categorial_label,dtype=tf.int32)
+                         tmp = tf.gather(idxmap,tmp)
+                     
+                     
                      pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
                      
                      
@@ -1055,10 +1061,17 @@ class PatchWorkModel(Model):
                      body = ''
                      for k in range(0,self.num_labels):
                         key = k+1
+                        if self.cropper.categorial_label is not None:
+                            key = self.cropper.categorial_label[k]
+                        
                         if label_names is None:
-                            labelname = "label_" + str(k+1)
+                            labelname = "L" + f"{(k+1):02d}"
+                            if self.cropper.categorial_label is not None:
+                                if k+1 != self.cropper.categorial_label[k]:
+                                    labelname = "L" + f"{(k+1):02d}" + f"({(self.cropper.categorial_label[k]):02d}),"
+                                    
                         else:
-                            labelname = label_names[k]
+                            labelname = label_names[k] + "-" + f"({(k+1):02d})"
                         rgb = colors[k%len(colors)]
                         body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
                      xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
@@ -1456,7 +1469,7 @@ class PatchWorkModel(Model):
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
                 f1,th = computeF1perf(masked_label,masked_pred,valid=False)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
-                hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**sum(th)/len(th)
+                hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**(sum(th)/len(th))
                 hist[prefix+'_nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                 
       return hist
@@ -1494,7 +1507,7 @@ class PatchWorkModel(Model):
                     f1,th = computeF1perf(masked_label,masked_pred)
                                         
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
-                    hist['output_' + str(k+1) + '_threshold'] = 10**sum(th)/len(th)
+                    hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
                     hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                                                                                    
                     if hard_mining > 0:
