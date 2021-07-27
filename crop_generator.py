@@ -288,6 +288,7 @@ class CropGenerator():
                     create_indicator_classlabels= False,
                     depth=3,               # depth of patchwork
                     ndim=2,
+                    num_labels=None,
                     ftype=tf.float32
                     ):
     self.model = None
@@ -310,6 +311,7 @@ class CropGenerator():
     self.ndim = ndim
     self.ftype=ftype
     self.snapper = snapper
+    self.num_labels = num_labels
     self.dest_full_size = [None]*depth
 
 
@@ -1105,15 +1107,22 @@ class CropGenerator():
                          verbose=False):
         
         if balance is not None:
+            
+            if self.model is not None:
+                num_labels = self.model.num_labels 
+            else:
+                num_labels = self.num_labels
+            
+            
             balance = balance.copy()
             if 'label_range' in balance and balance['label_range'] is not None:
                 balance['label_range'] = tf.cast(balance['label_range'],dtype=tf.int32)
             else:
-                balance['label_range'] = tf.cast(range(self.model.num_labels),dtype=tf.int32)
+                balance['label_range'] = tf.cast(range(num_labels),dtype=tf.int32)
             if 'label_weight' in balance  and balance['label_weight'] is not None:
                 balance['label_weight'] = tf.cast(balance['label_weight'],dtype=src_data.dtype)
             else:
-                balance['label_weight'] = tf.cast([1]*self.model.num_labels,dtype=src_data.dtype)
+                balance['label_weight'] = tf.cast([1]*num_labels,dtype=src_data.dtype)
     
         
     

@@ -1265,9 +1265,8 @@ class PatchWorkModel(Model):
   #   jitter,jitter_border_fix - if train_type=tree, the amount of randomness of
   #         tree branches (0<jitter<1). If jitter_border_fix=True, the border 
   #         patches are aligned with the border
-  #   balance -  a dict {'ratio':r,'N':N,'numrounds':nr} , where r gives desired balance between
-  #         positive and negative examples, N the number of tries per chunk and nr
-  #         the number of chunks
+  #   balance -  a dict {'ratio':r} , where r gives desired balance between
+  #         positive and negative examples
   #   valid_ids a list of indices in trainset, corresponding to vaidation examples
   #         not used for training
   #   showplot - show loss info during training
