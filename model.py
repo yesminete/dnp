@@ -659,7 +659,7 @@ class PatchWorkModel(Model):
              lazyEval['attentionFun'] = tf.math.sigmoid
          if 'fraction' not in lazyEval:
              lazyEval['fraction'] = 0.5
-         if branch_factor is None:
+         if branch_factor is None and generate_type != 'random':
              branch_factor = round(1/lazyEval['fraction'])
              print("branch factor is " + str(branch_factor))
          if 'label' not in lazyEval:
