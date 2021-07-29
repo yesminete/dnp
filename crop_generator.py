@@ -914,20 +914,32 @@ class CropGenerator():
       #         scales[k]['class_labels'] = tmp
 
         
-
-      if len(pool) == 0:
-        pool = scales
-      else:
-        for k in range(self.depth):
-            p = pool[k]
-            s = scales[k]
-            # only cat those which are necessary during training
-            p['data_cropped'] = tf.concat([p['data_cropped'],s['data_cropped']],0)
-            if p['labels_cropped'] is not None:
-              p['labels_cropped'] = tf.concat([p['labels_cropped'],s['labels_cropped']],0)            
-            p['local_box_index'] = tf.concat([p['local_box_index'],s['local_box_index']],0)
-            if p['class_labels'] is not None:
-              p['class_labels'] = tf.concat([p['class_labels'],s['class_labels']],0)            
+      pool.append(scales)
+    
+    
+    
+    if len(pool) == 1:  # typically in application, all dict entries are kept (for stitching)
+        result_data = pool[0]
+    else:            # only cat those which are necessary during training, and do it on GPU
+        with tf.device("/gpu:0"):      
+            result_data = []
+            for k in range(self.depth):
+                ths = {}
+                result_data.append(ths)
+                for field in ['data_cropped','labels_cropped','local_box_index','class_labels']:
+                    if pool[0][k][field] is not None:
+                        tocat = []
+                        for j in range(len(pool)):
+                            tocat.append(pool[j][k][field])
+                        ths[field] = tf.concat(tocat,0)
+                    
+                
+        # p['data_cropped'] = tf.concat([p['data_cropped'],s['data_cropped']],0)
+        # if p['labels_cropped'] is not None:
+        #   p['labels_cropped'] = tf.concat([p['labels_cropped'],s['labels_cropped']],0)            
+        # p['local_box_index'] = tf.concat([p['local_box_index'],s['local_box_index']],0)
+        # if p['class_labels'] is not None:
+        #   p['class_labels'] = tf.concat([p['class_labels'],s['class_labels']],0)            
 
     intermediate_loss = True     # whether we save output of intermediate layers
     if self.model is not None:
@@ -942,7 +954,7 @@ class CropGenerator():
     #         print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
         
 
-    return CropInstance(pool,self,intermediate_loss)
+    return CropInstance(result_data,self,intermediate_loss)
 
 
 
