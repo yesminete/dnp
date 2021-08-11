@@ -1299,6 +1299,7 @@ class PatchWorkModel(Model):
             debug=False,
             steps_per_epoch=None,
             inc_train_cycle=True,
+            cp_interval=-1,
             jitter=0,
             jitter_border_fix=False,
             balance=None,
@@ -1865,6 +1866,9 @@ class PatchWorkModel(Model):
         if callback is not None:
             callback(i)
 
+        if cp_interval != -1:
+            if (i+1)%cp_interval == 0:
+                self.train_cycle += 1
         
         if autosave:
            if self.modelname is None:

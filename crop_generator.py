@@ -1209,8 +1209,8 @@ class CropGenerator():
             if level == 0:
                 itype = tf.int64
             else:
-                #itype = tf.int64
-                itype = tf.int32 # int32 for mem. saving??
+                itype = tf.int64
+                #itype = tf.int32 # int32 for mem. saving??
             
             if interp_type == 'NN': # cast index to int
                 R = tf.dtypes.cast(tf.floor(R+0.5),dtype=itype)            
