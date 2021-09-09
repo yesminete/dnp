@@ -481,12 +481,8 @@ class CropGenerator():
       for k in range(self.depth):
           if scales[k]['labels_cropped'] is not None:
               labs = scales[k]['labels_cropped']
-              label_range = None
                            
               if self.categorial_label is None:
-                  if balance is not None and 'label_range' in balance:
-                        label_range = tf.cast(balance['label_range'],dtype=tf.int32)
-                        labs = tf.gather(labs,label_range,axis=self.ndim+1)           
                   #if balance is not None and 'label_reduce' in balance:
                   #    labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
                   indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
@@ -575,9 +571,6 @@ class CropGenerator():
 
     pool = []
     
-#    balances = [[]]*self.depth
-#    for k in range(self.depth):
-#        balances[k] = []
 
     if snapper is None:
         if self.snapper is None:
@@ -835,7 +828,23 @@ class CropGenerator():
       #     for k in range(len(destboxes)):
       #         destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
-        
+      if balance is not None and "autoweight" in balance and balance['autoweight'] == True:
+          balance = balance.copy()
+          if labels_ is not None:              
+              if self.categorial_label is not None:
+                 freqs = []
+                 for k in range(len(self.categorial_label)):
+                     freqs.append(tf.reduce_sum(tf.cast(labels_==self.categorial_label[k],dtype=tf.float32)))
+                 freqs = tf.cast(freqs,dtype=tf.float32)
+              else:
+                 freqs = tf.reduce_sum(labels_,axis=range(0,self.ndim+1))
+              numvx = np.prod(labels_.shape[0:-1])
+              weights = 1/len(freqs)/(1+freqs)*tf.reduce_sum(freqs)
+                 
+              balance['label_weight'] = weights
+                  
+                  
+          
       
         
       aug_fac = lambda level: 1.0
@@ -1127,10 +1136,6 @@ class CropGenerator():
             
             
             balance = balance.copy()
-            if 'label_range' in balance and balance['label_range'] is not None:
-                balance['label_range'] = tf.cast(balance['label_range'],dtype=tf.int32)
-            else:
-                balance['label_range'] = tf.cast(range(num_labels),dtype=tf.int32)
             if 'label_weight' in balance  and balance['label_weight'] is not None:
                 balance['label_weight'] = tf.cast(balance['label_weight'],dtype=src_data.dtype)
             else:
@@ -1206,11 +1211,11 @@ class CropGenerator():
         def clip(R,sz,interp_type):
             nD = len(sz)
             
-            if level == 0:
-                itype = tf.int64
+            if src_labels is not None:
+                itype = tf.int32 # int32 during training
             else:
-                itype = tf.int64
-                #itype = tf.int32 # int32 for mem. saving??
+                itype = tf.int64 # int64 during application
+                
             
             if interp_type == 'NN': # cast index to int
                 R = tf.dtypes.cast(tf.floor(R+0.5),dtype=itype)            
@@ -1260,7 +1265,6 @@ class CropGenerator():
                   label = tf.expand_dims(label,3)
             
               ratio = balance['ratio']
-              label_range = balance['label_range']
               label_weight = balance['label_weight']
               label_reduce = None
               if 'label_reduce' in balance:
@@ -1269,23 +1273,21 @@ class CropGenerator():
                   for k in range(nD):
                       label_weight = tf.expand_dims(label_weight,0)
                 
+                
               points_tot = []
               for k in range(label.shape[0]):
                   L = label[k,...]
                   if self.categorial_label is None:
-                      if label_range is not None:
-                          L = tf.gather(L,label_range,axis=nD)
                       if label_weight is not None:
                           L = L*label_weight
                   else:
                       tmp = 0;
-                      for j in self.categorial_label:
-                            tmp = tmp + tf.cast(L==j,dtype=tf.float32)
+                      for j in range(len(self.categorial_label)):
+                            tmp = tmp + tf.cast(L==self.categorial_label[j],dtype=tf.float32)*label_weight[...,j]
                       L = tmp
                   if label_reduce is not None:
                       L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)
-                  L = 1.0*(L>0)
                   sz = L.shape
                   cnt=0
             

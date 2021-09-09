@@ -26,7 +26,7 @@ sys.path.append("/software")
 import patchwork2 as patchwork
 
 
-#%%
+#%
 
 #% definition data sources
 
@@ -94,7 +94,8 @@ patching = {
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 'globalmax', 
-    "categorial_label" :None,
+    "categorial_label" :[1,2,8,12],
+#    "categorial_label" :None,
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -156,11 +157,11 @@ loading = {
 
 
 training = {
-   "num_patches":20,
+   "num_patches":200,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":5,
+   "epochs":1,
    "num_its":100,                
-   #"balance":{"ratio":0.5},
+   "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
@@ -275,7 +276,10 @@ else:
     if 'finalBlock' not in network:
         network['finalBlock']=layers.Activation('sigmoid')
     network['modelname'] = modelfi  
-    network['num_labels']= lset[0].shape[nD+1]
+    if patching['categorial_label'] is not None:
+        network['num_labels']= len(patching['categorial_label'])
+    else:
+        network['num_labels']= lset[0].shape[nD+1]
     print('numlabels:' + str(network['num_labels']))
 
     
@@ -320,9 +324,11 @@ for i in range(0,outer_num_its):
         else:
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
-        
-    #lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
-    #lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
+
+    # some cathegorals for testing        
+    if patching['categorial_label'] is not None:            
+        lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
+        lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
