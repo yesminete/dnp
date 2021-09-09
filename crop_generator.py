@@ -839,7 +839,9 @@ class CropGenerator():
               else:
                  freqs = tf.reduce_sum(labels_,axis=range(0,self.ndim+1))
               numvx = np.prod(labels_.shape[0:-1])
-              weights = 1/len(freqs)/(1+freqs)*tf.reduce_sum(freqs)
+#              weights = 1/len(freqs)/(1+freqs)*tf.reduce_sum(freqs)
+              pp = 1
+              weights = tf.reduce_sum(freqs)/tf.reduce_sum((freqs+1)**(1-pp)) / (freqs+1)**pp
                  
               balance['label_weight'] = weights
                   
