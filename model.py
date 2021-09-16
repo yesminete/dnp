@@ -1011,7 +1011,7 @@ class PatchWorkModel(Model):
                                                       [0,0,0,1]]))
       pred_nii = None
       if ofname is not None:
-          def savenii(name,res_,out_typ):       
+          def savenii(name,res_,out_typ,labelidx=None):       
              threshold = None
              if out_typ == 'int16':
                  fac = 32000/maxi                    
@@ -1041,8 +1041,11 @@ class PatchWorkModel(Model):
                  
              if threshold is not None:
                  if out_typ.find('mask') != -1:
-                     out_typ = 'uint8';                     
-                     pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
+                     out_typ = 'uint8';   
+                     if labelidx is not None:
+                         pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx], newaffine, img1.header)
+                     else:
+                         pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
                  if out_typ.find('atls') != -1:
                      out_typ = 'uint16';                     
                      tmp = res_>threshold
@@ -1097,7 +1100,7 @@ class PatchWorkModel(Model):
                         
           if isinstance(ofname,list):
              for s in range(len(ofname)):                    
-                 pred_nii = savenii(ofname[s],res[...,s],out_typ)
+                 pred_nii = savenii(ofname[s],res[...,s],out_typ,s)
           else:
              pred_nii = savenii(ofname,res,out_typ)
               
@@ -1212,13 +1215,13 @@ class PatchWorkModel(Model):
         try:
             if dummyData is None:
                 if model.cropper.ndim == 3:
-                    initdat = tf.ones([1,32,32,32, model.input_fdim])
+                    initdat = tf.ones([1,320,320,320, model.input_fdim])
                 else:
                     initdat = tf.ones([1,32,32, model.input_fdim])    
             else:
                 initdat = dummyData
             print("----------------- load/init network by minimal application")
-            dummy = model.apply_full(initdat,resolution={"input_edges":np.eye(4),"voxsize":[1,1,1]},
+            dummy = model.apply_full(initdat,resolution={"input_edges":np.eye(4),"voxsize":[0.01,0.01,0.01]},
                                      verbose=True,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
             print("----------------- model and weights loaded")
         except:
@@ -1816,8 +1819,21 @@ class PatchWorkModel(Model):
         
         if hard_mining is not None and hard_mining>0:
            with tf.device(DEVCPU):    
-              patchloss = tf.concat([patchloss,tf.expand_dims(c_data.getAge(),1)],1)
-              c_data.subset(patchloss,hard_mining,hard_mining_maxage)    
+              if hard_mining_order == 'balance':
+                  targetdata = c_data.getTargetData(sampletyp)
+                  patches = targetdata[-1]
+                  labelfreqs = []
+                  for k in range(self.num_labels):
+                        labelfreqs.append(tf.reduce_max(tf.cast(patches==self.cropper.categorial_label[k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                  labelfreqs = tf.concat(labelfreqs,1)
+                  labelfreqs = labelfreqs / tf.reduce_sum(labelfreqs,axis=0)
+                  probs = tf.reduce_mean(labelfreqs,axis=1,keepdims=True)
+                  probs = tf.concat([probs,tf.expand_dims(c_data.getAge(),1)],1)
+                  c_data.subsetProb(probs,hard_mining,hard_mining_maxage)    
+                  
+              else:
+                  patchloss = tf.concat([patchloss,tf.expand_dims(c_data.getAge(),1)],1)                                          
+                  c_data.subsetOrder(patchloss,hard_mining,hard_mining_maxage)    
               self.myhist.age = c_data.getAge()
               hard_data = c_data
               self.hard_data = hard_data
@@ -1898,6 +1914,8 @@ class patchworkModelEncoder(json.JSONEncoder):
            return {'keras_layer':obj.get_config(), 'name': obj.__class__.__name__ }
         if isinstance(obj,dict):
            return dict(obj)
+        if isinstance(obj,tf.TensorShape):
+           return list(obj)            
         if isinstance(obj,list):
            return list(obj)
         if hasattr(obj,'tolist'):

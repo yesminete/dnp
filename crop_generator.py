@@ -74,10 +74,23 @@ class CropInstance:
   def getAge(self):
       return self.scales[0]['age']
 
-  def subset(self,patchloss,fraction,maxage=1000):
+  def subsetOrder(self,patchloss,fraction,maxage=1000):
       patchloss = tf.where(patchloss[:,1:2]>maxage,0,patchloss[:,0:1])
       n = tf.cast(patchloss.shape[0]*fraction,dtype=tf.int32)
       idx = tf.argsort(patchloss,0,'DESCENDING')[0:n]
+      for i in range(len(self.scales)):
+          x = self.scales[i]
+          for k in self.attrs:
+              if k in x and x[k] is not None and k != 'dest_full_size':
+                 x[k] = tf.gather(x[k],idx[:,0]) 
+      
+  def subsetProb(self,probs,fraction,maxage=1000):
+      probs = tf.where(probs[:,1:2]>maxage,0,probs[:,0:1])
+      n = tf.cast(probs.shape[0]*fraction,dtype=tf.int32)
+      p = tf.cast(probs[:,0],dtype=tf.float64)
+      p = p / tf.reduce_sum(p)
+      idx = np.random.choice(probs.shape[0],[n,1],p=p,replace=True)
+
       for i in range(len(self.scales)):
           x = self.scales[i]
           for k in self.attrs:
@@ -495,6 +508,7 @@ class CropGenerator():
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
               balances[k]= cur_ratio
+              np.set_printoptions(precision=3,linewidth=1000)
               if verbose:
                   print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
       return balances
@@ -828,7 +842,7 @@ class CropGenerator():
       #     for k in range(len(destboxes)):
       #         destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
-      if balance is not None and "autoweight" in balance and balance['autoweight'] == True:
+      if balance is not None and "autoweight" in balance and balance['autoweight'] > 0:
           balance = balance.copy()
           if labels_ is not None:              
               if self.categorial_label is not None:
@@ -840,9 +854,8 @@ class CropGenerator():
                  freqs = tf.reduce_sum(labels_,axis=range(0,self.ndim+1))
               numvx = np.prod(labels_.shape[0:-1])
 #              weights = 1/len(freqs)/(1+freqs)*tf.reduce_sum(freqs)
-              pp = 1
+              pp = balance['autoweight']
               weights = tf.reduce_sum(freqs)/tf.reduce_sum((freqs+1)**(1-pp)) / (freqs+1)**pp
-                 
               balance['label_weight'] = weights
                   
                   
@@ -1072,9 +1085,9 @@ class CropGenerator():
       def frac(a):
           return a-tf.floor(a)
       if self.ndim == 3:
-          w = [frac(x[:,0:1,0:1,0:1, 0:1]),frac(x[:,0:1,0:1,0:1, 1:2]), frac(x[:,0:1,0:1,0:1, 2:3])]
+          w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]), frac(x[:,..., 2:3])]
       else:
-          w = [frac(x[:,0:1,0:1, 0:1]),frac(x[:,0:1,0:1, 1:2]) ]
+          w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]) ]
 
       def gather(d,idx,s):
           q = tf.convert_to_tensor(s)

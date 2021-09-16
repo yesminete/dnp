@@ -93,7 +93,7 @@ patching = {
         "fov_rel":[0.5,0.5],
      },
     "smoothfac_data" : 0,   
-    "smoothfac_label" : 'globalmax', 
+    "smoothfac_label" : 0, 
     "categorial_label" :[1,2,8,12],
 #    "categorial_label" :None,
     "interp_type" : "NN",    
@@ -332,9 +332,10 @@ for i in range(0,outer_num_its):
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
-                   debug=True,                 
-                   #hard_mining=0.2,
-                   #hard_mining_order='f1',
+                   debug=True,              
+                   patch_on_cpu=True,
+                   hard_mining=0.2,
+                   hard_mining_order='balance',
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     

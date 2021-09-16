@@ -724,6 +724,70 @@ custom_layers['sigmoid_window'] = sigmoid_window
 
 
 
+class warpLayer(layers.Layer):
+
+  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), nD=0,**kwargs):
+    super().__init__(**kwargs)
+    nD = len(shape)-1
+    self.nD = nD
+    self.shape = shape
+    self.shape_mult = shape[0:nD]
+    for k in range(nD+1):
+        self.shape_mult = tf.expand_dims(self.shape_mult,0)
+    self.weight = self.add_weight(shape=shape, 
+                        initializer=initializer, trainable=False,name=self.name)    
+    
+        
+  def lin_interp(self,data,x):
+    
+          def frac(a):
+              return a-tf.floor(a)
+          if self.nD == 3:
+              w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]), frac(x[:,..., 2:3])]
+          else:
+              w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]) ]
+    
+          def gather(d,idx,s):
+              q = tf.convert_to_tensor(s)
+              for k in range(self.nD+1):
+                  q = tf.expand_dims(q,0)
+              idx = idx + q
+              weight = 1.0
+              for k in range(self.nD):
+                  if s[k] == 1:
+                      weight = weight*w[k]
+                  else:
+                      weight = weight*(1-w[k])
+                      
+              return tf.gather_nd(d, idx ,batch_dims=0) * weight
+          x = tf.cast(x,dtype=tf.int32)
+          if self.nD == 3:
+              res = gather(data,x,[0,0,0]) + gather(data,x,[1,0,0]) + gather(data,x,[0,1,0]) + gather(data,x,[0,0,1]) + gather(data,x,[0,1,1]) + gather(data,x,[1,0,1]) + gather(data,x,[1,1,0]) + gather(data,x,[1,1,1])
+          else:
+              res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1]) 
+          return res
+   
+
+  def call(self, image):
+     C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
+     C = tf.where(C>1.0,1.0,C)
+     C = C/(np.pi*2)*tf.cast(self.shape_mult-1,dtype=tf.float32)
+     W = self.lin_interp(self.weight,C)
+     return tf.concat([W,C],self.nD+1)
+     
+      
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'nD': self.nD,
+            'shape': self.shape,
+        } )    
+        return config                  
+
+custom_layers['warpLayer'] = warpLayer
+
+
 class normalizedConvolution(layers.Layer):
 
   def __init__(self, nD=3, out_n0=7,  ksize0=3, 
@@ -1045,14 +1109,18 @@ def TopK_loss2D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
 ## A CNN wrapper to allow easy layer references and stacking
 
 class CNNblock(layers.Layer):
-  def __init__(self,theLayers=None,name=None,verbose=False):
-    super().__init__(name=name)
+  def __init__(self,theLayers=None,name=None,verbose=False,fromconfig=False,**kwargs):
+    super().__init__(**kwargs)
     
     self.verbose = verbose
-    if theLayers is None:
-        self.theLayers = {}
+    if fromconfig:
+        tmp = createCNNBlockFromObj(theLayers,custom_objects=custom_layers)
+        self.theLayers = tmp.theLayers
     else:
-        self.theLayers = theLayers
+        if theLayers is None:
+            self.theLayers = {}
+        else:
+            self.theLayers = theLayers
 
   def add(self,*args):
       if len(args) > 1:
@@ -1075,6 +1143,7 @@ class CNNblock(layers.Layer):
          config.update(
          {
              'theLayers': dict(self.theLayers),
+             'fromconfig': True
          } )    
          return config                  
      
@@ -1192,6 +1261,9 @@ class CNNblock(layers.Layer):
         return tf.concat(applyout,nD+1)
     else:
         return x
+
+
+custom_layers['CNNblock'] = CNNblock
 
 
 

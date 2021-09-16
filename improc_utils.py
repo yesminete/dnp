@@ -47,7 +47,6 @@ def conv_boxcar2D(img,std):
 
 def conv_gauss2D_fft(img,std):
     
-    
   if isinstance(std,float) or isinstance(std,int):
       std = [std]*2
     
