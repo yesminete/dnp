@@ -1823,17 +1823,23 @@ class PatchWorkModel(Model):
                   targetdata = c_data.getTargetData(sampletyp)
                   patches = targetdata[-1]
                   labelfreqs = []
+                  hard_mining_ratio = 1-1/(1+hard_mining)
+
                   for k in range(self.num_labels):
-                        labelfreqs.append(tf.reduce_max(tf.cast(patches==self.cropper.categorial_label[k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                      if self.cropper.categorial_label is not None:
+                            labelfreqs.append(tf.reduce_max(tf.cast(patches==self.cropper.categorial_label[k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                      else:
+                            labelfreqs.append(tf.reduce_max(tf.cast(patches[...,k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                      
                   labelfreqs = tf.concat(labelfreqs,1)
                   labelfreqs = labelfreqs / tf.reduce_sum(labelfreqs,axis=0)
                   probs = tf.reduce_mean(labelfreqs,axis=1,keepdims=True)
                   probs = tf.concat([probs,tf.expand_dims(c_data.getAge(),1)],1)
-                  c_data.subsetProb(probs,hard_mining,hard_mining_maxage)    
+                  c_data.subsetProb(probs,hard_mining_ratio,hard_mining_maxage)    
                   
               else:
                   patchloss = tf.concat([patchloss,tf.expand_dims(c_data.getAge(),1)],1)                                          
-                  c_data.subsetOrder(patchloss,hard_mining,hard_mining_maxage)    
+                  c_data.subsetOrder(patchloss,hard_mining_ratio,hard_mining_maxage)    
               self.myhist.age = c_data.getAge()
               hard_data = c_data
               self.hard_data = hard_data
