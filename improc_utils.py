@@ -191,6 +191,23 @@ def getClosestDivisable(x,divisor):
     return i
 
 
+
+def sparse_scatter(pbox_index,qq,sha):
+    
+    idx = tf.math.argmax(qq,axis=-1)
+    val = tf.math.reduce_max(qq,axis=-1)
+    nD = len(sha)-1
+    absidx = tf.cast(pbox_index[...,0],dtype=tf.int64)
+    w = sha[0]
+    for k in range(1,nD):
+        absidx = absidx + pbox_index[...,k]*w
+        w = w*sha[k]
+    IDX = tf.concat([tf.expand_dims(absidx,3),tf.expand_dims(idx,3)],3)
+    IDX = tf.reshape(IDX,[np.prod(idx.shape),2])
+    val = tf.reshape(val,[np.prod(idx.shape)])
+    T = tf.sparse.SparseTensor(IDX,val,[w,sha[-1]])
+    return T
+
 # a simple resize of the image by nearest neighbor interp.
 # 2D image array of size [w,h,f] (if batch_dim=False) or [b,w,h,f] (if batch_dim=True)
 # 3D image array of size [w,h,d,f] (if batch_dim=False) or [b,w,h,d,f] (if batch_dim=True)

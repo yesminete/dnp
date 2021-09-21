@@ -537,6 +537,32 @@ class identity(layers.Layer):
 custom_layers['identity'] = identity
 
 
+class QMembedding(layers.Layer):
+  def __init__(self,numC,initializer=tf.keras.initializers.RandomNormal, **kwargs):    
+    super().__init__(**kwargs)
+    self.numC = numC
+    
+  def call(self, image):         
+      if not hasattr(self,"weight"):
+          self.weight = self.add_weight(shape=[image.shape[-1],numC], 
+                        initializer=self.initializer, trainable=True,name=self.name)
+      if len(image.shape) == 5:
+          x = tf.einsum('bijkf,fC->bijkC',image,self.weight)
+      else:
+          x = tf.einsum('bijf,fC->bijC',image,self.weight)
+      x = x**2
+      x = x / tf.reduce_sum(x,axis=-1,keepdims=True)
+      return x
+    
+
+class QMactivation(layers.Layer):
+  def __init__(self, **kwargs):    
+    super().__init__(**kwargs)
+    
+  def call(self, image):         
+      x = x**2
+      x = x / tf.reduce_sum(x,axis=-1,keepdims=True)
+      return x
 
 
 class Scramble(layers.Layer):
@@ -1103,6 +1129,9 @@ def TopK_loss2D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
     def loss(x,y,from_logits=True):
         return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=2,mismatch_penalty=mismatch_penalty)
     return loss   
+
+    
+    
 
 #%%###############################################################################################
 
