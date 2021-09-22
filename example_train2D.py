@@ -115,6 +115,7 @@ network = {
 #    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),    
     "intermediate_out":8,
     "intermediate_loss":True,          
+    "finalizeOnApply":True
     }
 
 ## DATA IMPORT OPTIONS
@@ -307,6 +308,8 @@ if "align_physical" in loading:
     
 #%% start training    
 
+#training['sparseLoss'] =True
+#training['loss'] = [tf.losses.SparseCategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)]*patching['depth']
 
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
 import gc

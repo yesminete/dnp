@@ -1312,6 +1312,7 @@ class PatchWorkModel(Model):
             max_agglomerative=False,
             rot_intrinsic=0,
             loss=None,
+            sparseLoss=False,
             optimizer=None,
             recompile_loss_optim=False,
             dontcare=True,
@@ -1398,7 +1399,7 @@ class PatchWorkModel(Model):
     
     
     def computeloss(fun,label,pred):
-        if self.cropper.categorial_label is not None:
+        if self.cropper.categorial_label is not None and not self.sparseLoss:
             lmat = 0.0
             cnt = 0
             for j in self.cropper.categorial_label:
@@ -1645,6 +1646,19 @@ class PatchWorkModel(Model):
     self.disc_variables = list([])
     for b in self.classifiers:
         self.disc_variables += b.trainable_variables
+    
+    self.sparseLoss = sparseLoss
+    
+    # if self.cropper.categorial_label is not None:
+      
+    #    for k in range(len(labelset)):
+    #         maxi  = tf.reduce_max(labelset[k])
+    #         c = tf.cast(self.cropper.categorial_label,dtype=tf.int64)
+    #         r = tf.range(self.num_labels)
+    #         categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
+    #         labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,labelset[k]),-1)
+           
+       
     
     
     
