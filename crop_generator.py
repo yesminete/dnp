@@ -703,7 +703,7 @@ class CropGenerator():
                     '  voxsize:' +  showten(input_voxsize,2) )
               print("snapper " + " ".join(str(x) for x in snapper))
     
-          nD = len(resolution)        
+          nD = self.ndim
           patch_shapes = list(map(lambda k: tensor(self.get_patchsize(k)),range(depth)))
           out_patch_shapes =list(map(lambda k: tensor(self.get_outpatchsize(k)),range(depth)))
         
@@ -769,13 +769,14 @@ class CropGenerator():
                     else:
                         patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*patch_widths[-1])
               
-                
           # derive shape of output image
           dest_edges = []
           dest_shapes = []
+          idxperm = tf.argmax(tf.abs(input_edges[0,0:nD,0:nD]),1)
           for k in range(len(out_patch_shapes)):
             w = patch_widths[k]/(out_patch_shapes[k]-1)*1
-            dshape = int32(input_width/w)
+            wperm = tf.gather(w,idxperm)
+            dshape = int32(input_width/wperm)
             vsz =  input_width/tensor(dshape-1)
             dedge = tf.matmul(input_edges[0,:,:],tf.linalg.diag(tf.concat([vsz/input_voxsize,[1]],0)))
             #dedge = tf.linalg.diag(tf.concat([vsz,[1]],0))
