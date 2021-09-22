@@ -1068,13 +1068,13 @@ class PatchWorkModel(Model):
                             key = self.cropper.categorial_label[k]
                         
                         if label_names is None:
-                            labelname = "L" + f"{(k+1):02d}"
+                            labelname = "L" + str(k+1)
                             if self.cropper.categorial_label is not None:
                                 if k+1 != self.cropper.categorial_label[k]:
-                                    labelname = "L" + f"{(k+1):02d}" + f"({(self.cropper.categorial_label[k]):02d}),"
+                                    labelname = "L" + str(k+1) + str(self.cropper.categorial_label[k])
                                     
                         else:
-                            labelname = label_names[k] + "-" + f"({(k+1):02d})"
+                            labelname = label_names[k] + "-" + str(k+1)
                         rgb = colors[k%len(colors)]
                         body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
                      xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
@@ -1594,13 +1594,6 @@ class PatchWorkModel(Model):
     if inc_train_cycle:
         self.train_cycle += 1
         
-    self.block_variables = list([])
-    for b in self.blocks:
-        self.block_variables += b.trainable_variables
-        
-    self.disc_variables = list([])
-    for b in self.classifiers:
-        self.disc_variables += b.trainable_variables
     
     if isinstance(augment,dict):        
         self.augment = augment
@@ -1643,6 +1636,16 @@ class PatchWorkModel(Model):
                 self.loss = loss
     
     loss = self.loss
+    
+    
+    self.block_variables = list([])
+    for b in self.blocks:
+        self.block_variables += b.trainable_variables
+        
+    self.disc_variables = list([])
+    for b in self.classifiers:
+        self.disc_variables += b.trainable_variables
+    
     
     
     if loss is not None and fit_type=='keras':
