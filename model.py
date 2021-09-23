@@ -333,6 +333,13 @@ class PatchWorkModel(Model):
     
     if self.block_out is None:
         self.block_out = []
+        
+        if cropper.categorial_label_original is not None:
+            if cropper.categorical:
+                num_labels = len(cropper.categorial_label_original)+1
+            else:
+                num_labels = len(cropper.categorial_label_original)
+                
         if num_labels != -1:
             for k in range(self.cropper.depth-1): 
               self.block_out.append(num_labels+intermediate_out)
@@ -1041,18 +1048,29 @@ class PatchWorkModel(Model):
                  
              if threshold is not None:
                  if out_typ.find('mask') != -1:
-                     out_typ = 'uint8';   
-                     if labelidx is not None:
-                         pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx], newaffine, img1.header)
+                     out_typ = 'uint8'   
+                     if self.cropper.categorical:                     
+                         tmp = np.argmax(res_axis=-1)
+                         if labelidx is not None:
+                             pred_nii = nib.Nifti1Image(tmp==labelidx, newaffine, img1.header)
+                         else:
+                             pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
+                         
                      else:
-                         pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
+                         if labelidx is not None:
+                             pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx], newaffine, img1.header)
+                         else:
+                             pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
                  if out_typ.find('atls') != -1:
-                     out_typ = 'uint16';                     
-                     tmp = res_>threshold
-                     tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
-                     
+                     out_typ = 'uint16'
+                     if self.cropper.categorical:                     
+                         tmp = np.argmax(res_axis=-1)
+                     else:
+                         tmp = res_>threshold
+                         tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
+                         
                      if self.cropper.categorial_label is not None:
-                         idxmap = tf.cast([0] + self.cropper.categorial_label,dtype=tf.int32)
+                         idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                          tmp = tf.gather(idxmap,tmp)
                      
                      
@@ -1065,13 +1083,13 @@ class PatchWorkModel(Model):
                      for k in range(0,self.num_labels):
                         key = k+1
                         if self.cropper.categorial_label is not None:
-                            key = self.cropper.categorial_label[k]
+                            key = self.cropper.categorial_label_original[k]
                         
                         if label_names is None:
                             labelname = "L" + str(k+1)
                             if self.cropper.categorial_label is not None:
-                                if k+1 != self.cropper.categorial_label[k]:
-                                    labelname = "L" + str(k+1) + str(self.cropper.categorial_label[k])
+                                if k+1 != self.cropper.categorial_label_original[k]:
+                                    labelname = "L" + str(k+1) + str(self.cropper.categorial_label_original[k])
                                     
                         else:
                             labelname = label_names[k] + "-" + str(k+1)
@@ -1312,7 +1330,6 @@ class PatchWorkModel(Model):
             max_agglomerative=False,
             rot_intrinsic=0,
             loss=None,
-            sparseLoss=False,
             optimizer=None,
             recompile_loss_optim=False,
             dontcare=True,
@@ -1399,7 +1416,7 @@ class PatchWorkModel(Model):
     
     
     def computeloss(fun,label,pred):
-        if self.cropper.categorial_label is not None and not self.sparseLoss:
+        if self.cropper.categorial_label is not None and not self.cropper.categorical:
             lmat = 0.0
             cnt = 0
             for j in self.cropper.categorial_label:
@@ -1647,16 +1664,28 @@ class PatchWorkModel(Model):
     for b in self.classifiers:
         self.disc_variables += b.trainable_variables
     
-    self.sparseLoss = sparseLoss
     
-    # if self.cropper.categorial_label is not None:
-      
-    #    for k in range(len(labelset)):
-    #         maxi  = tf.reduce_max(labelset[k])
-    #         c = tf.cast(self.cropper.categorial_label,dtype=tf.int64)
-    #         r = tf.range(self.num_labels)
-    #         categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
-    #         labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,labelset[k]),-1)
+    if self.cropper.categorial_label is not None:
+
+       if self.cropper.categorical:
+           nl = len(self.cropper.categorial_label_original)
+           self.cropper.categorial_label = list(range(0,nl+1))
+           c = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int64)       
+           r = tf.range(0,nl+1)
+           self.num_labels=nl+1
+           self.cropper.num_labels = nl+1
+       else:
+           self.cropper.categorial_label = list(range(1,self.num_labels+1))
+           c = tf.cast(self.cropper.categorial_label_original,dtype=tf.int64)
+           r = tf.range(1,self.num_labels+1)
+       for k in range(len(labelset)):
+            maxi  = tf.reduce_max(labelset[k])
+            dontcarelabel = labelset[k]==-1
+            labelset[k] = tf.where(dontcarelabel,0,labelset[k])
+            categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
+            labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,labelset[k]),-1)
+            labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
+
            
        
     
@@ -1846,10 +1875,10 @@ class PatchWorkModel(Model):
                       if self.cropper.categorial_label is not None:
                             labelfreqs.append(tf.reduce_max(tf.cast(patches==self.cropper.categorial_label[k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
                       else:
-                            labelfreqs.append(tf.reduce_max(tf.cast(patches[...,k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                            labelfreqs.append(tf.reduce_max(tf.cast(patches[...,k:k+1],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
                       
                   labelfreqs = tf.concat(labelfreqs,1)
-                  labelfreqs = labelfreqs / tf.reduce_sum(labelfreqs,axis=0)
+                  labelfreqs = labelfreqs / (0.00001+tf.reduce_sum(labelfreqs,axis=0))
                   probs = tf.reduce_mean(labelfreqs,axis=1,keepdims=True)
                   probs = tf.concat([probs,tf.expand_dims(c_data.getAge(),1)],1)
                   c_data.subsetProb(probs,hard_mining_ratio,hard_mining_maxage)    
