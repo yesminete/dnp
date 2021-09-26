@@ -605,8 +605,9 @@ def QMloss():
 
         return N - 2*e + 1
         
+
 #        p = e**2
-#        return -tf.math.log(p) + tf.math.log(N)
+#        return -tf.math.log(p) + tf.math.log(N)  # = -log(p/N)
         
     return loss
     

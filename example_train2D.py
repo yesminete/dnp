@@ -176,7 +176,7 @@ training = {
         
 
 
-if True: #QMedbedding
+if False: #QMedbedding
     dim_embedding = 7
     
     if 'categorial_label' not in patching or patching['categorial_label'] is None:
@@ -191,22 +191,25 @@ if True: #QMedbedding
         network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [dim_embedding]
     network["finalBlock_all_levels"]=True
     
+    training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
         
 
 
-if False: # ,,,
+if True: # ,,,
 
-    dim_embedding = 4
+    dim_embedding = 7
     training['loss'] = [tf.losses.SparseCategoricalCrossentropy()]*patching['depth']
     training['dontcare'] =False
     patching['categorical'] = True
     network["intermediate_loss"]=False
-    network["finalBlock"]= patchwork.customLayers.QMactivation() # tf.keras.layers.Activation('softmax')
+    #network["finalBlock"]= patchwork.customLayers.QMactivation() 
+    network["finalBlock"]= tf.keras.layers.Activation('softmax')
     if 'block_out' not in network or network['block_out'] is None:            
         network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [dim_embedding]
     
 
+    training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
 
 
