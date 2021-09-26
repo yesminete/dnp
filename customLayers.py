@@ -537,33 +537,79 @@ class identity(layers.Layer):
 custom_layers['identity'] = identity
 
 
-class QMembedding(layers.Layer):
-  def __init__(self,numC,initializer=tf.keras.initializers.RandomNormal, **kwargs):    
-    super().__init__(**kwargs)
-    self.numC = numC
-    
-  def call(self, image):         
-      if not hasattr(self,"weight"):
-          self.weight = self.add_weight(shape=[image.shape[-1],numC], 
-                        initializer=self.initializer, trainable=True,name=self.name)
-      if len(image.shape) == 5:
-          x = tf.einsum('bijkf,fC->bijkC',image,self.weight)
-      else:
-          x = tf.einsum('bijf,fC->bijC',image,self.weight)
-      x = x**2
-      x = x / tf.reduce_sum(x,axis=-1,keepdims=True)
-      return x
-    
 
+    
 class QMactivation(layers.Layer):
   def __init__(self, **kwargs):    
     super().__init__(**kwargs)
     
   def call(self, image):         
-      x = x**2
+      x = image**2
       x = x / tf.reduce_sum(x,axis=-1,keepdims=True)
       return x
+custom_layers['QMactivation'] = QMactivation
 
+
+class QMembedding(layers.Layer):
+  def __init__(self,numC,embedD,**kwargs):    
+    super().__init__(**kwargs)
+    self.numC = numC
+    self.embedD = embedD
+  
+  def get_config(self):
+    config = super().get_config().copy()
+    config.update(
+    {
+        'numC': self.numC,
+        'embedD': self.embedD
+    } )    
+    return config
+    
+  def apply(self, r):
+      E = self.weight
+      idx = tf.zeros(r.shape[0:-1],dtype=tf.int32)
+      maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
+      for k in range(self.numC):
+          p = tf.einsum('...i,i->...',r,E[k,:])
+          idx = tf.where(p>maxp,k,idx)
+          maxp = tf.where(p>maxp,p,maxp)
+      maxp = tf.expand_dims(maxp,-1)
+      idx = tf.expand_dims(idx,-1)
+      return idx,maxp
+      
+
+  def call(self, image):         
+      if not hasattr(self,"weight"):
+          self.weight = self.add_weight(shape=[self.numC,self.embedD], 
+                        initializer=tf.keras.initializers.RandomNormal, trainable=True,name=self.name)
+      image.QMembedding = self
+      return image
+
+custom_layers['QMembedding'] = QMembedding
+
+def QMloss():
+    
+    def loss(x,y,from_logits=True):
+        E = y.QMembedding.weight
+        K = tf.einsum('ij,ik->jk',E,E)
+        e = tf.squeeze(tf.gather(E,x))
+        y = y[...,0:e.shape[-1]]
+        e = tf.reduce_sum(e*y,axis=-1)
+        nD = len(y.shape)-2
+        if nD == 2:
+            N = tf.einsum('bxyc,bxyd,cd->bxy',y,y,K)        
+        else:
+            N = tf.einsum('bxyzc,bxyzd,cd->bxyz',y,y,K)        
+        
+#        return 1-e/tf.math.sqrt(N)
+
+        return N - 2*e + 1
+        
+#        p = e**2
+#        return -tf.math.log(p) + tf.math.log(N)
+        
+    return loss
+    
 
 class Scramble(layers.Layer):
 

@@ -48,7 +48,7 @@ valid_ids = []
 
 modelfi = "models/yourmodel"
 
-reinit_model = False
+reinit_model = True
 
 
 

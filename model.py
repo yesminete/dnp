@@ -264,6 +264,7 @@ class PatchWorkModel(Model):
                spatial_max_train=False,
                finalBlock=None,
                finalizeOnApply=False,
+               finalBlock_all_levels=False,
 
                classifierCreator=None,
                num_classes=1,
@@ -290,6 +291,7 @@ class PatchWorkModel(Model):
     self.blocks = []
     self.classifiers = []
     self.finalBlock=finalBlock
+    self.finalBlock_all_levels = finalBlock_all_levels
     self.finalizeOnApply = finalizeOnApply
     self.set_cropgen(cropper)
     self.forward_type = forward_type
@@ -403,6 +405,7 @@ class PatchWorkModel(Model):
                'cropper':self.cropper,
                'finalBlock':self.finalBlock,
                'finalizeOnApply':self.finalizeOnApply,
+               'finalBlock_all_levels':self.finalBlock_all_levels,
                'trainloss_hist':self.myhist.trainloss_hist,
                'validloss_hist':self.myhist.validloss_hist,
                'trained_epochs':self.trained_epochs,
@@ -545,15 +548,17 @@ class PatchWorkModel(Model):
              output_nonspatial.append(res_nonspatial)
          
          def croplabeldim(res):
-             if self.num_labels != -1:
-                 outs = res[...,0:self.num_labels]
+             if self.num_labels != -1 and not hasattr(res,'QMembedding'):
+                outs = res[...,0:self.num_labels]
              else:
                  outs = res
              return outs
+         
+         self.finalBlock_all_levels = True
              
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
-             if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and k == self.cropper.depth-1:
+             if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and (k == self.cropper.depth-1 or self.finalBlock_all_levels):
                    if isinstance(self.finalBlock,list):
                        for fb in self.finalBlock:
                            output.append(croplabeldim(fb(res)))
@@ -802,15 +807,6 @@ class PatchWorkModel(Model):
                         pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
                         pred_votes = pred_votes + fac*tf.squeeze(pr/(vr+0.00001))
                     res = [pred_votes / (pred_on+0.00001)]
-                    # pred_aggr = 0
-                    # pred_votes = 0
-                    # dest_shape = pred[-1].shape
-                    # for k in range(len(pred)):
-                    #     fac = np.math.pow(0.2,len(pred)-1-k)
-                    #     pred_aggr = pred_aggr + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
-                    #     pred_votes = pred_votes + fac*tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k],0),dest_shape,True,nD,edge_center=False))
-                    # res = [pred_aggr/(pred_votes+0.0001)]
-
                     level = [0]                    
                 else:
                     res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
@@ -821,6 +817,17 @@ class PatchWorkModel(Model):
              with tf.device("/cpu:0"):                
                  for k in level:
                     res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+         
+        
+        
+            
+         if hasattr(r[0],'QMembedding'):
+            idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
+            for k in level:
+               res[k],probs = r[0].QMembedding.apply(res[k])
+               res[k] = tf.gather(idxmap,res[k])
+
+
          if single:
            res = res[level[0]]
      
@@ -895,6 +902,9 @@ class PatchWorkModel(Model):
       if align_physical is None:
           crop_fdim = False
 
+
+      if isinstance(self.finalBlock,QMembedding):
+          out_typ = 'idx'
         
       scrop = None
      
@@ -1020,6 +1030,9 @@ class PatchWorkModel(Model):
       if ofname is not None:
           def savenii(name,res_,out_typ,labelidx=None):       
              threshold = None
+             if out_typ == 'idx':
+                 fac = 1
+                 out_typ = 'int16'
              if out_typ == 'int16':
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
@@ -1064,7 +1077,7 @@ class PatchWorkModel(Model):
                  if out_typ.find('atls') != -1:
                      out_typ = 'uint16'
                      if self.cropper.categorical:                     
-                         tmp = np.argmax(res_axis=-1)
+                         tmp = np.argmax(res_,axis=-1)
                      else:
                          tmp = res_>threshold
                          tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
@@ -1432,8 +1445,14 @@ class PatchWorkModel(Model):
         th=[]
         cnt = 0
         if self.cropper.categorial_label is not None:
+            if hasattr(pred,'QMembedding'):
+                predQM,probs = pred.QMembedding.apply(pred)
             for j in self.cropper.categorial_label:
-                f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
+                if hasattr(pred,'QMembedding'):
+                    f1_ = tf.reduce_mean(f1_metric(tf.cast(label==j,dtype=tf.float32),tf.cast(predQM==j,tf.float32),valid=valid))
+                    th_ = tf.cast(0.5,tf.float32)
+                else:
+                    f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
                 f1+=f1_
                 th.append(th_)
                 cnt=cnt+1
@@ -1473,7 +1492,7 @@ class PatchWorkModel(Model):
       preds = self(data, training=True)
       loss = 0
       for k in range(len(labels)):          
-            if dontcare is not None:
+            if dontcare:
                 if self.cropper.categorial_label is not None:
                     masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
                     masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
@@ -1503,15 +1522,16 @@ class PatchWorkModel(Model):
       labels = images[1]
       
       trainvars = self.block_variables
+      trainvars = trainvars + self.finalBlock.trainable_variables
               
       with tf.GradientTape() as tape:
         preds = self(data, training=True)
-      
+            
         loss = 0
         depth = len(labels)
         for k in range(depth):
             if lossfun[k] is not None:
-                if dontcare is not None:
+                if dontcare:
                     if self.cropper.categorial_label is not None:
                         masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
                         masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
