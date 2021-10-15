@@ -496,6 +496,7 @@ class CropGenerator():
   def computeBalances(self,scales,verbose,balance):
       # print balance info
       balances = [None]*self.depth
+      balances_sum = [None]*self.depth
 
       for k in range(self.depth):
           if scales[k]['labels_cropped'] is not None:
@@ -505,19 +506,24 @@ class CropGenerator():
                   #if balance is not None and 'label_reduce' in balance:
                   #    labs = tf.reduce_sum(labs,axis=-1,keepdims=True)
                   indicator = tf.math.reduce_max(labs,list(range(1,self.ndim+1)))
+                  pixelsum = tf.math.reduce_sum(labs,list(range(1,self.ndim+1)))
               else:
                   tmp = []
+                  tmp_sum = []
                   for j in self.categorial_label:
                       tmp.append(tf.reduce_max(tf.cast(labs==j,dtype=tf.float32),list(range(1,self.ndim+1))))
+                      tmp_sum.append(tf.reduce_sum(tf.cast(labs==j,dtype=tf.float32),list(range(1,self.ndim+1))))
                   indicator = tf.concat(tmp,1)
+                  pixelsum = tf.concat(tmp_sum,1)
                     
               indicator = tf.cast(indicator>0,dtype=tf.float32)                                
               cur_ratio = tf.expand_dims(tf.math.reduce_mean(indicator,axis=0),1)              
               balances[k]= cur_ratio
+              balances_sum[k]= tf.expand_dims(tf.math.reduce_sum(indicator,axis=0),1)   
               np.set_printoptions(precision=3,linewidth=1000)
               if verbose:
-                  print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) )
-      return balances
+                  print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) ) # + "/" + str(np.transpose(balances_sum[k].numpy())[0]) )
+      return balances,balances_sum
 
   # generates cropped data structure
   # input:

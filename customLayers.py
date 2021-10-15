@@ -101,7 +101,7 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
 
 
 
-def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False,
+def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False,nonlin=None,
                   padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
   if nD == 3:
       strides = [2,2,2]
@@ -113,9 +113,13 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
       _conv = layers.Conv2D
       _convT = lambda *args, **kwargs: layers.Conv2DTranspose(*args, **kwargs,strides=strides)
       _maxpool = lambda: layers.MaxPooling2D(pool_size=(2,2))
+    
   
   def BNrelu():
-      return [layers.BatchNormalization(), layers.LeakyReLU()]
+      if nonlin is None:
+          return [layers.BatchNormalization(), layers.LeakyReLU()]
+      else:
+          return [layers.BatchNormalization(), layers.Activation(nonlin)]
   
   if padding == 'VALID':
       def conv_down(fdim):
@@ -555,6 +559,7 @@ class QMembedding(layers.Layer):
     super().__init__(**kwargs)
     self.numC = numC
     self.embedD = embedD
+    self.bias = 0
   
   def get_config(self):
     config = super().get_config().copy()
@@ -565,22 +570,38 @@ class QMembedding(layers.Layer):
     } )    
     return config
     
-  def apply(self, r):
+  def apply(self, r, full=False):
+      r = tf.math.atan(r)     
       E = self.weight
       idx = tf.zeros(r.shape[0:-1],dtype=tf.int32)
       maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
+      tmp = []
       for k in range(self.numC):
-          p = tf.einsum('...i,i->...',r,E[k,:])
+          if self.bias == 1:
+              p = tf.einsum('...i,i->...',r,E[k,0:-1]) + E[k,-1]
+          else:
+              p = tf.einsum('...i,i->...',r,E[k,:]) 
+          
+          p = p**2
+          
+          if full:
+              tmp.append(tf.expand_dims(p,-1))
           idx = tf.where(p>maxp,k,idx)
           maxp = tf.where(p>maxp,p,maxp)
-      maxp = tf.expand_dims(maxp,-1)
-      idx = tf.expand_dims(idx,-1)
-      return idx,maxp
+      if full:
+          tmp = tf.concat(tmp,-1)
+          maxp = tf.expand_dims(maxp,-1)
+          idx = tf.expand_dims(idx,-1)
+          return idx,maxp,tmp
+      else:
+          maxp = tf.expand_dims(maxp,-1)
+          idx = tf.expand_dims(idx,-1)
+          return idx,maxp
       
 
   def call(self, image):         
       if not hasattr(self,"weight"):
-          self.weight = self.add_weight(shape=[self.numC,self.embedD], 
+          self.weight = self.add_weight(shape=[self.numC,self.embedD+self.bias], 
                         initializer=tf.keras.initializers.RandomNormal, trainable=True,name=self.name)
       image.QMembedding = self
       return image
@@ -589,25 +610,39 @@ custom_layers['QMembedding'] = QMembedding
 
 def QMloss():
     
-    def loss(x,y,from_logits=True):
+    def loss(x,y,class_weight=None, from_logits=True):
+        nD = len(y.shape)-2        
         E = y.QMembedding.weight
+        y = tf.math.atan(y)
         K = tf.einsum('ij,ik->jk',E,E)
         e = tf.squeeze(tf.gather(E,x))
-        y = y[...,0:e.shape[-1]]
-        e = tf.reduce_sum(e*y,axis=-1)
-        nD = len(y.shape)-2
-        if nD == 2:
-            N = tf.einsum('bxyc,bxyd,cd->bxy',y,y,K)        
+        if False: # with bias
+            y = y[...,0:e.shape[-1]-1]
+            e = tf.reduce_sum(e[...,0:e.shape[-1]-1]*y,axis=-1) + e[...,-1]
+            sz = list(y.shape)
+            sz[-1] = 1
+            ys = tf.zeros(sz)
+            ys = tf.concat([y,ys],-1)
         else:
-            N = tf.einsum('bxyzc,bxyzd,cd->bxyz',y,y,K)        
+            e = tf.reduce_sum(e*y,axis=-1)
+            ys = y
+        if nD == 2:
+            N = tf.einsum('bxyc,bxyd,cd->bxy',ys,ys,K)        
+        else:
+            N = tf.einsum('bxyzc,bxyzd,cd->bxyz',ys,ys,K)        
         
-#        return 1-e/tf.math.sqrt(N)
-
-        return N - 2*e + 1
+#        L = N - 2*e + 1
         
-
-#        p = e**2
-#        return -tf.math.log(p) + tf.math.log(N)  # = -log(p/N)
+#        if class_weight is not None:
+ #           L = L*tf.squeeze(tf.gather(class_weight,x))
+  #      return 1-e/tf.math.sqrt(N)
+ #       return L
+     #   t = 0
+     #   p = t+e**2
+     #   return -tf.math.log(p) + tf.math.log(t*14+N)  # = -log(p/N)
+        
+        p = e**2
+        return -tf.math.log(p) + tf.math.log(N) # = -log(p/N)
         
     return loss
     

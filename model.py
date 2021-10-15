@@ -822,11 +822,15 @@ class PatchWorkModel(Model):
         
             
          if hasattr(r[0],'QMembedding'):
-            idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
-            for k in level:
-               res[k],probs = r[0].QMembedding.apply(res[k])
-               res[k] = tf.gather(idxmap,res[k])
-
+            if False:
+                idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
+                for k in level:
+                   res[k],probs = r[0].QMembedding.apply(res[k])
+                   res[k] = tf.gather(idxmap,res[k])
+            else:
+                for k in level:
+                   _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
+                
 
          if single:
            res = res[level[0]]
@@ -1429,6 +1433,10 @@ class PatchWorkModel(Model):
     
     
     def computeloss(fun,label,pred):
+        f = self.pixelfreqs[-1]
+        w = f / tf.reduce_sum(f)
+        w = 1/w
+        w = tf.where(f==0,1,w)
         if self.cropper.categorial_label is not None and not self.cropper.categorical:
             lmat = 0.0
             cnt = 0
@@ -1437,7 +1445,7 @@ class PatchWorkModel(Model):
                 cnt=cnt+1
             lmat = lmat/cnt
         else:                       
-            lmat = fun(label,pred)
+            lmat = fun(label,pred)#,class_weight=w)
         return lmat
 
     def computeF1perf(label,pred,valid=False):
@@ -1745,7 +1753,9 @@ class PatchWorkModel(Model):
         start = timer()
         c_data = getSample(trainidx,num_patches)    
         print("balances")
-        self.cropper.computeBalances(c_data.scales,True,balance)
+        _,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)
+        
+        self.pixelfreqs = pixelfreqs
 
         end = timer()
         print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")

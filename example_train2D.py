@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork2 as patchwork
+import patchwork2_dev as patchwork
 
 
 #%
@@ -95,7 +95,7 @@ patching = {
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
-    "categorial_label" :[1,2,8],
+    "categorial_label" : [1,2,3,4,5,6,8,9,10,11,12,13,14],#list(range(1,14)),
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -111,7 +111,7 @@ patching = {
 
 network = {    
     "blockCreator": lambda level,outK,input_shape : 
-        patchwork.customLayers.createUnet_v2(depth=3,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,32,64,64]),
+        patchwork.customLayers.createUnet_v2(depth=3,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,32,64,64],nonlin='linear'),
     # "finalBlock": patchwork.customLayers.QMembedding(20,4),
     #"block_out":[6,7,6,4],
     #"finalBlock_all_levels":True,
@@ -160,7 +160,7 @@ loading = {
 
 
 training = {
-   "num_patches":400,
+   "num_patches":200,
    "augment": {},#{"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
    "epochs":5,
    "num_its":100,                
@@ -193,7 +193,8 @@ if False: #QMedbedding
     
     training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
-        
+    network["intermediate_loss"]=False
+
 
 
 if True: # ,,,
@@ -206,7 +207,7 @@ if True: # ,,,
     #network["finalBlock"]= patchwork.customLayers.QMactivation() 
     network["finalBlock"]= tf.keras.layers.Activation('softmax')
     if 'block_out' not in network or network['block_out'] is None:            
-        network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [dim_embedding]
+        network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [15]
     
 
     training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
@@ -342,7 +343,7 @@ themodel.train_cycle += 1
 if "align_physical" in loading:
     themodel.align_physical = loading["align_physical"]
 
-
+ 
     
 #%% start training    
 
@@ -395,9 +396,11 @@ ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=200,num
                                 augment={},
                                 scale_to_original=False)
 
+#plt.imshow(tf.squeeze(ew[1][:,:,:]))
 
-
-plt.imshow(tf.squeeze(ew[1][:,:,:,0]))
+for k in range(14):
+    plt.imshow(tf.squeeze(ew[1][:,:,:,k]),vmin=0)
+    plt.pause(0.001)
 
 
 
