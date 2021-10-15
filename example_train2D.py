@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork2 as patchwork
+import patchwork2_dev as patchwork
 
 
 #%
@@ -43,7 +43,7 @@ subjects = [ 'subj1', 'subj2'];
 valid_ids = [1]
 
 
-modelfi = "models/yourmodel"
+modelfi = "models/yourmodel2"
 
 reinit_model = True
 
@@ -84,18 +84,18 @@ nD = 2
 # - normalize_input: None or "max" at the moment.
 
 patching = {        
-    "depth":4,                    
+    "depth":3,                    
     "scheme":{ 
         "patch_size":[32,32],                
         "destvox_mm": None,
-        "destvox_rel":[1,1],
+        "destvox_rel":[4,4],
         "fov_mm":None,
-        "fov_rel":[0.5,0.5],
+        "fov_rel":[0.7,0.7],
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
-    "categorial_label" :[1,2,8,12],
-#    "categorial_label" :None,
+    #"categorial_label" :None,
+    "categorial_label" : [1,2,3,4,5,6,8,9,10,11,12,13,14],#list(range(1,14)),
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -111,10 +111,13 @@ patching = {
 
 network = {    
     "blockCreator": lambda level,outK,input_shape : 
-        patchwork.customLayers.createUnet_v2(depth=5,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,16,32,64]),
-#    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),    
-    "intermediate_out":8,
+        patchwork.customLayers.createUnet_v2(depth=3,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,32,64,64],nonlin='linear'),
+    # "finalBlock": patchwork.customLayers.QMembedding(20,4),
+    #"block_out":[6,7,6,4],
+    #"finalBlock_all_levels":True,
     "intermediate_loss":True,          
+    "finalizeOnApply":False
+#    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),   
     }
 
 ## DATA IMPORT OPTIONS
@@ -158,8 +161,8 @@ loading = {
 
 training = {
    "num_patches":200,
-   "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":1,
+   "augment": {},#{"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
+   "epochs":5,
    "num_its":100,                
    "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -171,6 +174,43 @@ training = {
 
 
         
+
+
+if False: #QMedbedding
+    dim_embedding = 7
+    
+    if 'categorial_label' not in patching or patching['categorial_label'] is None:
+        raise ValueError('QMenbedding only with categorial labels')
+
+    num_labels_cat = len(patching['categorial_label'])+1
+    training['loss'] = [patchwork.customLayers.QMloss()]*patching['depth']
+    training['dontcare'] =False
+    patching['categorical'] = True
+    network["finalBlock"]= patchwork.customLayers.QMembedding(num_labels_cat,dim_embedding)
+    if 'block_out' not in network or network['block_out'] is None:            
+        network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [dim_embedding]
+    network["finalBlock_all_levels"]=True
+    
+    training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
+
+    network["intermediate_loss"]=False
+
+
+
+if True: # ,,,
+
+    dim_embedding = 7
+    training['loss'] = [tf.losses.SparseCategoricalCrossentropy()]*patching['depth']
+    training['dontcare'] =False
+    patching['categorical'] = True
+    network["intermediate_loss"]=False
+    #network["finalBlock"]= patchwork.customLayers.QMactivation() 
+    network["finalBlock"]= tf.keras.layers.Activation('softmax')
+    if 'block_out' not in network or network['block_out'] is None:            
+        network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [15]
+    
+
+    training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
 
 
@@ -289,7 +329,7 @@ else:
     
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> initializing network")
     dataexample = tset[0][0:1,...]    
-    themodel.apply_full(dataexample,resolution=rset[0],repetitions=100,generate_type='random',verbose=True)
+    tmp = themodel.apply_full(dataexample,resolution=rset[0],repetitions=100,generate_type='random',verbose=True)
     
     
 
@@ -303,11 +343,12 @@ themodel.train_cycle += 1
 if "align_physical" in loading:
     themodel.align_physical = loading["align_physical"]
 
-
+ 
     
 #%% start training    
 
-
+#training['sparseLoss'] =True
+#training['loss'] = [tf.losses.SparseCategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)]*patching['depth']
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
 import gc
 for i in range(0,outer_num_its):
@@ -334,8 +375,8 @@ for i in range(0,outer_num_its):
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=True,              
                    patch_on_cpu=True,
-                   hard_mining=0.2,
-                   hard_mining_order='balance',
+                  # hard_mining=0.2,
+                  # hard_mining_order='balance',
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     
@@ -351,11 +392,21 @@ for i in range(0,outer_num_its):
 
 
 #%%
-    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='atls',repetitions=100,generate_type='random')
+ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=200,num_chunks=1,generate_type='random',
+                                augment={},
+                                scale_to_original=False)
+
+#plt.imshow(tf.squeeze(ew[1][:,:,:]))
+
+for k in range(14):
+    plt.imshow(tf.squeeze(ew[1][:,:,:,k]),vmin=0)
+    plt.pause(0.001)
 
 
 
 
+#%%
+model = patchwork.PatchWorkModel.load('models/yourmodel.json')
 
 
 
