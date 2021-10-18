@@ -1433,10 +1433,10 @@ class PatchWorkModel(Model):
     
     
     def computeloss(fun,label,pred):
-        f = self.pixelfreqs[-1]
-        w = f / tf.reduce_sum(f)
-        w = 1/w
-        w = tf.where(f==0,1,w)
+        #f = self.pixelfreqs[-1]
+        #w = f / tf.reduce_sum(f)
+        #w = 1/w
+        #w = tf.where(f==0,1,w)
         if self.cropper.categorial_label is not None and not self.cropper.categorical:
             lmat = 0.0
             cnt = 0
