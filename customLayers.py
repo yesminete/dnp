@@ -796,10 +796,11 @@ class warpLayer(layers.Layer):
 
   def call(self, image):
      C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
-     C = tf.where(C>1.0,1.0,C)
-     C = C/(np.pi*2)*tf.cast(self.shape_mult-1,dtype=tf.float32)
+     C = C/(np.pi*2)
+     C = tf.where(C>0.99,0.99,C)     
+     C = C*tf.cast(self.shape_mult-1,dtype=tf.float32)
      W = self.lin_interp(self.weight,C)
-     return tf.concat([W,C],self.nD+1)
+     return tf.concat([W,image],self.nD+1)
      
       
   def get_config(self):
