@@ -1004,7 +1004,27 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         
                 else:
                     notfound = False
-                    if exclude_incomplete_labels == -1:
+
+                    if exclude_incomplete_labels == -2:
+                        sz = imgs[0].shape
+                        print("  missing label " + str(j) + " for subject " + k + ", using position label")                        
+                        if nD==2:
+                            X,Y = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),indexing='ij')
+                            X = tf.expand_dims(tf.expand_dims(tf.cast(X,dtype=ftype),0),-1)
+                            Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
+                            X = X/(sz[1]-1)*2*np.pi
+                            Y = Y/(sz[2]-1)*2*np.pi
+                            img = tf.concat([img,tf.math.cos(X),tf.math.sin(X),tf.math.cos(Y),tf.math.sin(Y)],nD+1)
+                        if nD==3:
+                            X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
+                            X = tf.expand_dims(tf.expand_dims(tf.cast(X,dtype=ftype),0),-1)
+                            Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
+                            Z = tf.expand_dims(tf.expand_dims(tf.cast(Z,dtype=ftype),0),-1)
+                            X = X/(sz[1]-1)*2*np.pi
+                            Y = Y/(sz[2]-1)*2*np.pi
+                            Z = Z/(sz[3]-1)*2*np.pi
+                            img = tf.concat([img,tf.math.cos(X),tf.math.sin(X),tf.math.cos(Y),tf.math.sin(Y),tf.math.cos(Z),tf.math.sin(Z)],nD+1)                            
+                    elif exclude_incomplete_labels == -1:
                         print("  missing label " + str(j) + " for subject " + k + ", extending with nans (dont care label)")
                         img = tf.zeros(imgs[0].shape,dtype=ftype)+np.nan
                     else:
