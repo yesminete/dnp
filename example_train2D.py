@@ -35,12 +35,12 @@ import patchwork2 as patchwork
 contrasts = [ { 'subj1' :  'example2d.nii.gz',  
                 'subj2' :  'example2d.nii.gz'  } ]
 labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
-                'subj2' :  'example2d_label.nii.gz' } ]
+                 } ]
 
 subjects = [ 'subj1', 'subj2'];
 
 # define ou want some validation dta
-valid_ids = [1]
+valid_ids = []
 
 
 modelfi = "models/yourmodel"
@@ -141,6 +141,7 @@ loading = {
     "threshold":0.5,
     "add_inverted_label":False,
     "one_hot_index_list":None,
+    "exclude_incomplete_labels":-2
    # "integer_labels":True
     }
 
