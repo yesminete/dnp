@@ -834,12 +834,13 @@ custom_layers['sigmoid_window'] = sigmoid_window
 
 class warpLayer(layers.Layer):
 
-  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), nD=0,**kwargs):
+  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), nD=0,typ=None,**kwargs):
     super().__init__(**kwargs)
     nD = len(shape)-1
     self.nD = nD
+    self.typ=typ
     self.shape = shape
-    self.shape_mult = shape[0:nD]
+    self.shape_mult = tf.cast(shape[0:nD],dtype=tf.float32)
     for k in range(nD+1):
         self.shape_mult = tf.expand_dims(self.shape_mult,0)
     self.weight = self.add_weight(shape=shape, 
@@ -877,10 +878,16 @@ class warpLayer(layers.Layer):
    
 
   def call(self, image):
-     C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
-     C = C/(np.pi*2)
-     C = tf.where(C>0.99,0.99,C)     
+     if self.typ == 'xyz':
+        C = image
+     else:
+        C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
+        C = C/(np.pi*2)
+     #C = tf.where(C>0.99,0.99,C)     
      C = C*tf.cast(self.shape_mult-1,dtype=tf.float32)
+     C = tf.where(C<0,0.0,C)
+     C = tf.where(C>self.shape_mult-2,self.shape_mult-2,C)
+          
      W = self.lin_interp(self.weight,C)
      return tf.concat([W,image],self.nD+1)
      
@@ -891,6 +898,7 @@ class warpLayer(layers.Layer):
         {
             'nD': self.nD,
             'shape': self.shape,
+            'typ':self.typ,
         } )    
         return config                  
 

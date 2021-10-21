@@ -1707,11 +1707,11 @@ class PatchWorkModel(Model):
            c = tf.cast(self.cropper.categorial_label_original,dtype=tf.int64)
            r = tf.range(1,self.num_labels+1)
        for k in range(len(labelset)):
-            maxi  = tf.reduce_max(labelset[k])
+            maxi  = max(c) # tf.reduce_max(labelset[k])
             dontcarelabel = labelset[k]==-1
             labelset[k] = tf.where(dontcarelabel,0,labelset[k])
             categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
-            labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,labelset[k]),-1)
+            labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
             labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
 
            
