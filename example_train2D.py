@@ -352,7 +352,7 @@ for i in range(0,outer_num_its):
 
 
 #%%
-    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='atls',repetitions=100,generate_type='random')
+res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=100,generate_type='random',level='mix')
 
 
 

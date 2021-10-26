@@ -553,9 +553,7 @@ class PatchWorkModel(Model):
              else:
                  outs = res
              return outs
-         
-         self.finalBlock_all_levels = True
-             
+                      
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
              if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and (k == self.cropper.depth-1 or self.finalBlock_all_levels):
@@ -800,6 +798,8 @@ class PatchWorkModel(Model):
                     pred_votes = 0
                     pred_on = 0
                     dest_shape = pred[-1].shape
+                    print(">>> mixing ")    
+                    start = timer()                    
                     for k in range(len(pred)):
                         fac = np.math.pow(0.2,len(pred)-1-k)
                         pr = tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
@@ -808,6 +808,8 @@ class PatchWorkModel(Model):
                         pred_votes = pred_votes + fac*tf.squeeze(pr/(vr+0.00001))
                     res = [pred_votes / (pred_on+0.00001)]
                     level = [0]                    
+                    print(">>> time elapsed, mixing: " + str(timer() - start) )
+
                 else:
                     res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
              
@@ -1067,7 +1069,7 @@ class PatchWorkModel(Model):
                  if out_typ.find('mask') != -1:
                      out_typ = 'uint8'   
                      if self.cropper.categorical:                     
-                         tmp = np.argmax(res_axis=-1)
+                         tmp = np.argmax(res_,axis=-1)
                          if labelidx is not None:
                              pred_nii = nib.Nifti1Image(tmp==labelidx, newaffine, img1.header)
                          else:
@@ -1693,29 +1695,31 @@ class PatchWorkModel(Model):
         self.disc_variables += b.trainable_variables
     
     
-    if self.cropper.categorial_label is not None:
-
-       if self.cropper.categorical:
-           nl = len(self.cropper.categorial_label_original)
-           self.cropper.categorial_label = list(range(0,nl+1))
-           c = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int64)       
-           r = tf.range(0,nl+1)
-           self.num_labels=nl+1
-           self.cropper.num_labels = nl+1
-       else:
-           self.cropper.categorial_label = list(range(1,self.num_labels+1))
-           c = tf.cast(self.cropper.categorial_label_original,dtype=tf.int64)
-           r = tf.range(1,self.num_labels+1)
-       for k in range(len(labelset)):
-            maxi  = max(c) # tf.reduce_max(labelset[k])
-            dontcarelabel = labelset[k]==-1
-            labelset[k] = tf.where(dontcarelabel,0,labelset[k])
-            categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
-            labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
-            labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
-
+    
+        
+        if self.cropper.categorial_label is not None:
+    
+           if self.cropper.categorical:
+               nl = len(self.cropper.categorial_label_original)
+               self.cropper.categorial_label = list(range(0,nl+1))
+               c = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int64)       
+               r = tf.range(0,nl+1)
+               self.num_labels=nl+1
+               self.cropper.num_labels = nl+1
+           else:
+               self.cropper.categorial_label = list(range(1,self.num_labels+1))
+               c = tf.cast(self.cropper.categorial_label_original,dtype=tf.int64)
+               r = tf.range(1,self.num_labels+1)
+           for k in range(len(labelset)):
+                maxi  = max(c) # tf.reduce_max(labelset[k])
+                dontcarelabel = labelset[k]==-1
+                labelset[k] = tf.where(dontcarelabel,0,labelset[k])
+                categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
+                labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
+                labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
+    
+               
            
-       
     
     
     
