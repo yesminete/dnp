@@ -352,11 +352,14 @@ for i in range(0,outer_num_its):
 
 
 #%%
-res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=100,generate_type='random',level='mix')
+res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=1,
+                                  generate_type='tree',
+                                  lazyEval={'batches':2,'fraction':1}
+                                  )
 
 
 
-
+plt.imshow(res[1][:,:,0,0])
 
 
 

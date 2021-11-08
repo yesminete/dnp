@@ -29,19 +29,25 @@ import patchwork2.customLayers as customLayers
 
 #%%
 
-
-
+fi = 't1.nii'
+fi = '/software/patchwork2/s004.nii'
 
 trainset = []
 labelset = []
 
-img = nib.load('t1.nii')
+img = nib.load(fi)
 ie = img.affine
 img = img.get_fdata()
 
 #ie = np.array([[-1,0,0,100],[0,-1,0,-10000],[0,0,-1,-500],[0,0,0,1]])
-ie = np.array([[-3,0,0,100],[0,-1,0,-10000],[0,0,1,-500],[0,0,0,1]])
-img = img[:,:,::2]
+if 0:
+    ie = np.array([ [0,0,-0.6,100],
+                    [-0.6,0,0,-10000],
+                    [0,-1,0,-500],
+                    [0,0,0,1]])
+#img = img[:,:,::2]
+img = img[:,:,:]
+
 
 img = tf.cast(tf.expand_dims(tf.expand_dims(img,0),4),dtype=tf.float32)
 resolutions = [{"input_edges":ie}]
@@ -63,14 +69,15 @@ cgen = patchwork.CropGenerator(
     snapper = [0,1,1],
                   scheme = {
                       #"destvox_mm": [1,1,1],
-                      "destvox_rel": [5,1,1],
-                      "fov_mm":[100,100,150],
-                      #"fov_rel":[0.5,0.5,0.5],
+                      "destvox_rel": [1,1,1],
+                      #"fov_mm":[10,10,10],
+                      "fov_rel":[0.8,0.8,0.8],
                       "patch_size":[32,32,32]
                       },
                   ndim=nD,
                   interp_type = 'NN',
                   scatter_type = 'NN',
+                  system='world',
                   depth=3)
 
 
@@ -89,14 +96,40 @@ s = 1
 xx = trainset[0]
 res = model.apply_full(xx,resolution=resolutions[0],
                        branch_factor=1,
-                       level='mix',
-                       generate_type='random',jitter=0.1,   repetitions=10,
+                       #level='mix',
+                       generate_type='random',jitter=0,   repetitions=200,num_chunks=1,
                        augment= {"independent_augmentation" : False,
-                                 "dphi" : [0,0 ,0] },
+                                 "dphi" : 0 },
                        verbose=True,scale_to_original=False,testIT=1)
 
 
 
-s=2
-plt.imshow(tf.squeeze(res[20,:,:]),aspect=1/s)
+s=1
+#plt.imshow(tf.squeeze(res[150,:,:]),aspect=1/s)
+plt.imshow(tf.squeeze(res[:,:,20]),aspect=1/s)
+print(res.shape)
+#%%
+
+res,nii = model.apply_on_nifti(fi, ['/nfs/noraimg/transfer/xx.nii'],
+                       branch_factor=1,
+                       #level='mix',
+                       generate_type='random',jitter=0,   repetitions=20,num_chunks=1,
+                       augment= {"independent_augmentation" : False,
+                                 "dphi" : 0.4 },
+                       verbose=True,scale_to_original=False,testIT=1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
