@@ -1451,7 +1451,7 @@ class PatchWorkModel(Model):
         return lmat
 
     def computeF1perf(label,pred,valid=False):
-        f1=0
+        f1=[]
         th=[]
         cnt = 0
         if self.cropper.categorial_label is not None:
@@ -1463,17 +1463,16 @@ class PatchWorkModel(Model):
                     th_ = tf.cast(0.5,tf.float32)
                 else:
                     f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
-                f1+=f1_
+                f1.append(f1_)
                 th.append(th_)
                 cnt=cnt+1
         else:                       
             for j in range(0,self.num_labels):
                 f1_,th_ = f1_metric_best(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid)
-                f1+=f1_
+                f1.append(f1_)
                 th.append(th_)
                 cnt=cnt+1
-        f1 /= cnt
-        return f1,th
+        return f1,th,sum(f1)/cnt
 
     def computeF1perf_center(label,pred,valid=False):
         f1=0
@@ -1517,10 +1516,11 @@ class PatchWorkModel(Model):
             loss += l
             if k == len(labels)-1:
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                f1,th = computeF1perf(masked_label,masked_pred,valid=False)
+                f1list,th,f1 = computeF1perf(masked_label,masked_pred,valid=False)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
                 hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**(sum(th)/len(th))
-                hist[prefix+'_nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
+                hist[prefix+'_nodisplay_class_f1'] = tf.cast(th,dtype=tf.float32)
+                hist[prefix+'_nodisplay_class_threshold'] = tf.cast(f1list,dtype=tf.float32)
                 
       return hist
     
@@ -1555,10 +1555,11 @@ class PatchWorkModel(Model):
                 l = tf.reduce_mean(lmat)
                 if k == depth-1:
                     hist['output_' + str(k+1) + '_loss'] = l                    
-                    f1,th = computeF1perf(masked_label,masked_pred)
+                    f1list,th,f1 = computeF1perf(masked_label,masked_pred)
                                         
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
                     hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
+                    hist['nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
                     hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                                                                                    
                     if hard_mining > 0:
