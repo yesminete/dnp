@@ -69,7 +69,9 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
     fdim = fdims[z]
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
-    if noBridge:
+    if noBridge==2 and z==depth-1:
+        theLayers[id_d+"conv0"] =  [conv_down(fdim) ]+BNrelu()
+    elif noBridge==1:
         theLayers[id_d+"conv0"] =  [conv_down(fdim) ]+BNrelu()
     else:
         theLayers[id_d+"conv0"] = [{'f': [conv_down(fdim)]+BNrelu() } , {'f': conv(fdim), 'dest':id_u+"relu" }  ]
@@ -158,7 +160,9 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
     fdim = fdims[z]
     id_d = str(1000 + z+1)
     id_u = str(2000 + depth-z+1)
-    if noBridge:
+    if noBridge==2 and z==depth-1:
+        theLayers[id_d+"0_conv"] =  [conv_down(fdim) ]+BNrelu()    
+    elif noBridge == 1:
         theLayers[id_d+"0_conv"] =  [conv_down(fdim) ]+BNrelu()
     else:
         theLayers[id_d+"0_conv"] = [{'f': [conv_down(fdim)]+BNrelu() } , {'f': conv(fdim), 'dest':id_u+"5_relu" }  ]

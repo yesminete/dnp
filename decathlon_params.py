@@ -63,12 +63,9 @@ snapper=None
 
 
 # V4
-theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
-                 outK=outK,nD=3,input_shape=input_shape,feature_dim=[32,32,32,32,32],dropout=False)
-patch_size = [64,64,64]
-bala=None
-snapper=[1,1,1,1,1]
-
+theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,16,32,64])
+balance={"ratio":0.5,"autoweight":1}
+iout = 8
 
 ##
 #theblock = lambda level,outK,input_shape : createUnet_v2(depth=5,
@@ -76,16 +73,14 @@ snapper=[1,1,1,1,1]
 
 
 schemeP = lambda task : { 
+    "patch_size":[32,32,32],                   
     "destvox_mm": vsizes[task],
     "destvox_rel": None,
     "fov_mm":wid80[task],
     "fov_rel":None,
 }
-depth=2
-ident=False
-fittyp = 'custom'
+depth=4
 
-#myloss = TopK_loss3D(K=1000,combi=True)
 
 
 import tensorflow_addons as tfa
@@ -102,10 +97,11 @@ myoptim = None #tfa.optimizers.AdamW()
 
 
 
-
-
 def augmentP(task):
-    return { 'dphi': 0.25, 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+    aug = { 'dphi': 0.25, 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }
+    if ct[task]==0:
+        aug['vscale'] = 1
+    return aug
 
 #    if aniso[task] == 1:
 #        return { 'dphi': 0.25, 'flip': flips[task], 'dscale':[0.1,0.1,0.1] }

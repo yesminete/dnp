@@ -725,80 +725,67 @@ class CropGenerator():
           patch_shapes = list(map(lambda k: tensor(self.get_patchsize(k)),range(depth)))
           out_patch_shapes =list(map(lambda k: tensor(self.get_outpatchsize(k)),range(depth)))
         
-          if self.scheme is not None:
-              destvox_mm = at(self.scheme,'destvox_mm')
-              destvox_rel = at(self.scheme,'destvox_rel')
-              fov_mm = at(self.scheme,'fov_mm')
-              fov_rel = at(self.scheme,'fov_rel')
-                                
-              if fov_mm is not None:
-                  patch_widths = [tensor(fov_mm)]
-              else:
-                  patch_widths = [tensor(fov_rel)*input_width]
+          destvox_mm = at(self.scheme,'destvox_mm')
+          destvox_rel = at(self.scheme,'destvox_rel')
+          fov_mm = at(self.scheme,'fov_mm')
+          fov_rel = at(self.scheme,'fov_rel')
+                          
+          
+          idxperm_inv = tf.argmax(tf.abs(input_edges[0,0:nD,0:nD]),1)
+          idxperm = tf.argmax(tf.abs(input_edges[0,0:nD,0:nD]),0)
             
-              if destvox_mm is not None:
-                  final_width = (out_patch_shapes[-1]-1)*tensor(destvox_mm)
-              else:
-                  final_width = (out_patch_shapes[-1]-1)*input_width/(tensor(input_shape)-1)*tensor(destvox_rel)
-              
-              if depth == 1:
-                  patch_widths = [tensor(final_width)]
-              else:
-                  fac = tf.math.pow(final_width / patch_widths[0],1/(depth-1))
-                  for k in range(1,depth):
-                      patch_widths.append(fac*patch_widths[-1])
-                  
+          
+            
+          
+          if fov_mm is not None:
+                fov_mm = tensor(fov_mm)
+                if self.system == 'world':
+                    fov_mm = tf.gather(fov_mm,idxperm)
+                patch_widths = [fov_mm]
           else:
+                fov_rel = tensor(fov_rel)
+                if self.system == 'world':
+                    fov_rel = tf.gather(fov_rel,idxperm)
+                patch_widths = [fov_rel*input_width]
+          
             
-              
-              init_scale = self.init_scale
-              depth = self.depth
-              if isinstance(init_scale,str) or init_scale == -1:
-                 if isinstance(init_scale,str):
-                    if init_scale.find('mm') != -1 or init_scale.find('cm') != -1:
-                        assert (resolution is not None), "for absolute init_scale you have to pass resolution"
-                        if init_scale.find('cm') != -1:
-                            sizes_mm = init_scale.replace("cm","").split(",")
-                            sizes_mm = list(map(lambda x: float(x)*10, sizes_mm))
-                        else:
-                            sizes_mm = init_scale.replace("mm","").split(",")
-                            sizes_mm = list(map(float, sizes_mm))                   
-                        patch_widths = [tensor(sizes_mm)]
-                    else:
-                       assert False, "bug in init_scale"
-                 else:
-                    patch_widths = []
+          if destvox_mm is not None:  # final_width is size of smallest patch in mm
+                destvox_mm = tensor(destvox_mm)
+                if self.system == 'world':
+                    destvox_mm = tf.gather(destvox_mm,idxperm)
                 
-                 shapes = [tensor(input_shape)] + patch_shapes
-                 for k in range(len(patch_widths),depth):
-                    asp = []
-                    for d in range(nD):
-                        asp.append(shapes[k][d]/shapes[k+1][d]*self.get_scalefac(k)[d])
-                    if self.scale_fac_ref == 'max':
-                        asp = [max(asp)]*nD
-                    elif self.scale_fac_ref == 'min':
-                        asp = [min(asp)]*nD
-                    elif self.scale_fac_ref == 'perdim':
-                        asp = asp
-                    else:
-                        asp = [asp[self.scale_fac_ref]]*nD
-                    if len(patch_widths) == 0:
-                        patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*input_width)
-                    else:
-                        patch_widths.append(tensor(asp)* shapes[k+1]/shapes[k]*patch_widths[-1])
-              
+                final_width = (out_patch_shapes[-1]-1)*destvox_mm
+          else:
+                destvox_rel = tensor(destvox_rel)
+                if self.system == 'world':
+                    destvox_rel = tf.gather(destvox_rel,idxperm)
+                final_width = (out_patch_shapes[-1]-1)*input_width/(tensor(input_shape)-1)*destvox_rel
+
+          if self.system == 'world':
+              final_width = tf.gather(final_width,idxperm_inv)
+            
+            
+            
+          if depth == 1:
+                patch_widths = [tensor(final_width)]
+          else:
+                fac = tf.math.pow(final_width / patch_widths[0],1/(depth-1))
+                for k in range(1,depth):
+                    patch_widths.append(fac*patch_widths[-1])
+
+
+            
           # derive shape of output image
           dest_edges = []
           dest_shapes = []
-          idxperm = tf.argmax(tf.abs(input_edges[0,0:nD,0:nD]),1)
+          if self.system == 'matrix':
+              idxperm = list(range(nD))
           for k in range(len(out_patch_shapes)):
             w = patch_widths[k]/(out_patch_shapes[k]-1)*1
             wperm = tf.gather(w,idxperm)
-            dshape = int32(input_width/wperm)
+            dshape = int32(input_width/wperm+1)
             vsz =  input_width/tensor(dshape-1)
             dedge = tf.matmul(input_edges[0,:,:],tf.linalg.diag(tf.concat([vsz/input_voxsize,[1]],0)))
-            #dedge = tf.linalg.diag(tf.concat([vsz,[1]],0))
-            ##bug 
             dest_edges.append(tf.expand_dims(dedge,0))
             dest_shapes.append(dshape)
 
@@ -853,13 +840,10 @@ class CropGenerator():
 
       patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],src_boxes,resolution_,self.depth)
 
+      if generate_type == 'random_fillholes' and labels_ is not None:
+          src_boxes_labels = patching_params['dest_edges'][-1]
+          src_width_labels = tf.math.sqrt(tf.reduce_sum(src_boxes_labels[0,0:self.ndim,0:self.ndim]**2,0))*(tensor(labels_.shape[1:-1])-1)                        
 
-      # if isinstance(resolution_,dict) and "input_edges" in resolution_:          
-      #     destboxes = patching_params['dest_edges']
-      #     ##bug
-      #     worldtrafo = tf.einsum('ik,k->ik',toboxes(resolution_['input_edges']),1.0/tf.concat([src_voxsize,[1]],0))
-      #     for k in range(len(destboxes)):
-      #         destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
       if balance is not None and "autoweight" in balance and balance['autoweight'] > 0:
           balance = balance.copy()
@@ -1306,7 +1290,9 @@ class CropGenerator():
               points_tot = []
               for k in range(label.shape[0]):
                   L = label[k,...]
-                  if self.categorial_label is None:
+                  if generate_type == 'random_fillholes': # only for application
+                      L = L
+                  elif self.categorial_label is None:
                       if label_weight is not None:
                           L = L*label_weight
                   else:
@@ -1377,7 +1363,7 @@ class CropGenerator():
             w = (1-overlap)*out_width/width
         
             # rnd points inside patches
-            if generate_type == "random" or generate_type == "random_deprec":
+            if generate_type == "random" or generate_type == "random_fillholes" or generate_type == "random_deprec":
                 if balance is not None:
                     points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
                 else:
@@ -1438,9 +1424,11 @@ class CropGenerator():
             
             if self.system == 'matrix':
                 Def = src_boxes/src_vxsz
-            else:                
+            elif self.system == 'world':                
                 tmp = tf.concat([tf.linalg.diag(tf.ones([src_boxes.shape[0],nD])),tf.zeros([src_boxes.shape[0],1,nD])],1)
                 Def = tf.concat([ tmp,  src_boxes[:,:,nD:nD+1] ],2)
+            else:
+                assert 0,'system has to be world or matrix'
 
             U = tf.matmul(A,Def*vxsz)
             
@@ -1477,14 +1465,22 @@ class CropGenerator():
             flip = tensor([0]*nD)
                         
         start = timer()
-          
-        local_boxes, rot_augment, affine_augment = draw_boxes(
-                                 last_boxes, last_shape, last_width, 
-                                 patch_shapes[level], patch_widths[level], 
-                                 last_label,
-                                 N)
+ 
+
+        if src_boxes_labels is not None and level == 0:   # if labels are present and we are in the lowest level, take geometry of label
+            local_boxes, rot_augment, affine_augment = draw_boxes(
+                                     src_boxes_labels, tensor(last_label.shape[1:-1]), src_width_labels, 
+                                     patch_shapes[level], patch_widths[level], 
+                                     last_label,
+                                     N)
+        else:
+            local_boxes, rot_augment, affine_augment = draw_boxes(
+                                     last_boxes, last_shape, last_width, 
+                                     patch_shapes[level], patch_widths[level], 
+                                     last_label,
+                                     N)
+            
         
-    
         # the index which crops the subpatch out of the last patch
         local_box_index = compindex(last_boxes,local_boxes,last_shape,patch_shapes[level],0,self.interp_type,0)
 

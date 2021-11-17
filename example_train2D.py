@@ -160,7 +160,7 @@ loading = {
 training = {
    "num_patches":200,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":1,
+   "epochs":2,
    "num_its":100,                
    "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -309,6 +309,18 @@ if "align_physical" in loading:
 #%% start training    
 
 
+initial_learning_rate = 0.1
+lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+    initial_learning_rate,
+    decay_steps=10,
+    decay_rate=0.96,
+    staircase=True)
+
+
+training['optimizer'] = tf.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, amsgrad=True)
+
+
+
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
 import gc
 for i in range(0,outer_num_its):
@@ -352,11 +364,14 @@ for i in range(0,outer_num_its):
 
 
 #%%
-res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=100,generate_type='random',level='mix')
+res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=10,num_chunks=4,
+                                  generate_type='random_fillholes',
+                                  lazyEval={'fraction':1}
+                                  )
 
 
 
-
+plt.imshow(res[1][:,:,0,0])
 
 
 

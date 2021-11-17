@@ -475,10 +475,16 @@ class PatchWorkModel(Model):
                 attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
             else:
                 attention = reduceFun(attentionFun(res[...,lazyEval['label']:lazyEval['label']+1]),axis=list(range(1,nD+2)))                  
+                
         idx = tf.argsort(attention,0,'DESCENDING')
-        numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
-        idx = idx[0:numps]            
-        print('lazyEval, level ' + str(k-1) + ': only forwarding the ' + str(numps.numpy()) + ' most likely patches to next level')
+        if fraction < 1:
+            numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
+            idx = idx[0:numps]            
+
+        if 'batchselection' in lazyEval:
+            idx = lazyEval['batchselection'](idx,k)
+
+        print('lazyEval, level ' + str(k-1) + ': only forwarding ' + str(idx.shape[0]) + ' patches to next level')
         res = tf.gather(res,idx,axis=0)
         if res_nonspatial is not None:
            res_nonspatial = tf.gather(res_nonspatial,idx,axis=0)
@@ -493,6 +499,10 @@ class PatchWorkModel(Model):
       else:
           inp = inputs['input' + str(k)]
           coords = inputs['cropcoords' + str(k)]
+
+    #  if lazyEval is not None:
+      #print('processing level ' + str(k) + ': ' + str(inp.shape[0]) + ' patches')
+
 
       if k > 0: # it's not the initial scale, so do cropping etc.
           
@@ -654,7 +664,7 @@ class PatchWorkModel(Model):
      sumpred = [0.0]  * self.cropper.depth
      
      reps = 1
-     if generate_type == 'random' or generate_type == 'random_deprec' :
+     if generate_type == 'random' or generate_type == 'random_fillholes' or generate_type == 'random_deprec' :
          reps = repetitions
          repetitions = 1         
          
@@ -668,12 +678,26 @@ class PatchWorkModel(Model):
          if 'attentionFun' not in lazyEval:
              lazyEval['attentionFun'] = tf.math.sigmoid
          if 'fraction' not in lazyEval:
-             lazyEval['fraction'] = 0.5
+             if 'batches' in lazyEval:
+                 lazyEval['fraction'] = 1
+             else:
+                 lazyEval['fraction'] = 0.5
          if branch_factor is None and generate_type != 'random':
              branch_factor = round(1/lazyEval['fraction'])
              print("branch factor is " + str(branch_factor))
          if 'label' not in lazyEval:
              lazyEval['label'] = None
+         if 'batches' in lazyEval:
+             if lazyEval['batches'] is not None:
+                 B = lazyEval['batches']
+                 repetitions = B**self.cropper.depth
+                 def batchselection(idx,level,instance):                    
+                    s = (instance//(B**level))%B
+                    n = idx.shape[0]
+                    idx = idx[s*(n//B+1):(s+1)*(n//B+1)]
+                    
+                        
+                    return idx
 
      if branch_factor is None:
          branch_factor = 1
@@ -687,18 +711,33 @@ class PatchWorkModel(Model):
 
      for w in range(num_chunks):
          if w > 0:
-             print('chunks: ' + str(w) + "/" +  str(num_chunks))
+             print('------------------------------------------------ chunk: ' + str(w) + "/" +  str(num_chunks))
          for i in range(repetitions):
              
             if lazyEval is None:             
                 print(">>> sampling patches for testing")
                 start = timer()
-            x = self.cropper.sample(data,None,test=False,generate_type=generate_type,snapper=snapper,
+            else:
+                if 'batches' in lazyEval:
+                   if lazyEval['batches'] is not None:
+                       lazyEval['batchselection'] = lambda x,y : batchselection(x,y,i)
+
+            label_dummy = None
+            balance = None
+            if generate_type == 'random_fillholes' and w > 0:
+                covering = tf.expand_dims(tf.reduce_max(sumpred[-1],axis=-1,keepdims=True),0)
+                label_dummy = tf.cast(covering==0,dtype=tf.float32)
+                balance = {"ratio":0.9}
+                #print(data.shape)                
+                #print(label_dummy.shape)
+
+            x = self.cropper.sample(data,label_dummy,test=False,generate_type=generate_type,snapper=snapper,
                                     resolutions=resolution,
                                     jitter = jitter,
                                     jitter_border_fix = jitter_border_fix,
                                     overlap=overlap,
                                     num_patches=reps,
+                                    balance=balance,
                                     dphi=dphi,
                                     augment=augment,
                                     branch_factor=branch_factor,
@@ -722,7 +761,7 @@ class PatchWorkModel(Model):
             if lazyEval is None:             
                 print(">>> time elapsed, sampling: " + str(timer() - start) )
 
-            print(">>> applying network -------------------------------------------------")
+            print(">>> applying network --- " + str(i+1) + "/" + str(repetitions))
             start = timer()
 
             if generate_type=='tree':
@@ -779,7 +818,8 @@ class PatchWorkModel(Model):
                         for k in level_to_stitch:            
                           a,b = x.stitchResult(r,k)
                           pred[k] += a
-                          sumpred[k] += b                
+                          sumpred[k] += b        
+                    print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[-1][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[-1].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
                     print(">>> time elapsed, stitching: " + str(timer() - start) )
                       
          if (np.amin(sumpred[-1])) > 0:
@@ -872,6 +912,7 @@ class PatchWorkModel(Model):
                  out_typ='int16',
                  label_names=None,
                  testIT=False,
+                 verbose=False,
                  return_nibabel=True,
                  lazyEval = None):
 
@@ -984,7 +1025,7 @@ class PatchWorkModel(Model):
                                         level = level,
                                         lazyEval = lazyEval,
                                         patch_size_factor=patch_size_factor,
-                                        verbose=False,
+                                        verbose=verbose,
                                         testIT=testIT,
                                         scale_to_original=scale_to_original)
 
@@ -1059,7 +1100,15 @@ class PatchWorkModel(Model):
                      if 'valid_nodisplay_class_threshold' in self.myhist.validloss_hist :
                          th = self.myhist.validloss_hist['valid_nodisplay_class_threshold']
                          threshold = th[-1][1]
-                 threshold = np.expand_dims(threshold,[0,1,2])
+                 nD = self.cropper.ndim
+                 if nD == 3 and self.num_labels > 1:
+                     threshold = np.expand_dims(threshold,[0,1,2])
+                 elif nD == 3 and self.num_labels == 1:
+                     threshold = np.expand_dims(threshold,[0,1])
+                 elif nD == 2 and self.num_labels > 1:
+                     threshold = np.expand_dims(threshold,[0,1])
+                 elif nD == 2 and self.num_labels == 1:
+                     threshold = np.expand_dims(threshold,[0])
 
                  
              else:
@@ -1086,7 +1135,10 @@ class PatchWorkModel(Model):
                          tmp = np.argmax(res_,axis=-1)
                      else:
                          tmp = res_>threshold
-                         tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
+                         if len(tmp.shape) == nD:
+                             tmp = tf.cast(tmp,dtype=tf.int32)
+                         else:
+                             tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
                          
                      if self.cropper.categorial_label is not None:
                          idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
@@ -1183,6 +1235,10 @@ class PatchWorkModel(Model):
     with open(fname) as f:
         x = json.load(f)
 
+    if 'system' not in x['cropper']:
+        print('deprecated: no system variable found, using system=matrix')
+        x['cropper']['system'] = 'matrix'
+
     cropper = CropGenerator(**x['cropper'])
     del x['cropper']
 
@@ -1259,7 +1315,7 @@ class PatchWorkModel(Model):
                 initdat = dummyData
             print("----------------- load/init network by minimal application")
             dummy = model.apply_full(initdat,resolution={"input_edges":np.eye(4),"voxsize":[0.01,0.01,0.01]},
-                                     verbose=True,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
+                                     verbose=False,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
             print("----------------- model and weights loaded")
         except:
             if not notmpfile:
@@ -1876,6 +1932,7 @@ class PatchWorkModel(Model):
                 for k in log:
                     print(k + ":" + str(log[k][0]),end=" ")
                 print("")
+                print("learning rate: " + str(self.optimizer._decayed_lr(tf.float32).numpy()))
 
             if len(patchloss) > 0:
                 patchloss = tf.concat(patchloss,0)
