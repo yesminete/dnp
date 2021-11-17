@@ -1093,7 +1093,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     print('label matrix inconsistent: ' + fname)
 
             if integer_labels:
-                labs = tf.cast(labs,dtype=tf.uint8)
+                labs = tf.cast(labs,dtype=tf.int16)
                 
                 
             labelset.append(labs)
