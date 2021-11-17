@@ -779,7 +779,7 @@ class CropGenerator():
           dest_edges = []
           dest_shapes = []
           if self.system == 'matrix':
-              idxperm = [0,1,2]
+              idxperm = list(range(nD))
           for k in range(len(out_patch_shapes)):
             w = patch_widths[k]/(out_patch_shapes[k]-1)*1
             wperm = tf.gather(w,idxperm)
@@ -840,13 +840,10 @@ class CropGenerator():
 
       patching_params = getPatchingParams(src_width,trainset_.shape[1:-1],src_boxes,resolution_,self.depth)
 
+      if generate_type == 'random_fillholes' and labels_ is not None:
+          src_boxes_labels = patching_params['dest_edges'][-1]
+          src_width_labels = tf.math.sqrt(tf.reduce_sum(src_boxes_labels[0,0:self.ndim,0:self.ndim]**2,0))*(tensor(labels_.shape[1:-1])-1)                        
 
-      # if isinstance(resolution_,dict) and "input_edges" in resolution_:          
-      #     destboxes = patching_params['dest_edges']
-      #     ##bug
-      #     worldtrafo = tf.einsum('ik,k->ik',toboxes(resolution_['input_edges']),1.0/tf.concat([src_voxsize,[1]],0))
-      #     for k in range(len(destboxes)):
-      #         destboxes[k] = tf.einsum('ij,cjk->cik',worldtrafo,destboxes[k])
       
       if balance is not None and "autoweight" in balance and balance['autoweight'] > 0:
           balance = balance.copy()
@@ -1293,7 +1290,9 @@ class CropGenerator():
               points_tot = []
               for k in range(label.shape[0]):
                   L = label[k,...]
-                  if self.categorial_label is None:
+                  if generate_type == 'random_fillholes': # only for application
+                      L = L
+                  elif self.categorial_label is None:
                       if label_weight is not None:
                           L = L*label_weight
                   else:
@@ -1364,7 +1363,7 @@ class CropGenerator():
             w = (1-overlap)*out_width/width
         
             # rnd points inside patches
-            if generate_type == "random" or generate_type == "random_deprec":
+            if generate_type == "random" or generate_type == "random_fillholes" or generate_type == "random_deprec":
                 if balance is not None:
                     points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
                 else:
@@ -1466,14 +1465,22 @@ class CropGenerator():
             flip = tensor([0]*nD)
                         
         start = timer()
-          
-        local_boxes, rot_augment, affine_augment = draw_boxes(
-                                 last_boxes, last_shape, last_width, 
-                                 patch_shapes[level], patch_widths[level], 
-                                 last_label,
-                                 N)
+ 
+
+        if src_boxes_labels is not None and level == 0:   # if labels are present and we are in the lowest level, take geometry of label
+            local_boxes, rot_augment, affine_augment = draw_boxes(
+                                     src_boxes_labels, tensor(last_label.shape[1:-1]), src_width_labels, 
+                                     patch_shapes[level], patch_widths[level], 
+                                     last_label,
+                                     N)
+        else:
+            local_boxes, rot_augment, affine_augment = draw_boxes(
+                                     last_boxes, last_shape, last_width, 
+                                     patch_shapes[level], patch_widths[level], 
+                                     last_label,
+                                     N)
+            
         
-    
         # the index which crops the subpatch out of the last patch
         local_box_index = compindex(last_boxes,local_boxes,last_shape,patch_shapes[level],0,self.interp_type,0)
 

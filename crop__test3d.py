@@ -66,10 +66,9 @@ trainset = [img]
 #tf.random.set_seed(2)
 nD=3
 cgen = patchwork.CropGenerator(
-    snapper = [0,1,1],
                   scheme = {
                       #"destvox_mm": [1,1,1],
-                      "destvox_rel": [1,1,1],
+                      "destvox_rel": [2,2,2],
                       #"fov_mm":[10,10,10],
                       "fov_rel":[0.8,0.8,0.8],
                       "patch_size":[32,32,32]
@@ -78,7 +77,7 @@ cgen = patchwork.CropGenerator(
                   interp_type = 'NN',
                   scatter_type = 'NN',
                   system='world',
-                  depth=3)
+                  depth=2)
 
 
 
@@ -86,18 +85,21 @@ cgen = patchwork.CropGenerator(
 model = patchwork.PatchWorkModel(cgen,
                       blockCreator= lambda level,outK : customLayers.createUnet_v2(2,1,nD=3,verbose=False),
                       intermediate_loss = True,
-                       num_labels = 1,
+                       num_labels = 5,
                        num_classes = 1,                      
                       )
-#%
+#%%
 
 
 s = 1
 xx = trainset[0]
 res = model.apply_full(xx,resolution=resolutions[0],
-                       branch_factor=1,
+                       #branch_factor=1,
                        #level='mix',
-                       generate_type='random',jitter=0,   repetitions=200,num_chunks=1,
+                       #lazyEval=0.1,
+                       generate_type='random_fillholes',
+                       #generate_type='random',
+                       jitter=0,   repetitions=64,num_chunks=4,
                        augment= {"independent_augmentation" : False,
                                  "dphi" : 0 },
                        verbose=True,scale_to_original=False,testIT=1)
@@ -106,14 +108,14 @@ res = model.apply_full(xx,resolution=resolutions[0],
 
 s=1
 #plt.imshow(tf.squeeze(res[150,:,:]),aspect=1/s)
-plt.imshow(tf.squeeze(res[:,:,20]),aspect=1/s)
+plt.imshow(tf.squeeze(res[:,:,20])>0.0,aspect=1/s)
 print(res.shape)
 #%%
 
 res,nii = model.apply_on_nifti(fi, ['/nfs/noraimg/transfer/xx.nii'],
                        branch_factor=1,
                        #level='mix',
-                       generate_type='random',jitter=0,   repetitions=20,num_chunks=1,
+                       generate_type='random_fillholes',jitter=0,   repetitions=20,num_chunks=4,
                        augment= {"independent_augmentation" : False,
                                  "dphi" : 0.4 },
                        verbose=True,scale_to_original=False,testIT=1)
