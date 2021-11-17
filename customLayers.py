@@ -555,23 +555,23 @@ custom_layers['QMactivation'] = QMactivation
 
 
 class QMembedding(layers.Layer):
-  def __init__(self,numC,embedD,**kwargs):    
+  def __init__(self,numC,embedD,bias=1,**kwargs):    
     super().__init__(**kwargs)
     self.numC = numC
     self.embedD = embedD
-    self.bias = 0
+    self.bias = bias
   
   def get_config(self):
     config = super().get_config().copy()
     config.update(
     {
         'numC': self.numC,
+        'bias': self.bias,
         'embedD': self.embedD
     } )    
     return config
     
   def apply(self, r, full=False):
-      r = tf.math.atan(r)     
       E = self.weight
       idx = tf.zeros(r.shape[0:-1],dtype=tf.int32)
       maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
@@ -581,9 +581,7 @@ class QMembedding(layers.Layer):
               p = tf.einsum('...i,i->...',r,E[k,0:-1]) + E[k,-1]
           else:
               p = tf.einsum('...i,i->...',r,E[k,:]) 
-          
-          p = p**2
-          
+                    
           if full:
               tmp.append(tf.expand_dims(p,-1))
           idx = tf.where(p>maxp,k,idx)
@@ -608,9 +606,33 @@ class QMembedding(layers.Layer):
 
 custom_layers['QMembedding'] = QMembedding
 
-def QMloss():
+def QMloss(bias=1,num_samples=4):
     
-    def loss(x,y,class_weight=None, from_logits=True):
+   def loss(x,y,class_weight=None, from_logits=True):
+
+        if bias == 1:
+            inp = lambda e: tf.reduce_sum(e[...,0:e.shape[-1]-1]*y,axis=-1) + e[...,-1]
+        else:
+            inp = lambda e: tf.reduce_sum(e*y,axis=-1)
+
+        nD = len(y.shape)-2        
+        E = y.QMembedding.weight
+
+        e = tf.squeeze(tf.gather(E,x))          
+        e = inp(e)
+
+        p_opp = tf.math.exp(e)
+        for k in range(num_samples):
+            opp = tf.random.uniform(x.shape,minval=0,maxval=E.shape[0],dtype=tf.int32)
+            opp = tf.where(opp==x,0,opp)
+            opp = tf.squeeze(tf.gather(E,opp))
+            e_opp = inp(opp)
+            p_opp = p_opp + tf.math.exp(e_opp)
+        
+        return -e + tf.math.log(p_opp)
+            
+            
+   def loss___(x,y,class_weight=None, from_logits=True):
         nD = len(y.shape)-2        
         E = y.QMembedding.weight
         y = tf.math.atan(y)
@@ -644,7 +666,7 @@ def QMloss():
         p = e**2
         return -tf.math.log(p) + tf.math.log(N) # = -log(p/N)
         
-    return loss
+   return loss
     
 
 class Scramble(layers.Layer):

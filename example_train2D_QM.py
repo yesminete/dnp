@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork2_dev as patchwork
+import patchwork2 as patchwork
 
 
 #%
@@ -95,7 +95,7 @@ patching = {
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
-    "categorial_label" : [1,2,3,4,5,6,8,9,10,11,12,13,14],#list(range(1,14)),
+    "categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14],#list(range(1,14)),
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -162,7 +162,7 @@ loading = {
 training = {
    "num_patches":200,
    "augment": {},#{"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":5,
+   "epochs":15,
    "num_its":100,                
    "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -176,8 +176,8 @@ training = {
         
 
 
-if False: #QMedbedding
-    dim_embedding = 7
+if True: #QMedbedding
+    dim_embedding = 3
     
     if 'categorial_label' not in patching or patching['categorial_label'] is None:
         raise ValueError('QMenbedding only with categorial labels')
@@ -196,9 +196,7 @@ if False: #QMedbedding
     network["intermediate_loss"]=False
 
 
-
-if True: # ,,,
-
+else:
     dim_embedding = 7
     training['loss'] = [tf.losses.SparseCategoricalCrossentropy()]*patching['depth']
     training['dontcare'] =False
@@ -398,8 +396,8 @@ ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=200,num
 
 #plt.imshow(tf.squeeze(ew[1][:,:,:]))
 
-for k in range(14):
-    plt.imshow(tf.squeeze(ew[1][:,:,:,k]),vmin=0)
+for k in range(5):
+    plt.imshow(tf.squeeze(ew[1][:,:,:,k]))
     plt.pause(0.001)
 
 

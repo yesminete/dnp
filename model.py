@@ -824,7 +824,7 @@ class PatchWorkModel(Model):
         
             
          if hasattr(r[0],'QMembedding'):
-            if False:
+            if True:
                 idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                 for k in level:
                    res[k],probs = r[0].QMembedding.apply(res[k])
@@ -1696,32 +1696,32 @@ class PatchWorkModel(Model):
         self.disc_variables += b.trainable_variables
     
     
+
     
-        
-        if self.cropper.categorial_label is not None:
-    
-           if self.cropper.categorical:
-               nl = len(self.cropper.categorial_label_original)
-               self.cropper.categorial_label = list(range(0,nl+1))
-               c = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int64)       
-               r = tf.range(0,nl+1)
-               self.num_labels=nl+1
-               self.cropper.num_labels = nl+1
-           else:
-               self.cropper.categorial_label = list(range(1,self.num_labels+1))
-               c = tf.cast(self.cropper.categorial_label_original,dtype=tf.int64)
-               r = tf.range(1,self.num_labels+1)
-           for k in range(len(labelset)):
-                maxi  = max(c) # tf.reduce_max(labelset[k])
-                dontcarelabel = labelset[k]==-1
-                labelset[k] = tf.where(dontcarelabel,0,labelset[k])
-                categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
-                labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
-                labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
-    
-               
+    if self.cropper.categorial_label is not None:
+
+       if self.cropper.categorical:
+           nl = len(self.cropper.categorial_label_original)
+           self.cropper.categorial_label = list(range(0,nl+1))
+           c = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int64)       
+           r = tf.range(0,nl+1)
+           self.num_labels=nl+1
+           self.cropper.num_labels = nl+1
+       else:
+           self.cropper.categorial_label = list(range(1,self.num_labels+1))
+           c = tf.cast(self.cropper.categorial_label_original,dtype=tf.int64)
+           r = tf.range(1,self.num_labels+1)
+       for k in range(len(labelset)):
+            maxi  = max(c) # tf.reduce_max(labelset[k])
+            dontcarelabel = labelset[k]==-1
+            labelset[k] = tf.where(dontcarelabel,0,labelset[k])
+            categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
+            labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
+            labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
+
            
-    
+       
+
     
     
     if loss is not None and fit_type=='keras':
@@ -1864,6 +1864,7 @@ class PatchWorkModel(Model):
                     
                     log.append(losslog)
                     print('.', end='') 
+                    
                 
                 
                 log, new_min = self.myhist.accum('train',log,numsamples,tensors=True,mean=True)
