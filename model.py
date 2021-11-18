@@ -1079,8 +1079,8 @@ class PatchWorkModel(Model):
              threshold = None
              if out_typ == 'idx':
                  fac = 1
-                 out_typ = 'int16'
-             if out_typ == 'int16':
+                 threshold = 0.5
+             elif out_typ == 'int16':
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
@@ -1129,16 +1129,19 @@ class PatchWorkModel(Model):
                              pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx], newaffine, img1.header)
                          else:
                              pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
-                 if out_typ.find('atls') != -1:
-                     out_typ = 'uint16'
-                     if self.cropper.categorical:                     
-                         tmp = np.argmax(res_,axis=-1)
+                 if out_typ.find('atls') != -1 or out_typ == 'idx':
+                     if self.cropper.categorical:           
+                         if out_typ == 'idx':
+                             tmp = res_
+                         else:
+                             tmp = np.argmax(res_,axis=-1)
                      else:
                          tmp = res_>threshold
                          if len(tmp.shape) == nD:
                              tmp = tf.cast(tmp,dtype=tf.int32)
                          else:
                              tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
+                     out_typ = 'uint16'
                          
                      if self.cropper.categorial_label is not None:
                          idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
@@ -1151,7 +1154,12 @@ class PatchWorkModel(Model):
                      colors = [[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255],[0,255,255],[255,128,0],[255,0,128],[128,255,128],[0,128,255],[128,128,128],[185,170,155]]
                      xmlpre = '<?xml version="1.0" encoding="UTF-8"?> <CaretExtension>  <Date><![CDATA[2013-07-14T05:45:09]]></Date>   <VolumeInformation Index="0">   <LabelTable>'
                      body = ''
-                     for k in range(0,self.num_labels):
+                     
+                     num_labels = self.num_labels
+                     
+                     if self.cropper.categorical:                         
+                         num_labels = self.num_labels-1
+                     for k in range(num_labels):
                         key = k+1
                         if self.cropper.categorial_label is not None:
                             key = self.cropper.categorial_label_original[k]
@@ -1167,7 +1175,7 @@ class PatchWorkModel(Model):
                         rgb = colors[k%len(colors)]
                         body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
                      xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
-                     xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n"
+                     xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n              "
                      pred_nii.header.extensions.append(nib.nifti1.Nifti1Extension(0,bytes(xml,'utf-8')))
 
                      
