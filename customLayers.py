@@ -614,24 +614,37 @@ def QMloss(bias=1,num_samples=4):
     
    def loss(x,y,class_weight=None, from_logits=True):
 
+        E = y.QMembedding.weight
+
         if bias == 1:
-            inp = lambda e: tf.reduce_sum(e[...,0:e.shape[-1]-1]*y,axis=-1) + e[...,-1]
+            y = y[...,0:(E.shape[1]-1)]
+            inp =  lambda e: tf.reduce_sum(e[...,0:e.shape[-1]-1]*y,axis=-1) + e[...,-1]
+            inp2 = lambda e: tf.reduce_sum(e[...,0:e.shape[-1]-1]*tf.expand_dims(y,-2),axis=-1) + e[...,-1]
         else:
-            inp = lambda e: tf.reduce_sum(e*y,axis=-1)
+            y = y[...,0:(E.shape[1])]
+            inp =  lambda e: tf.reduce_sum(e*y,axis=-1)
+            inp2 = lambda e: tf.reduce_sum(e*tf.expand_dims(y,-2),axis=-1)
 
         nD = len(y.shape)-2        
-        E = y.QMembedding.weight
 
         e = tf.squeeze(tf.gather(E,x))          
         e = inp(e)
 
         p_opp = tf.math.exp(e)
-        for k in range(num_samples):
-            opp = tf.random.uniform(x.shape,minval=0,maxval=E.shape[0],dtype=tf.int32)
-            opp = tf.where(opp==x,0,opp)
-            opp = tf.squeeze(tf.gather(E,opp))
-            e_opp = inp(opp)
-            p_opp = p_opp + tf.math.exp(e_opp)
+        bsize = num_samples
+        rshape = x.shape[0:-1] + [bsize]
+        opp = tf.random.uniform(rshape,minval=0,maxval=E.shape[0],dtype=tf.int32)
+        #opp = tf.where(opp==x,0,opp)
+        opp = tf.squeeze(tf.gather(E,opp))
+        p_opp = p_opp + tf.reduce_sum(tf.math.exp(inp2(opp)),axis=-1)
+        
+        
+        # for k in range(num_samples):
+        #     opp = tf.random.uniform(x.shape,minval=0,maxval=E.shape[0],dtype=tf.int32)
+        #     opp = tf.where(opp==x,0,opp)
+        #     opp = tf.squeeze(tf.gather(E,opp))
+        #     e_opp = inp(opp)
+        #     p_opp = p_opp + tf.math.exp(e_opp)
         
         return -e + tf.math.log(p_opp)
             
