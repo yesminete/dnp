@@ -765,9 +765,9 @@ class PatchWorkModel(Model):
             start = timer()
 
             if generate_type=='tree':
-                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init,batch_size=32)
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=False,batch_size=32)
             else:
-                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=init)
+                r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=False)
                 
             print(">>> time elapsed, network application: " + str(timer() - start) )
             if max_patching:
@@ -863,7 +863,8 @@ class PatchWorkModel(Model):
         
         
             
-         if hasattr(r[0],'QMembedding'):
+         if hasattr(r[0],'QMembedding') and not init:
+            print("do full QM pred.")
             if True:
                 idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                 for k in level:
@@ -1080,7 +1081,7 @@ class PatchWorkModel(Model):
              if out_typ == 'idx':
                  fac = 1
                  out_typ = 'int16'
-             if out_typ == 'int16':
+             elif out_typ == 'int16':
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
@@ -1315,7 +1316,7 @@ class PatchWorkModel(Model):
                 initdat = dummyData
             print("----------------- load/init network by minimal application")
             dummy = model.apply_full(initdat,resolution={"input_edges":np.eye(4),"voxsize":[0.01,0.01,0.01]},
-                                     verbose=False,scale_to_original=False,generate_type='random',repetitions=1,init=False)        
+                                     verbose=False,scale_to_original=False,generate_type='random',repetitions=1,init=True)        
             print("----------------- model and weights loaded")
         except:
             if not notmpfile:
@@ -1814,8 +1815,7 @@ class PatchWorkModel(Model):
         start = timer()
         c_data = getSample(trainidx,num_patches)    
         print("balances")
-        _,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)
-        
+        _,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
         self.pixelfreqs = pixelfreqs
 
         end = timer()

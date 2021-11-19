@@ -930,11 +930,11 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         sz2 = template_nii.header.get_data_shape()
                         if reslice_labels:
                             if np.abs(sz1[0]-sz2[0]) > 0 or np.abs(sz1[1]-sz2[1]) > 0 or np.abs(sz1[2]-sz2[2]) > 0 or np.sum(np.abs(template_nii.affine-img.affine)) > 0.01:                           
-                                print("reslicing label")
                                 if integer_labels:
                                     order = 0
                                 else:
                                     order = 1
+                                print("reslicing label order " + str(order))
                                 if len(img.shape) == 3:
                                     img= resample_from_to(img, (template_shape ,template_affine),order=order,cval=label_cval)                                    
                                 else:
