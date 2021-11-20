@@ -95,7 +95,9 @@ patching = {
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
-    "categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14],#list(range(1,14)),
+#    "categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14],#list(range(1,14)),
+    "categorial_label" :[1,2,8,12],
+    
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -162,7 +164,7 @@ loading = {
 training = {
    "num_patches":200,
    "augment": {},#{"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":15,
+   "epochs":2,
    "num_its":100,                
    "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -197,7 +199,7 @@ if True: #QMedbedding
 
 
 else:
-    dim_embedding = 7
+    dim_embedding = 3
     training['loss'] = [tf.losses.SparseCategoricalCrossentropy()]*patching['depth']
     training['dontcare'] =False
     patching['categorical'] = True
@@ -205,7 +207,7 @@ else:
     #network["finalBlock"]= patchwork.customLayers.QMactivation() 
     network["finalBlock"]= tf.keras.layers.Activation('softmax')
     if 'block_out' not in network or network['block_out'] is None:            
-        network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [15]
+        network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [len(patching['categorial_label'])+1]
     
 
     training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)

@@ -1297,7 +1297,10 @@ class CropGenerator():
                       if label_weight is not None:
                           L = L*label_weight
                   else:
-                      L = tf.gather(tf.squeeze(label_weight),L)
+                      if self.categorical:
+                          L = tf.gather(tf.squeeze(label_weight),L)
+                      else:
+                          L = tf.gather(tf.concat([[0],tf.squeeze(label_weight)],0),L)
                   if label_reduce is not None:
                       L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)

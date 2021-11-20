@@ -35,6 +35,7 @@ import patchwork2 as patchwork
 contrasts = [ { 'subj1' :  'example2d.nii.gz',  
                 'subj2' :  'example2d.nii.gz'  } ]
 labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
+               'subj2' :  'example2d_label.nii.gz', 
                  } ]
 
 subjects = [ 'subj1', 'subj2'];
@@ -84,13 +85,13 @@ nD = 2
 # - normalize_input: None or "max" at the moment.
 
 patching = {        
-    "depth":4,                    
+    "depth":3,                    
     "scheme":{ 
         "patch_size":[32,32],                
         "destvox_mm": None,
-        "destvox_rel":[1,1],
+        "destvox_rel":[4,4],
         "fov_mm":None,
-        "fov_rel":[0.5,0.5],
+        "fov_rel":[0.7,0.7],
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
@@ -141,7 +142,7 @@ loading = {
     "threshold":0.5,
     "add_inverted_label":False,
     "one_hot_index_list":None,
-    "exclude_incomplete_labels":-2
+    "exclude_incomplete_labels":1
    # "integer_labels":True
     }
 
@@ -309,15 +310,15 @@ if "align_physical" in loading:
 #%% start training    
 
 
-initial_learning_rate = 0.1
-lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-    initial_learning_rate,
-    decay_steps=10,
-    decay_rate=0.96,
-    staircase=True)
+# initial_learning_rate = 0.1
+# lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+#     initial_learning_rate,
+#     decay_steps=10,
+#     decay_rate=0.96,
+#     staircase=True)
 
 
-training['optimizer'] = tf.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, amsgrad=True)
+# training['optimizer'] = tf.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
 
 

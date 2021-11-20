@@ -1425,21 +1425,22 @@ class PatchWorkModel(Model):
             callback=None
             ):
       
-    def f1_metric(y_true, y_pred,valid=False):
+    def f1_metric(y_true, y_pred,valid=False,start_reduce=0):
         
         sz = y_true.shape
         def sumy(x):
-            return tf.reduce_sum(x,axis=list(range(1,self.cropper.ndim+1)))
+            return tf.reduce_sum(x,axis=list(range(start_reduce,self.cropper.ndim+1)))
         
         if self.finalizeOnApply and not valid:
             y_pred = tf.nn.sigmoid(y_pred)
         true_positives = sumy(kb.round(kb.clip(y_true * y_pred, 0, 1)))
+        false_positives = sumy(kb.round(kb.clip((1-y_true) * y_pred, 0, 1)))
         possible_positives = sumy(kb.round(kb.clip(y_true, 0, 1)))
         predicted_positives = sumy(kb.round(kb.clip(y_pred, 0, 1)))
-        #precision = true_positives / (predicted_positives + kb.epsilon())
-        #recall = true_positives / (possible_positives + kb.epsilon())
-        #f1_val = 2*(precision*recall)/(precision+recall+kb.epsilon())
+
+
         f1_val = (2*true_positives+1)/(possible_positives+predicted_positives+2)
+#        f1_val = (true_positives)/(possible_positives+predicted_positives+1)
         return f1_val      
       
     def f1_metric_best(y_true, y_pred,valid=False):
@@ -1545,12 +1546,12 @@ class PatchWorkModel(Model):
         cnt = 0
         if self.cropper.categorial_label is not None:
             for j in self.cropper.categorial_label:
-                f1_ = f1_metric(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
+                f1_ = f1_metric(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid,start_reduce=1)
                 f1+=f1_
                 cnt=cnt+1
         else:                       
             for j in range(0,self.num_labels):
-                f1_ = f1_metric(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid)
+                f1_ = f1_metric(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid,start_reduce=1)
                 f1+=f1_
                 cnt=cnt+1
         f1 /= cnt
@@ -1778,8 +1779,10 @@ class PatchWorkModel(Model):
            r = tf.range(1,self.num_labels+1)
        for k in range(len(labelset)):
             maxi  = max(c) # tf.reduce_max(labelset[k])
+            #maxi  = tf.reduce_max(labelset[k])
             dontcarelabel = labelset[k]==-1
             labelset[k] = tf.where(dontcarelabel,0,labelset[k])
+            labelset[k] = tf.where(labelset[k]>=maxi,0,labelset[k])
             categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
             labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
             labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
