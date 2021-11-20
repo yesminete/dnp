@@ -866,10 +866,10 @@ class PatchWorkModel(Model):
          if hasattr(r[0],'QMembedding') and not init:
             print("do full QM pred.")
             if True:
-                idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
+                #idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                 for k in level:
                    res[k],probs = r[0].QMembedding.apply(res[k])
-                   res[k] = tf.gather(idxmap,res[k])
+                #   res[k] = tf.gather(idxmap,res[k])
             else:
                 for k in level:
                    _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
@@ -951,7 +951,7 @@ class PatchWorkModel(Model):
           crop_fdim = False
 
 
-      if isinstance(self.finalBlock,QMembedding):
+      if hasattr(self.finalBlock,'isQMembedding'):
           out_typ = 'idx'
         
       scrop = None
@@ -1169,7 +1169,7 @@ class PatchWorkModel(Model):
                             labelname = "L" + str(k+1)
                             if self.cropper.categorial_label is not None:
                                 if k+1 != self.cropper.categorial_label_original[k]:
-                                    labelname = "L" + str(k+1) + str(self.cropper.categorial_label_original[k])
+                                    labelname = "L" + str(k+1) +"_"+ str(self.cropper.categorial_label_original[k])
                                     
                         else:
                             labelname = label_names[k] + "-" + str(k+1)

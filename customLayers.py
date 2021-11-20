@@ -564,6 +564,7 @@ class QMembedding(layers.Layer):
     self.numC = numC
     self.embedD = embedD
     self.bias = bias
+    self.isQMembedding = True
   
   def get_config(self):
     config = super().get_config().copy()
