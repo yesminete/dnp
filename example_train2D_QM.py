@@ -100,7 +100,7 @@ patching = {
     
     "interp_type" : "NN",    
     "scatter_type" : "NN",
-    "normalize_input" : 'mean',
+    "normalize_input" : 'm0s1',
     }
 
 ### NETWORK OPTIONS
@@ -403,7 +403,7 @@ for i in range(0,outer_num_its):
 
 #%%
 
-ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=5,num_chunks=1,generate_type='random',
+ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=50,num_chunks=1,generate_type='random',
                                 augment={},
                                 level='mix',
                                 scale_to_original=False)

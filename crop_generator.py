@@ -640,6 +640,8 @@ class CropGenerator():
       # get the data 
       trainset_ = trainset[j]
       
+      
+      patch_normalization=None
       if self.normalize_input == 'ct':
          trainset_ = tf.math.log(tf.math.maximum(trainset_+200,0.001))
          trainset_ = tf.math.maximum(trainset_-4,0)/10
@@ -649,6 +651,11 @@ class CropGenerator():
          trainset_ = trainset_/tf.reduce_max(trainset_,keepdims=True,axis=range(1,self.ndim+1))   
       elif self.normalize_input == 'mean':
          trainset_ = trainset_/tf.reduce_mean(trainset_,keepdims=True,axis=range(1,self.ndim+1))   
+      elif self.normalize_input == 'm0s1':
+         trainset_ = trainset_-tf.reduce_mean(trainset_,keepdims=True,axis=range(1,self.ndim+1))   
+         trainset_ = trainset_/(0.00001+tf.math.reduce_std(trainset_,keepdims=True,axis=range(1,self.ndim+1)))
+      elif self.normalize_input == 'patch_m0s1':
+         patch_normalization=True
       elif self.normalize_input is not None:
          assert False,'not valid normalize_input'
           
@@ -893,6 +900,7 @@ class CropGenerator():
                          flip=flip,
                          dscale = dscale*aug_fac(level),
                          vscale = vscale,
+                         patch_normalization = patch_normalization,
                          independent_augmentation=independent_augmentation,
                          pixel_noise = pixel_noise,
                          input_transform_behaviour = input_transform_behaviour,
@@ -1136,6 +1144,7 @@ class CropGenerator():
                          flip=None,                         
                          dscale = 0,
                          vscale = 0,
+                         patch_normalization = False,
                          independent_augmentation = False,
                          pixel_noise = 0,
                          input_transform_behaviour = None,
@@ -1535,7 +1544,22 @@ class CropGenerator():
           res_labels = fdim_transform(res_labels,rot_augment,label_transform_behaviour)
         else:
             res_labels = None
-
+            
+        if patch_normalization is not None:
+            if level == 0:
+                m = tf.reduce_mean(res_data,keepdims=True,axis=range(1,nD+1))
+                sd = tf.math.reduce_std(res_data,keepdims=True,axis=range(1,nD+1))+0.00001
+                slope_data = 1/sd
+                inter_data = -m/sd
+            else:
+                slope_data = crops['slope_data']        
+                inter_data = crops['inter_data']        
+            res_data = res_data*slope_data + inter_data
+        else:
+            slope_data = None
+            inter_data = None
+            
+                            
         if vscale > 0:
             afac = 2**(tf.random.uniform([res_data.shape[0]] + [1]*nD + [res_data.shape[-1]],minval=-1,maxval=1)*vscale)
             res_data = afac*res_data
@@ -1565,6 +1589,8 @@ class CropGenerator():
                   "dest_full_size":dest_shapes[level],
                   "affine_augment":affine_augment,
                   "rot_augment":rot_augment,
+                  "slope_data":slope_data,
+                  "inter_data":inter_data
     
                   }
     
