@@ -118,7 +118,8 @@ network = {
     #"block_out":[6,7,6,4],
     #"finalBlock_all_levels":True,
     "intermediate_loss":True,          
-    "finalizeOnApply":False
+    "finalizeOnApply":False,
+    "forward_type":"bridge"
 #    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),   
     }
 
@@ -402,7 +403,7 @@ for i in range(0,outer_num_its):
 
 #%%
 
-ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=50,num_chunks=1,generate_type='random',
+ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=5,num_chunks=1,generate_type='random',
                                 augment={},
                                 level='mix',
                                 scale_to_original=False)

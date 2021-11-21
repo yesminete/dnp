@@ -577,7 +577,7 @@ class PatchWorkModel(Model):
          # cat with total input
          if self.forward_type == 'noinput':
              inp = last_cropped
-         elif self.forward_type == 'simple':
+         elif self.forward_type == 'simple' or  self.forward_type == 'bridge' :
              if testIT:
                 inp = last_cropped
              else:
@@ -602,15 +602,18 @@ class PatchWorkModel(Model):
       else:
                     
          res = batcher(inp,lambda x: self.blocks[k](x,training=training))
-         #res = self.blocks[k](inp,training=training)
+
+         if self.forward_type == 'bridge' and k>0:
+             res = res + last_cropped[...,0:res.shape[-1]]
+
+
          if k < len(self.classifiers) and self.classifier_train:
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
-             #res_nonspatial = self.classifiers[k](res,training=training) 
              output_nonspatial.append(res_nonspatial)
          
          def croplabeldim(res):
              if self.num_labels != -1 and not hasattr(res,'QMembedding'):
-                outs = res[...,0:self.num_labels]
+                 outs = res[...,0:self.num_labels]
              else:
                  outs = res
              return outs
