@@ -137,6 +137,9 @@ class myHistory :
         
         import matplotlib.pyplot as plt
         from matplotlib import gridspec
+        
+        plt.rcParams.update({'font.size': 9})
+        
 
         if isinstance(self.trainloss_hist,list):
             
@@ -162,13 +165,17 @@ class myHistory :
             #%%
             loss_hist = self.trainloss_hist
             
-            def plothist(loss_hist,txt):
+            def plothist(loss_hist,txt,nodisp=False):
                 import matplotlib.pyplot as plt
                 
                 cols = 'rbmckrbmck'   
                 cnt = 0
                 for k in sorted(loss_hist):
-                    if k.find('nodisplay') > -1:
+                    if nodisp:
+                      if not k.find('nodisplay') > -1:
+                        continue
+                    else:
+                      if k.find('nodisplay') > -1:
                         continue
                     x = [ i/1000 for i, j in loss_hist[k] ]
                     y = [ j for i, j in loss_hist[k] ]
@@ -193,11 +200,24 @@ class myHistory :
                     cnt+=1
 
  
-            fig, ax = plt.subplots()
-            if hasattr(self,'age'):
-                gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1]) 
-                ax = plt.subplot(gs[0])
+            
+            fig = plt.figure(1,figsize=(7, 10))
 
+            #_, ax = plt.subplots()
+            if hasattr(self,'age'):
+                gs = fig.add_gridspec(3, 2, width_ratios=[3, 1],height_ratios=[3,1,1]) 
+                ax_age = 1
+                ax_bal = 2
+                ax_f1 = 4
+                ax_f1add = 5
+            else:
+                gs = fig.add_gridspec(3, 1, height_ratios=[3,1,1]) 
+                ax_bal = 1
+                ax_f1 = 2
+                ax_f1add = 3
+
+
+            ax = plt.subplot(gs[0])
             plothist(self.trainloss_hist,'train_')
             plothist(self.validloss_hist,'')
 
@@ -221,11 +241,42 @@ class myHistory :
                 
             
             if hasattr(self,'age'):
-                ax1 = plt.subplot(gs[1])
+                ax1 = plt.subplot(gs[ax_age])
                 plt.barh(range(self.age.shape[0]),tf.sort(self.age).numpy())
                 plt.yticks([])
                 plt.title('hard patch age')
                 plt.grid()
+
+        
+            ax2 = plt.subplot(gs[ax_bal])            
+            b = tf.squeeze(self.pixelratio[-1])
+            plt.bar(range(len(b)),b)
+            plt.title('balances')            
+            ax2.set_ylim([0, 1])
+            plt.xticks(range(len(b)))
+            if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                ax2.set_xticklabels(self.categorial_label)
+            else:
+                ax2.set_xticklabels(range(1,1+len(b)))
+
+            ax2 = plt.subplot(gs[ax_f1])
+            if 'nodisplay_class_f1' in self.validloss_hist:
+                b = tf.squeeze(self.validnloss_hist['nodisplay_class_f1'][-1][1])
+                plt.title('f1 scores (valid)')            
+            else:
+                b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
+                plt.title('f1 scores (train)')            
+            plt.bar(range(len(b)),b)
+            ax2.set_ylim([0, 1])
+            plt.xticks(range(len(b)))
+            if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                ax2.set_xticklabels(self.categorial_label)
+            else:
+                ax2.set_xticklabels(range(1,1+len(b)))
+
+
+     #       ax2 = plt.subplot(gs[ax_f1add])            
+     #       plothist(self.trainloss_hist,'train_',True)
 
 
 
@@ -1787,10 +1838,12 @@ class PatchWorkModel(Model):
             labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
             labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
 
-           
-       
 
-    
+    if self.cropper.categorial_label_original is not None:               
+        if self.cropper.categorical:
+            self.myhist.categorial_label = [0] + self.cropper.categorial_label_original
+        else:
+            self.myhist.categorial_label = self.cropper.categorial_label_original
     
     if loss is not None and fit_type=='keras':
         print("compiling ...")
@@ -1826,9 +1879,10 @@ class PatchWorkModel(Model):
         start = timer()
         c_data = getSample(trainidx,num_patches)    
         print("balances")
-        _,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
+        pixelratio,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
         self.pixelfreqs = pixelfreqs
-
+        self.myhist.pixelratio = pixelratio
+        
         end = timer()
         print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
         

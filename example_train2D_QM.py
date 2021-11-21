@@ -95,8 +95,8 @@ patching = {
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
-#    "categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14],#list(range(1,14)),
-    "categorial_label" :[1,2,8,12],
+    #"categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],#list(range(1,14)),
+    "categorial_label" :[1,2,7,8,12,14,15,16],
     
     "interp_type" : "NN",    
     "scatter_type" : "NN",
@@ -347,6 +347,13 @@ if "align_physical" in loading:
     
 #%% start training    
 
+def tocateg(l):
+    r = tf.argmax(l,axis=-1)+1
+    r = tf.where(tf.reduce_sum(l,-1)==0,0,r)
+    return tf.expand_dims(r,-1)
+    
+
+
 #training['sparseLoss'] =True
 #training['loss'] = [tf.losses.SparseCategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)]*patching['depth']
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
@@ -366,10 +373,12 @@ for i in range(0,outer_num_its):
             unlabeled_ids = []
             tset,lset,rset,subjs = get_data(num_samp)
 
+
+
     # some cathegorals for testing        
-    if patching['categorial_label'] is not None:            
-        lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
-        lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
+    if i==0 and patching['categorial_label'] is not None:            
+        lset[0] = tocateg(lset[0])
+        lset[1] = tocateg(lset[0])
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
