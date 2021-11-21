@@ -195,7 +195,7 @@ if True: #QMedbedding
     
     training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
-    network["intermediate_loss"]=False
+    network["intermediate_loss"]=True
 
 
 else:
@@ -378,7 +378,7 @@ for i in range(0,outer_num_its):
     # some cathegorals for testing        
     if i==0 and patching['categorial_label'] is not None:            
         lset[0] = tocateg(lset[0])
-        lset[1] = tocateg(lset[0])
+        lset[1] = tocateg(lset[1])
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
@@ -401,21 +401,23 @@ for i in range(0,outer_num_its):
 
 
 #%%
-ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=200,num_chunks=1,generate_type='random',
+
+ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=50,num_chunks=1,generate_type='random',
                                 augment={},
+                                level='mix',
                                 scale_to_original=False)
 
-#plt.imshow(tf.squeeze(ew[1][:,:,:]))
+plt.imshow(tf.squeeze(ew[1][:,:,:]))
 
-for k in range(5):
-    plt.imshow(tf.squeeze(ew[1][:,:,:,k]))
-    plt.pause(0.001)
+#for k in range(5):
+#    plt.imshow(tf.squeeze(ew[1][:,:,:,k]))
+#    plt.pause(0.001)
 
 
 
 
 #%%
-model = patchwork.PatchWorkModel.load('models/yourmodel.json')
+themodel = patchwork.PatchWorkModel.load('models/yourmodel.json')
 
 
 

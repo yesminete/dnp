@@ -576,21 +576,29 @@ class QMembedding(layers.Layer):
     } )    
     return config
     
-  def apply(self, r, full=False):
+  def apply(self, r, full=False,bsize=16):
       E = self.weight
-      idx = tf.zeros(r.shape[0:-1],dtype=tf.int32)
+      idx = tf.zeros(r.shape[0:-1],dtype=tf.int64)
       maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
       tmp = []
-      for k in range(self.numC):
+      if bsize > self.numC:
+          bsize = self.numC
+      nchunks = self.numC//bsize
+      for k in range(nchunks):
           if self.bias == 1:
-              p = tf.einsum('...i,i->...',r,E[k,0:-1]) + E[k,-1]
+              p = tf.einsum('...i,ji->...j',r,E[k*bsize:(k+1)*bsize,0:-1]) + E[k*bsize:(k+1)*bsize,-1]
           else:
-              p = tf.einsum('...i,i->...',r,E[k,:]) 
+              p = tf.einsum('...i,ji->...j',r,E[k*bsize:(k+1)*bsize,:]) 
                     
           if full:
               tmp.append(tf.expand_dims(p,-1))
-          idx = tf.where(p>maxp,k,idx)
-          maxp = tf.where(p>maxp,p,maxp)
+          Mp = tf.reduce_max(p,-1)  
+          Mi = tf.argmax(p,-1)
+            
+          idx  = tf.where(Mp>maxp,Mi+k*bsize,idx)
+          maxp = tf.where(Mp>maxp,Mp,maxp)
+#          idx = tf.where(p>maxp,k,idx)
+#          maxp = tf.where(p>maxp,p,maxp)
       if full:
           tmp = tf.concat(tmp,-1)
           maxp = tf.expand_dims(maxp,-1)

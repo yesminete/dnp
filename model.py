@@ -260,8 +260,8 @@ class myHistory :
                 ax2.set_xticklabels(range(1,1+len(b)))
 
             ax2 = plt.subplot(gs[ax_f1])
-            if 'nodisplay_class_f1' in self.validloss_hist:
-                b = tf.squeeze(self.validnloss_hist['nodisplay_class_f1'][-1][1])
+            if 'valid_nodisplay_class_f1' in self.validloss_hist:
+                b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
                 plt.title('f1 scores (valid)')            
             else:
                 b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
@@ -861,9 +861,12 @@ class PatchWorkModel(Model):
                         if level[0] == 'mix':
                             level_to_stitch = list(range(0,self.cropper.depth))
                             mix_levels = True
-                            for k in level_to_stitch:            
-                              if k < self.cropper.depth-1 or self.finalizeOnApply:
-                                  r[k] = tf.nn.sigmoid(r[k])        
+                            if self.cropper.categorical:
+                                print("misgin softmax impl. in mixing proc.")                                
+                            else:
+                                for k in level_to_stitch:            
+                                  if k < self.cropper.depth-1 or self.finalizeOnApply:
+                                      r[k] = tf.nn.sigmoid(r[k])        
                         else:
                             level_to_stitch = level
                         for k in level_to_stitch:            
@@ -873,8 +876,6 @@ class PatchWorkModel(Model):
                     print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[-1][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[-1].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
                     print(">>> time elapsed, stitching: " + str(timer() - start) )
                       
-         if (np.amin(sumpred[-1])) > 0:
-             break
 
               
      if (self.spatial_train  or max_patching)  and not self.spatial_max_train:
@@ -890,11 +891,12 @@ class PatchWorkModel(Model):
                     pred_on = 0
                     dest_shape = pred[-1].shape
                     print(">>> mixing ")    
-                    start = timer()                    
+                    start = timer()        
+                    last_fdim = pred[-1].shape[-1]
                     for k in range(len(pred)):
                         fac = np.math.pow(0.2,len(pred)-1-k)
-                        pr = tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k],0),dest_shape,True,nD,edge_center=False))
-                        vr = tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k],0),dest_shape,True,nD,edge_center=False))
+                        pr = tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k][...,0:last_fdim],0),dest_shape,True,nD,edge_center=False))
+                        vr = tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k][...,0:last_fdim],0),dest_shape,True,nD,edge_center=False))
                         pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
                         pred_votes = pred_votes + fac*tf.squeeze(pr/(vr+0.00001))
                     res = [pred_votes / (pred_on+0.00001)]
@@ -917,10 +919,8 @@ class PatchWorkModel(Model):
          if hasattr(r[0],'QMembedding') and not init:
             print("do full QM pred.")
             if True:
-                #idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                 for k in level:
                    res[k],probs = r[0].QMembedding.apply(res[k])
-                #   res[k] = tf.gather(idxmap,res[k])
             else:
                 for k in level:
                    _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
@@ -1636,8 +1636,8 @@ class PatchWorkModel(Model):
                 f1list,th,f1 = computeF1perf(masked_label,masked_pred,valid=False)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
                 hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**(sum(th)/len(th))
-                hist[prefix+'_nodisplay_class_f1'] = tf.cast(th,dtype=tf.float32)
-                hist[prefix+'_nodisplay_class_threshold'] = tf.cast(f1list,dtype=tf.float32)
+                hist[prefix+'_nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
+                hist[prefix+'_nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                 
       return hist
     

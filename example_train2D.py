@@ -346,7 +346,7 @@ for i in range(0,outer_num_its):
     # some cathegorals for testing        
     if i==0 and patching['categorial_label'] is not None:            
         lset[0] = tocateg(lset[0])
-        lset[1] = tocateg(lset[0])
+        lset[1] = tocateg(lset[1])
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
@@ -369,7 +369,7 @@ for i in range(0,outer_num_its):
 
 
 #%%
-res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=10,num_chunks=4,
+res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=128,num_chunks=4,
                                   generate_type='random_fillholes',
                                   lazyEval={'fraction':1}
                                   )
