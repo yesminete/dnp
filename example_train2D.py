@@ -95,8 +95,8 @@ patching = {
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
-    "categorial_label" :[1,2,8,12],
-#    "categorial_label" :None,
+ #   "categorial_label" :[1,2,12,8],
+    "categorial_label" :None,
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'mean',
@@ -159,9 +159,9 @@ loading = {
 
 
 training = {
-   "num_patches":200,
+   "num_patches":32,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":2,
+   "epochs":3,
    "num_its":100,                
    "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -320,6 +320,10 @@ if "align_physical" in loading:
 
 # training['optimizer'] = tf.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
+def tocateg(l):
+    r = tf.argmax(l,axis=-1)+1
+    r = tf.where(tf.reduce_sum(l,-1)==0,0,r)
+    return tf.expand_dims(r,-1)
 
 
 print("\n\n\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> starting training")
@@ -340,16 +344,16 @@ for i in range(0,outer_num_its):
             tset,lset,rset,subjs = get_data(num_samp)
 
     # some cathegorals for testing        
-    if patching['categorial_label'] is not None:            
-        lset[0] = tf.expand_dims(tf.argmax(lset[0],axis=-1),-1)
-        lset[1] = tf.expand_dims(tf.argmax(lset[1],axis=-1),-1)
+    if i==0 and patching['categorial_label'] is not None:            
+        lset[0] = tocateg(lset[0])
+        lset[1] = tocateg(lset[1])
 
         
     themodel.train(tset,lset,resolutions=rset,**training,
                    debug=True,              
                    patch_on_cpu=True,
-                   hard_mining=0.2,
-                   hard_mining_order='balance',
+              #     hard_mining=0.2,
+              #     hard_mining_order='balance',
                    verbose=2,inc_train_cycle=False,
                    valid_ids=valid_ids)
     
@@ -365,6 +369,20 @@ for i in range(0,outer_num_its):
 
 
 #%%
+res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=128,num_chunks=4,
+                                  generate_type='random_fillholes',
+                                  lazyEval={'fraction':1}
+                                  )
+
+
+
+
+plt.imshow(res[1][:,:,0,0])
+
+
+#%% 
+themodel = patchwork.PatchWorkModel.load(themodel.modelname)
+
 res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=10,num_chunks=4,
                                   generate_type='random_fillholes',
                                   lazyEval={'fraction':1}
@@ -373,8 +391,6 @@ res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',re
 
 
 plt.imshow(res[1][:,:,0,0])
-
-
 
 
 
