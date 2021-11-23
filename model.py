@@ -250,29 +250,30 @@ class myHistory :
         
             ax2 = plt.subplot(gs[ax_bal])            
             b = tf.squeeze(self.pixelratio[-1])
-            plt.bar(range(len(b)),b)
-            plt.title('balances')            
-            ax2.set_ylim([0, 1])
-            plt.xticks(range(len(b)))
-            if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                ax2.set_xticklabels(self.categorial_label)
-            else:
-                ax2.set_xticklabels(range(1,1+len(b)))
-
-            ax2 = plt.subplot(gs[ax_f1])
-            if 'valid_nodisplay_class_f1' in self.validloss_hist:
-                b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
-                plt.title('f1 scores (valid)')            
-            else:
-                b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
-                plt.title('f1 scores (train)')            
-            plt.bar(range(len(b)),b)
-            ax2.set_ylim([0, 1])
-            plt.xticks(range(len(b)))
-            if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                ax2.set_xticklabels(self.categorial_label)
-            else:
-                ax2.set_xticklabels(range(1,1+len(b)))
+            if len(b.shape) > 0:
+                plt.bar(range(len(b)),b)
+                plt.title('balances')            
+                ax2.set_ylim([0, 1])
+                plt.xticks(range(len(b)))
+                if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                    ax2.set_xticklabels(self.categorial_label)
+                else:
+                    ax2.set_xticklabels(range(1,1+len(b)))
+    
+                ax2 = plt.subplot(gs[ax_f1])
+                if 'valid_nodisplay_class_f1' in self.validloss_hist:
+                    b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
+                    plt.title('f1 scores (valid)')            
+                else:
+                    b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
+                    plt.title('f1 scores (train)')            
+                plt.bar(range(len(b)),b)
+                ax2.set_ylim([0, 1])
+                plt.xticks(range(len(b)))
+                if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                    ax2.set_xticklabels(self.categorial_label)
+                else:
+                    ax2.set_xticklabels(range(1,1+len(b)))
 
 
      #       ax2 = plt.subplot(gs[ax_f1add])            
@@ -903,6 +904,8 @@ class PatchWorkModel(Model):
                         pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
                         pred_votes = pred_votes + fac*tf.squeeze(pr/(vr+0.00001))
                     res = [pred_votes / (pred_on+0.00001)]
+                    if len(res[0].shape) == nD:
+                        res[0] = tf.expand_dims(res[0],-1)
                     level = [0]                    
                     print(">>> time elapsed, mixing: " + str(timer() - start) )
 
@@ -1836,7 +1839,7 @@ class PatchWorkModel(Model):
             #maxi  = tf.reduce_max(labelset[k])
             dontcarelabel = labelset[k]==-1
             labelset[k] = tf.where(dontcarelabel,0,labelset[k])
-            labelset[k] = tf.where(labelset[k]>=tf.cast(maxi,dtype=labelset[k].dtype),0,labelset[k])
+            labelset[k] = tf.where(labelset[k]>tf.cast(maxi,dtype=labelset[k].dtype),0,labelset[k])
             categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
             labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
             labelset[k] = tf.where(dontcarelabel,-1,labelset[k])

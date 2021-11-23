@@ -1164,7 +1164,6 @@ class CropGenerator():
             else:
                 balance['label_weight'] = tf.cast([1]*num_labels,dtype=src_data.dtype)
     
-        
     
         tensor = lambda a : tf.cast(a,dtype=self.ftype)
         int32 = lambda a : tf.cast(a,dtype=tf.int32)
@@ -1288,14 +1287,14 @@ class CropGenerator():
                   label = tf.expand_dims(label,3)
             
               ratio = balance['ratio']
-              label_weight = balance['label_weight']
+              label_weight = None
               label_reduce = None
               if 'label_reduce' in balance:
                   label_reduce = balance['label_reduce']
               if 'label_weight' in balance and balance['label_weight'] is not None:
+                  label_weight = balance['label_weight']
                   for k in range(nD):
                       label_weight = tf.expand_dims(label_weight,0)
-                
                 
               points_tot = []
               for k in range(label.shape[0]):
@@ -1306,10 +1305,14 @@ class CropGenerator():
                       if label_weight is not None:
                           L = L*label_weight
                   else:
-                      if self.categorical:
-                          L = tf.gather(tf.squeeze(label_weight),L)
-                      else:
-                          L = tf.gather(tf.concat([[0],tf.squeeze(label_weight)],0),L)
+                      if label_weight is not None:
+                          if self.categorical:
+                              L = tf.gather(tf.squeeze(label_weight),L)
+                          else:
+                              if label_weight.shape[-1] == 1:
+                                 L = tf.cast(L,dtype=tf.float32)
+                              else:
+                                 L = tf.gather(tf.concat([[0],tf.squeeze(label_weight)],0),L)
                   if label_reduce is not None:
                       L =tf.reduce_sum(L,axis=-1,keepdims=True)
                   L = np.amax(L,nD)
