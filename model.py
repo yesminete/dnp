@@ -1836,7 +1836,7 @@ class PatchWorkModel(Model):
             #maxi  = tf.reduce_max(labelset[k])
             dontcarelabel = labelset[k]==-1
             labelset[k] = tf.where(dontcarelabel,0,labelset[k])
-            labelset[k] = tf.where(labelset[k]>=maxi,0,labelset[k])
+            labelset[k] = tf.where(labelset[k]>=tf.cast(maxi,dtype=labelset[k].dtype),0,labelset[k])
             categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
             labelset[k] = tf.expand_dims(tf.gather_nd(categorial_label_idxmap,tf.cast(labelset[k],dtype=tf.int32)),-1)
             labelset[k] = tf.where(dontcarelabel,-1,labelset[k])
