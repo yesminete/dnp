@@ -194,7 +194,7 @@ if True: #QMedbedding
         network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [dim_embedding]
     network["finalBlock_all_levels"]=True
     
-    training["optimizer"] = tf.optimizers.Adam(learning_rate=0.01, beta_1=0.9, beta_2=0.999, amsgrad=True)
+    training["optimizer"] = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
 
     network["intermediate_loss"]=True
 
