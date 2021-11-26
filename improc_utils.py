@@ -816,7 +816,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             else:
                                 annos = loadAnnotation(jsobj,asdict=True)
                                 if 'labels' not in annotations_selector:
-                                    sel = [annos.keys()]
+                                    sel = [annos.keys().sort()]
                                 else:
                                     sel = annotations_selector['labels']   
                                 
@@ -824,12 +824,16 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             delim='.'
                             sizefac=1
                             normalize=False
+                            categorial=False
                             if 'delim' in annotations_selector:
                                 delim = annotations_selector['delim']
                             if 'sizefac' in annotations_selector:
                                 sizefac = annotations_selector['sizefac']
                             if 'normalize' in annotations_selector:
                                 normalize = annotations_selector['normalize']
+                            if 'categorial' in annotations_selector:
+                                categorial = annotations_selector['categorial']
+                            label_num = 1
                             for spec in sel:
                                 points = []
                                 notfound = False                                
@@ -865,12 +869,20 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                             break
                                 print('rendering ' + str(len(points)) + ' markers')
                                 img = renderpoints(points, header,ftype,nD,normalize,img_inputcontrast)
-                                if notfound:
-                                    img = img*0 + label_cval                                                                    
                                 img,_ = crop_spatial(img,scrop)                            
                                 img = np.expand_dims(img,0)
                                 img = np.expand_dims(img,nD+1)
-                                labs.append(img)
+                                if categorial:
+                                    if label_num == 1:
+                                        labs.append(img)
+                                    else:
+                                        labs[0] = labs[0] + label_num*img
+                                    label_num = label_num + 1                                        
+                                else:
+                                    if notfound:
+                                        img = img*0 + label_cval                                                                    
+                                    labs.append(img)
+                                    
                         elif class_selector is not None:
                             delim='.'
                             if 'delim' in class_selector:
