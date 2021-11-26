@@ -585,10 +585,12 @@ class QMembedding(layers.Layer):
           bsize = self.numC
       nchunks = self.numC//bsize
       for k in range(nchunks):
+          end = max(E.shape[0],(k+1)*bsize)
+          
           if self.bias == 1:
-              p = tf.einsum('...i,ji->...j',r,E[k*bsize:(k+1)*bsize,0:-1]) + E[k*bsize:(k+1)*bsize,-1]
+              p = tf.einsum('...i,ji->...j',r,E[k*bsize:end,0:-1]) + E[k*bsize:end,-1]
           else:
-              p = tf.einsum('...i,ji->...j',r,E[k*bsize:(k+1)*bsize,:]) 
+              p = tf.einsum('...i,ji->...j',r,E[k*bsize:end,:]) 
                     
           if full:
               tmp.append(tf.expand_dims(p,-1))
@@ -644,6 +646,7 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0):
         bsize = num_samples
         rshape = x.shape[0:-1] + [bsize]
         opp = tf.random.uniform(rshape,minval=0,maxval=E.shape[0],dtype=tf.int32)
+        opp = tf.where(opp==x,0,opp)
         opp = tf.squeeze(tf.gather(E,opp))
         opp = inp2(opp)
         maxl = tf.stop_gradient(tf.reduce_max(opp,axis=-1))
@@ -753,7 +756,7 @@ custom_layers['Scramble'] = Scramble
 
 class HistoMaker(layers.Layer):
 
-  def __init__(self,nD=2,out=10,scfac=0.2,scaling=1.0,init='ct',typ='acos',normalize=False,trainable=True,dropout=False,**kwargs):
+  def __init__(self,nD=2,out=10,scfac=0.2,scaling=1.0,init='ct',typ='acos',normalize=False,trainable=True,dropout=False,ignoreInf=False,**kwargs):
     super().__init__(**kwargs)
 
     self.init = init
@@ -763,6 +766,7 @@ class HistoMaker(layers.Layer):
     self.trainable = trainable
     self.dropout = dropout
     self.scaling = scaling
+    self.ignoreInf = ignoreInf
     self.typ = typ
     
     self.dropout_layer = None
@@ -820,11 +824,23 @@ class HistoMaker(layers.Layer):
             'init': self.init,
             'out': self.out,
             'nD': self.nD,
-            'dropout':self.dropout
+            'dropout':self.dropout,
+            'ignoreInf':self.ignoreInf
         } )    
         return config                  
       
   def call(self, image,training=False):    
+      
+      # if self.ignoreInf:
+      #     idx = tf.squeeze(tf.where(image[:,0,0,:]!=np.inf))
+      #     image = tf.gather(image,idx,batch_dims=1,axis=-1)
+      
+      # y = image*self.scaling
+      # x = 0
+      # for k in range(y.shape[-1]):
+      #     x = x + self.conv(y[...,k:k+1])
+      
+      
       x = image*self.scaling
       x = self.conv(x)
       if self.typ == 'acos':

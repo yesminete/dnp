@@ -33,7 +33,12 @@ import patchwork2 as patchwork
 
 # define your data sources 
 contrasts = [ { 'subj1' :  'example2d.nii.gz',  
-                'subj2' :  'example2d.nii.gz'  } ]
+                'subj2' :  'example2d.nii.gz'  },
+              { 'subj1' :  'example2d.nii.gz'
+                  },
+              { 'subj1' :  'example2d.nii.gz'
+                  }
+              ]
 labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
                 'subj2' :  'example2d_label.nii.gz' } ]
 
@@ -95,12 +100,13 @@ patching = {
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
-    #"categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],#list(range(1,14)),
-    "categorial_label" :[1,2,7,8,12,14,15,16],
+    "categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],#list(range(1,14)),
+    #"categorial_label" :[1,2,7,8,12,14,15,16],
     
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'm0s1',
+    "input_dim_extension" : 1
     }
 
 ### NETWORK OPTIONS
@@ -119,8 +125,8 @@ network = {
     #"finalBlock_all_levels":True,
     "intermediate_loss":True,          
     "finalizeOnApply":False,
-    "forward_type":"bridge"
-#    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),   
+    "forward_type":"bridge",
+   # "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init=None,dropout=0,nD=nD,normalize=False,ignoreInf=True)
     }
 
 ## DATA IMPORT OPTIONS
@@ -147,6 +153,7 @@ loading = {
     "threshold":0.5,
     "add_inverted_label":False,
     "one_hot_index_list":None,
+    "ignore_incomplete_input":True
    # "integer_labels":True
     }
 

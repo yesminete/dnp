@@ -603,6 +603,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            annotations_selector=None, 
                            class_selector=None, 
                            exclude_incomplete_labels=True,
+                           ignore_incomplete_input=False,
                            use_unlabeled_data=False,
                            add_inverted_label=False,one_hot_index_list=None,max_num_data=None,
                            align_physical=False,
@@ -706,6 +707,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         imgs = []
         template_nii = None
         for j in range(len(contrasts)):
+            if ignore_incomplete_input:
+                if k not in contrasts[j]:
+                    continue                                
             item = contrasts[j][k]
             if isinstance(item,dict):  # this is for DPX_selectFiles compat.
                 item = item[next(iter(item))]

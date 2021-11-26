@@ -1548,7 +1548,7 @@ class PatchWorkModel(Model):
         with tf.device(DEVCPU):    
     
             if traintype == 'random' or traintype ==  'random_deprec' :
-                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype, 
+                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,
                                         num_patches=np,augment=aug_,balance=balance,dphi=dphi,training=True)
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
@@ -1595,7 +1595,13 @@ class PatchWorkModel(Model):
                 f1.append(f1_)
                 th.append(th_)
                 cnt=cnt+1
-        return f1,th,sum(f1)/cnt
+                
+        if self.cropper.categorical:                
+            meanf1 = sum(f1[1:])/(cnt-1)
+        else:
+            meanf1 = sum(f1)/cnt
+                
+        return f1,th,meanf1
 
     def computeF1perf_center(label,pred,valid=False):
         f1=0

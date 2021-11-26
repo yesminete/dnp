@@ -290,6 +290,7 @@ class CropGenerator():
                     keepAspect = True,     # (deprecated)  in case of c) this keeps the apsect ratio (also if for b) if shape is not a nice number)                                     
                     
                     transforms = None,
+                    input_dim_extension = -1,
                     system = 'matrix',
                     snapper = None,
                     smoothfac_data = 0,  # 
@@ -308,6 +309,7 @@ class CropGenerator():
     self.model = None
     self.scheme = scheme
     self.transforms = transforms
+    self.input_dim_extension = input_dim_extension
     self.patch_size = patch_size
     self.system = system
     self.scale_fac = scale_fac
@@ -952,10 +954,23 @@ class CropGenerator():
         
       pool.append(scales)
     
+
+
+    def extend_input_dim(toextend):
+        fdim = toextend.shape[-1]
+        if fdim > self.input_dim_extension:
+            toextend = toextend[...,0:self.input_dim_extension]
+        elif fdim < self.input_dim_extension:           
+            dummy = tf.ones(toextend.shape[0:-1] + [self.input_dim_extension-fdim]) + math.inf
+            toextend = tf.concat([toextend, dummy],-1)
+        return toextend
     
     
     if len(pool) == 1:  # typically in application, all dict entries are kept (for stitching)
         result_data = pool[0]
+        if self.input_dim_extension != -1:
+            for k in range(self.depth):            
+                result_data[k]['data_cropped'] = extend_input_dim(result_data[k]['data_cropped'])
     else:            # only cat those which are necessary during training, and do it on GPU
         with tf.device("/gpu:0"):      
             result_data = []
@@ -966,7 +981,12 @@ class CropGenerator():
                     if pool[0][k][field] is not None:
                         tocat = []
                         for j in range(len(pool)):
-                            tocat.append(pool[j][k][field])
+                            if self.input_dim_extension == -1 or field != 'data_cropped':
+                                tocat.append(pool[j][k][field])
+                            else:
+                                tocat.append(extend_input_dim(pool[j][k][field]))
+                                    
+                                
                         ths[field] = tf.concat(tocat,0)
                     
                 
