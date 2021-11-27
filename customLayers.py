@@ -831,25 +831,19 @@ class HistoMaker(layers.Layer):
       
   def call(self, image,training=False):    
       
-      # if self.ignoreInf:
-      #     idx = tf.squeeze(tf.where(image[:,0,0,:]!=np.inf))
-      #     image = tf.gather(image,idx,batch_dims=1,axis=-1)
       
-      # y = image*self.scaling
-      # x = 0
-      # for k in range(y.shape[-1]):
-      #     x = x + self.conv(y[...,k:k+1])
+      y = image*self.scaling
+      ch = 0
+      for k in range(y.shape[-1]):
+        x = self.conv(y[...,k:k+1])
+        if self.typ == 'acos':
+            x = 1/tf.math.cosh(x)
+        elif self.typ == 'atan':
+            x = tf.math.atan(x)
+        else:
+            assert False, 'invalid typ'
+        ch = ch + tf.where(tf.math.is_inf(y[...,k:k+1]),0,x)
       
-      
-      x = image*self.scaling
-      x = self.conv(x)
-      if self.typ == 'acos':
-          ch = 1/tf.math.cosh(x)
-      elif self.typ == 'atan':
-          ch = tf.math.atan(x)
-      else:
-          assert False, 'invalid typ'
-          
       if self.dropout_layer is not None:
           ch = self.dropout_layer(ch,training=True)
       if self.normalize:

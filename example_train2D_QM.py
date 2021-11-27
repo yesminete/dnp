@@ -34,7 +34,7 @@ import patchwork2 as patchwork
 # define your data sources 
 contrasts = [ { 'subj1' :  'example2d.nii.gz',  
                 'subj2' :  'example2d.nii.gz'  },
-              { 'subj1' :  'example2d.nii.gz'
+              { 'subj2' :  'example2d.nii.gz'
                   },
               { 'subj1' :  'example2d.nii.gz'
                   }
@@ -106,7 +106,7 @@ patching = {
     "interp_type" : "NN",    
     "scatter_type" : "NN",
     "normalize_input" : 'm0s1',
-    "input_dim_extension" : 1
+    "input_dim_extension" : 3
     }
 
 ### NETWORK OPTIONS
@@ -126,7 +126,7 @@ network = {
     "intermediate_loss":True,          
     "finalizeOnApply":False,
     "forward_type":"bridge",
-   # "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init=None,dropout=0,nD=nD,normalize=False,ignoreInf=True)
+    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init=None,dropout=0,nD=nD,normalize=False,ignoreInf=True)
     }
 
 ## DATA IMPORT OPTIONS

@@ -773,7 +773,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         if labels is not None:
             
             labs = []
-            for j in range(len(labels)): # over 
+            for j in range(len(labels)): # over all label files
                 if k in labels[j]:
                     item = labels[j][k]
                     if isinstance(item,dict):
@@ -838,6 +838,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             if 'categorial' in annotations_selector:
                                 categorial = annotations_selector['categorial']
                             label_num = 1
+                            render = renderpoints(header,ftype,nD,normalize,img_inputcontrast)
+                            
                             for spec in sel:
                                 points = []
                                 notfound = False                                
@@ -872,7 +874,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                         if exclude_incomplete_labels:
                                             break
                                 print('rendering ' + str(len(points)) + ' markers')
-                                img = renderpoints(points, header,ftype,nD,normalize,img_inputcontrast)
+                                img = render(points)
                                 img,_ = crop_spatial(img,scrop)                            
                                 img = np.expand_dims(img,0)
                                 img = np.expand_dims(img,nD+1)
@@ -1130,7 +1132,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     if labels is not None:
         return trainset,labelset,resolutions,subjects_names;
 
-def renderpoints(points,header,ftype,nD,normalize=False,img_inputcontrast=None):
+def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
 
     sz =header['dim'][1:nD+1]
     A = header.get_best_affine()
@@ -1145,15 +1147,17 @@ def renderpoints(points,header,ftype,nD,normalize=False,img_inputcontrast=None):
         Y = tf.cast(Y,dtype=ftype)
         X_ = A[0][0]*X + A[0][1]*Y +  A[0][3]
         Y_ = A[1][0]*X + A[1][1]*Y +  A[1][3]
-        for p in points:
-            R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1]) 
-            tmp = R2 < p[2]*p[2]
-            if not normalize:
-                img = tf.math.logical_or(img,tmp)
-            else:
-                tmp = tf.cast(tmp,dtype=ftype)
-                img = img + tmp /tf.reduce_sum(tmp)
-        return tf.cast(img,dtype=ftype)
+        def render(points):
+            for p in points:
+                R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1]) 
+                tmp = R2 < p[2]*p[2]
+                if not normalize:
+                    img = tf.math.logical_or(img,tmp)
+                else:
+                    tmp = tf.cast(tmp,dtype=ftype)
+                    img = img + tmp /tf.reduce_sum(tmp)
+            return tf.cast(img,dtype=ftype)
+        return render
     if nD==3:
         X,Y,Z = np.meshgrid(np.arange(0,sz[0]),np.arange(0,sz[1]),np.arange(0,sz[2]),indexing='ij')
         X = tf.cast(X,dtype=ftype)
@@ -1162,20 +1166,19 @@ def renderpoints(points,header,ftype,nD,normalize=False,img_inputcontrast=None):
         X_ = A[0][0]*X + A[0][1]*Y + A[0][2]*Z + A[0][3]
         Y_ = A[1][0]*X + A[1][1]*Y + A[1][2]*Z + A[1][3]
         Z_ = A[2][0]*X + A[2][1]*Y + A[2][2]*Z + A[2][3]
-        for p in points:
-            R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1])  + (Z_-p[2])*(Z_-p[2]) 
-            tmp = R2 < p[3]*p[3]
-            if len(p) >= 5:
-                tmp = tf.math.logical_and(tmp,img_inputcontrast[0,:,:,:,0]>p[4])
-                            
-            
-            if not normalize:
-                img = tf.math.logical_or(img,tmp)
-            else:
-                tmp = tf.cast(tmp,dtype=ftype)
-                img = img + tmp /tf.reduce_sum(tmp)
-        return tf.cast(img,dtype=ftype)
-
+        def render(points):
+            for p in points:
+                R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1])  + (Z_-p[2])*(Z_-p[2]) 
+                tmp = R2 < p[3]*p[3]
+                if len(p) >= 5:
+                    tmp = tf.math.logical_and(tmp,img_inputcontrast[0,:,:,:,0]>p[4])
+                if not normalize:
+                    img = tf.math.logical_or(img,tmp)
+                else:
+                    tmp = tf.cast(tmp,dtype=ftype)
+                    img = img + tmp /tf.reduce_sum(tmp)
+            return tf.cast(img,dtype=ftype)
+        return render
 
 
 
