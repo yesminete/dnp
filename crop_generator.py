@@ -544,9 +544,10 @@ class CropGenerator():
              branch_factor=1,         #  if 'random' this gives the number of children for each random patch
              jitter=0,                #  if 'tree' this is the amount of random jitter
              jitter_border_fix=False,
-             snapper=None,
-             patch_size_factor=1,
-             dphi=0,
+             snapper=None,            # handling of border snapping
+             destshape_size_factor=1, # over/undersampling of stitched output 
+             patch_size_factor=1,     #  actual patch shaoe are scaled by this factor
+             dphi=0,                  #  deprectaed augmnt
              overlap=0,
              balance=None,
              augment=None,
@@ -793,7 +794,7 @@ class CropGenerator():
           for k in range(len(out_patch_shapes)):
             w = patch_widths[k]/(out_patch_shapes[k]-1)*1
             wperm = tf.gather(w,idxperm)
-            dshape = int32(input_width/wperm+1)
+            dshape = int32(destshape_size_factor*input_width/wperm+1)
             vsz =  input_width/tensor(dshape-1)
             dedge = tf.matmul(input_edges[0,:,:],tf.linalg.diag(tf.concat([vsz/input_voxsize,[1]],0)))
             dest_edges.append(tf.expand_dims(dedge,0))

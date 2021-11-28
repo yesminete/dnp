@@ -34,10 +34,10 @@ import patchwork2 as patchwork
 # define your data sources 
 contrasts = [ { 'subj1' :  'example2d.nii.gz',  
                 'subj2' :  'example2d.nii.gz'  },
-              { 'subj2' :  'example2d.nii.gz'
-                  },
-              { 'subj1' :  'example2d.nii.gz'
-                  }
+          #    { 'subj2' :  'example2d.nii.gz'
+          #       },
+          #    { 'subj1' :  'example2d.nii.gz'
+          #        }
               ]
 labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
                 'subj2' :  'example2d_label.nii.gz' } ]
@@ -100,13 +100,13 @@ patching = {
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
-    "categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],#list(range(1,14)),
-    #"categorial_label" :[1,2,7,8,12,14,15,16],
+    #"categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],#list(range(1,14)),
+    "categorial_label" :[1,2,7,8,12,14,15,16],
     
     "interp_type" : "NN",    
     "scatter_type" : "NN",
-    "normalize_input" : 'm0s1',
-    "input_dim_extension" : 3
+    "normalize_input" : 'patch_m0s1',
+#    "input_dim_extension" : 2
     }
 
 ### NETWORK OPTIONS
@@ -172,7 +172,7 @@ loading = {
 training = {
    "num_patches":200,
    "augment": {},#{"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":2,
+   "epochs":5,
    "num_its":100,                
    "balance":{"ratio":0.9,"autoweight":True},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -194,6 +194,7 @@ if True: #QMedbedding
 
     num_labels_cat = len(patching['categorial_label'])+1
     training['loss'] = [patchwork.customLayers.QMloss()]*patching['depth']
+    #training['loss'] = [patchwork.customLayers.QMloss(num_samples=20)]*patching['depth']
     training['dontcare'] =False
     patching['categorical'] = True
     network["finalBlock"]= patchwork.customLayers.QMembedding(num_labels_cat,dim_embedding)
@@ -410,12 +411,12 @@ for i in range(0,outer_num_its):
 
 #%%
 
-ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=50,num_chunks=1,generate_type='random',
-                                augment={},
-                                level='mix',
+ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=500,num_chunks=1,generate_type='random',
+                                augment={"dphi":0.2},sampling_factor=1,
+                                #level='mix',
                                 scale_to_original=False)
 
-plt.imshow(tf.squeeze(ew[1][:,:,:]))
+plt.imshow(tf.squeeze(ew[1][:,:,:,0]))
 
 #for k in range(5):
 #    plt.imshow(tf.squeeze(ew[1][:,:,:,k]))

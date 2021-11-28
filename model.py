@@ -692,6 +692,7 @@ class PatchWorkModel(Model):
                  init=False,
                  num_chunks=1,
                  patch_size_factor=1,
+                 sampling_factor=1,
                  lazyEval = None,
                  max_patching=False,
                  patch_stats= False,
@@ -797,6 +798,7 @@ class PatchWorkModel(Model):
                                     augment=augment,
                                     branch_factor=branch_factor,
                                     patch_size_factor=patch_size_factor,
+                                    destshape_size_factor=sampling_factor,
                                     lazyEval=lazyEval,
                                     verbose=verbose)
             
@@ -866,7 +868,7 @@ class PatchWorkModel(Model):
                             level_to_stitch = list(range(0,self.cropper.depth))
                             mix_levels = True
                             if self.cropper.categorical:
-                                print("misgin softmax impl. in mixing proc.")                                
+                                print("mising softmax impl. in mixing proc.")                                
                             else:
                                 for k in level_to_stitch:            
                                   if k < self.cropper.depth-1 or self.finalizeOnApply:
@@ -912,6 +914,16 @@ class PatchWorkModel(Model):
                 else:
                     res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
              
+                
+         if sampling_factor > 1:    
+             sigma = sampling_factor-1
+             for k in level:
+                if nD==2:
+                    res[k] = tf.squeeze(conv_gauss2D_fft(tf.expand_dims(res[k],0),sigma),0)
+                if nD==3:
+                    res[k] = tf.squeeze(conv_gauss3D_fft(tf.expand_dims(res[k],0),sigma),0)
+             
+                
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
@@ -926,7 +938,8 @@ class PatchWorkModel(Model):
             print("do full QM pred.")
             if True:
                 for k in level:
-                   res[k],probs = r[0].QMembedding.apply(res[k])
+                   idx,probs = r[0].QMembedding.apply(res[k])
+                   res[k] = tf.concat([idx,tf.cast(probs*10,dtype=tf.int64)],-1)
             else:
                 for k in level:
                    _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
@@ -965,6 +978,7 @@ class PatchWorkModel(Model):
                  along4dim=False,
                  align_physical=None,
                  patch_size_factor=1,
+                 sampling_factor=1,                 
                  crop_fdim=None,
                  crop_sdim=None,
                  out_typ='int16',
@@ -1083,6 +1097,7 @@ class PatchWorkModel(Model):
                                         level = level,
                                         lazyEval = lazyEval,
                                         patch_size_factor=patch_size_factor,
+                                        sampling_factor=sampling_factor,
                                         verbose=verbose,
                                         testIT=testIT,
                                         scale_to_original=scale_to_original)
@@ -1188,9 +1203,11 @@ class PatchWorkModel(Model):
                          else:
                              pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
                  if out_typ.find('atls') != -1 or out_typ == 'idx':
+                     probs = None
                      if self.cropper.categorical:           
                          if out_typ == 'idx':
-                             tmp = res_
+                             tmp = res_[...,0:1]
+                             probs = res_[...,1:2]
                          else:
                              tmp = np.argmax(res_,axis=-1)
                      else:
@@ -1204,6 +1221,8 @@ class PatchWorkModel(Model):
                      if self.cropper.categorial_label is not None:
                          idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                          tmp = tf.gather(idxmap,tmp)
+                         if probs is not None:
+                             tmp = tf.concat([tmp,probs],-1)
                      
                      
                      pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
