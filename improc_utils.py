@@ -792,11 +792,14 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         ext = os.path.splitext(fname)[1]
                     notfound = False
                     
-                    if ext == '.json':
+                    if ext == '.json' or ext == '.fcsv':
                         
                         if fname != 'READING' and fname != 'PINFO':
-                            with open(fname) as json_file:
-                                jsobj = json.load(json_file)
+                            if ext == '.json':
+                                with open(fname) as json_file:
+                                    jsobj = json.load(json_file)
+                            else:
+                                jsobj = loadAnnotation_fcsv(fname) 
                         else:
                             jsobj = item
     
@@ -1133,19 +1136,6 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         return trainset,labelset,resolutions,subjects_names;
 
 
-def renderpoints(normalize):
-
-    if not normalize:
-        img = 1
-    else:
-        img = 2
-    
-    def render(points):
-        img = img+1
-        return img
-    return render
-
-
 def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
 
     sz =header['dim'][1:nD+1]
@@ -1199,6 +1189,38 @@ def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
         return render
 
 
+
+def loadAnnotation_fcsv(file):
+    import csv
+    
+    with open(file) as csvfile:
+         lines = csvfile.readlines()
+         content = []
+         hdr = None
+         for l in lines:
+             l = l.rstrip()
+             if l.find("columns")>-1:
+                 hdr = l[l.find("=")+1:].split(",")
+                 continue
+             if len(l) == 0 or l[0] == '#':
+                 continue
+             cont = l.split(",")
+             obj = {}
+             for k in range(len(hdr)):
+                 obj[hdr[k]] = cont[k]
+             content.append(obj)
+             
+         pset = []
+         for k in content:
+             pset.append({'name':k['label'],
+                          'coords':[float(k['x']),
+                                    float(k['y']),
+                                    float(k['z']),1] })
+
+         return [{ "name":'*', "points":pset , "type":"pointset" } ] 
+             
+       
+    return
 
 def loadAnnotation(annos,asdict=True):
         if not asdict:
