@@ -644,7 +644,9 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0):
         weight = tf.squeeze(tf.where(x==0,background_weight,1.0),-1)
 
         bsize = num_samples
-        if num_samples >= E.shape[0]:
+        full = num_samples >= E.shape[0]
+                
+        if full:
             opp = tf.tile(tf.reshape(tf.range(E.shape[0]),[1]*(nD+1) + [E.shape[0]]),x.shape[0:-1]+[1])
         else:
             rshape = x.shape[0:-1] + [bsize]
@@ -656,7 +658,10 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0):
         maxl = tf.stop_gradient(tf.where(maxl>e,maxl,e))
         e = e - maxl
         opp = opp - tf.expand_dims(maxl,-1)
-        sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)
+        if full:
+            sump = tf.reduce_sum(tf.math.exp(opp),axis=-1)
+        else:
+            sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)
         
         
         return weight*(-e + tf.math.log(sump))
