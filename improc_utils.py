@@ -1132,14 +1132,24 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
     if labels is not None:
         return trainset,labelset,resolutions,subjects_names;
 
+
+def renderpoints(normalize):
+
+    if not normalize:
+        img = 1
+    else:
+        img = 2
+    
+    def render(points):
+        img = img+1
+        return img
+    return render
+
+
 def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
 
     sz =header['dim'][1:nD+1]
     A = header.get_best_affine()
-    if not normalize:
-        img = tf.zeros(sz,dtype=tf.bool)
-    else:
-        img = tf.zeros(sz,dtype=ftype)
     
     if nD==2:
         X,Y = np.meshgrid(np.arange(0,sz[0]),np.arange(0,sz[1]),indexing='ij')
@@ -1148,6 +1158,10 @@ def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
         X_ = A[0][0]*X + A[0][1]*Y +  A[0][3]
         Y_ = A[1][0]*X + A[1][1]*Y +  A[1][3]
         def render(points):
+            if not normalize:
+                img = tf.zeros(sz,dtype=tf.bool)
+            else:
+                img = tf.zeros(sz,dtype=ftype)
             for p in points:
                 R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1]) 
                 tmp = R2 < p[2]*p[2]
@@ -1167,6 +1181,10 @@ def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
         Y_ = A[1][0]*X + A[1][1]*Y + A[1][2]*Z + A[1][3]
         Z_ = A[2][0]*X + A[2][1]*Y + A[2][2]*Z + A[2][3]
         def render(points):
+            if not normalize:
+                img = tf.zeros(sz,dtype=tf.bool)
+            else:
+                img = tf.zeros(sz,dtype=ftype)
             for p in points:
                 R2 = (X_-p[0])*(X_-p[0]) + (Y_-p[1])*(Y_-p[1])  + (Z_-p[2])*(Z_-p[2]) 
                 tmp = R2 < p[3]*p[3]
