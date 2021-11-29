@@ -50,7 +50,7 @@ class CropInstance:
     self.intermediate_loss = intermediate_loss
     
     self.scales[0]['age'] = tf.zeros([self.num_patches()])
-    self.attrs = ['data_cropped','local_box_index','labels_cropped','class_labels','age']
+    self.attrs = ['data_cropped','local_box_index','labels_cropped','class_labels','age','slope_data','inter_data']
 
   def extb2dim(self,x,batchdim2):
       if batchdim2 == -1:
@@ -1576,8 +1576,8 @@ class CropGenerator():
                 slope_data = 1/sd
                 inter_data = -m/sd
             else:
-                slope_data = crops['slope_data']        
-                inter_data = crops['inter_data']        
+                slope_data = tf.tile(crops['slope_data'],[N]+[1]*(nD+1))
+                inter_data = tf.tile(crops['inter_data'],[N]+[1]*(nD+1))
             res_data = res_data*slope_data + inter_data
         else:
             slope_data = None
@@ -1634,6 +1634,8 @@ class CropGenerator():
                  #'parent_box_scatter_index',
                  'affine_augment',
                  'rot_augment',
+                 'slope_data',
+                 'inter_data',
                  'class_labels']
         for p in props:
             if p in x:
