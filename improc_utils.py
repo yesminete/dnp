@@ -1265,19 +1265,29 @@ def loadAnnotation(annos,asdict=True):
                 
             
         
-def getLocalMaximas(res,affine,threshold,namemap=None,maxpoints=50):
+def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50,nD=3):
 
     x = tf.expand_dims(res,0)
     if len(x.shape) < 5:
         x = tf.expand_dims(x,4)
+    
         
 
-    points = []
-    for s in range(0,x.shape[4]):
-        a = x==tf.nn.max_pool3d(x[...,s:s+1],3,1,'SAME')
+        
+    def getLM(x,labelnum=0,labelidx=None):
+        points = []
+        if nD == 2:
+            x = tf.squeeze(x,-1)
+            if labelidx is not None:
+                labelidx = tf.squeeze(labelidx,-1)
+            a = x==tf.nn.max_pool2d(x,3,1,'SAME')
+        else:
+            a = x==tf.nn.max_pool3d(x,3,1,'SAME')
         a = tf.math.logical_and(a,x>threshold)
         idx = tf.where(a)
         maxis = tf.gather_nd(x,idx)
+        if labelidx is not None:
+            maxis_idx = tf.gather_nd(labelidx,idx)
     
         sorted_ = tf.argsort(maxis,-1,'DESCENDING')
         for j in range(min(maxis.shape[0],maxpoints)):
@@ -1287,8 +1297,13 @@ def getLocalMaximas(res,affine,threshold,namemap=None,maxpoints=50):
             #p = idx[k,1:4].numpy()
             
             score = maxis[k].numpy()
+            if labelidx is not None:
+                theidx = maxis_idx[k].numpy()
+            else:
+                theidx = labelnum
+
             
-            name = 'L'+str(s)+' score:'+str(score)
+            name = 'L'+str(theidx)+' score:'+str(score)
             if namemap is not None:
                 name = namemap(s,score)
             
@@ -1296,6 +1311,18 @@ def getLocalMaximas(res,affine,threshold,namemap=None,maxpoints=50):
                             'name': name,
                             'size': 2                                
                 })
+            
+        return points
+
+    if idxMode:
+        points = getLM(tf.cast(x[...,1:2],dtype=tf.float32),labelidx = x[...,0:1])
+        
+    else:
+        points = []
+        for s in range(0,x.shape[4]):
+            points = points + getLM(x[...,s:s+1],labelnum=s)
+
+
         
     annotation = { "type":"pointset",
                    "state":{},
