@@ -193,7 +193,7 @@ if True: #QMedbedding
         raise ValueError('QMenbedding only with categorial labels')
 
     num_labels_cat = len(patching['categorial_label'])+1
-    training['loss'] = [patchwork.customLayers.QMloss()]*patching['depth']
+    training['loss'] = [patchwork.customLayers.QMloss(typ='hinge')]*patching['depth']
     #training['loss'] = [patchwork.customLayers.QMloss(num_samples=20)]*patching['depth']
     training['dontcare'] =False
     patching['categorical'] = True

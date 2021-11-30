@@ -335,6 +335,7 @@ class PatchWorkModel(Model):
                train_cycle = None,
                augment = None,
                align_physical = None,
+               info = {},
                crop_fdim = None,
                input_fdim = None
                ):
@@ -374,6 +375,7 @@ class PatchWorkModel(Model):
     self.train_cycle = train_cycle
     self.saved_points = saved_points
     self.augment = augment
+    self.info = info
     self.align_physical = align_physical
     self.crop_fdim = crop_fdim
     self.input_fdim = input_fdim
@@ -464,6 +466,7 @@ class PatchWorkModel(Model):
                'saved_points':self.saved_points,
                'train_cycle':self.train_cycle,
                'augment':self.augment,
+               'info':self.info,
                'align_physical':self.align_physical,
                'crop_fdim':self.crop_fdim,
                'input_fdim':self.input_fdim
@@ -1021,6 +1024,18 @@ class PatchWorkModel(Model):
       if align_physical is None:
           crop_fdim = False
 
+
+      if label_names is None:
+          if self.info is not None:
+              if 'annotations_selector' in self.info:
+                  if 'labels' in self.info['annotations_selector']:
+                    lbls = self.info['annotations_selector']['labels']
+                    label_names = []
+                    for l in lbls:
+                        label_names.append(l[0].split(".")[1])
+                          
+                  
+          
 
       if hasattr(self.finalBlock,'isQMembedding'):
           out_typ = 'idx'

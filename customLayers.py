@@ -621,7 +621,7 @@ class QMembedding(layers.Layer):
 
 custom_layers['QMembedding'] = QMembedding
 
-def QMloss(bias=1,num_samples=4,background_weight=1.0):
+def QMloss(bias=1,num_samples=4,background_weight=1.0,typ='softmax'):
     
    def loss(x,y,class_weight=None, from_logits=True):
 
@@ -654,17 +654,23 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0):
             opp = tf.where(opp>=x,opp+1,opp)
         opp = tf.squeeze(tf.gather(E,opp))
         opp = inp2(opp)
-        maxl = tf.stop_gradient(tf.reduce_max(opp,axis=-1))
-        maxl = tf.stop_gradient(tf.where(maxl>e,maxl,e))
-        e = e - maxl
-        opp = opp - tf.expand_dims(maxl,-1)
-        if full:
-            sump = tf.reduce_sum(tf.math.exp(opp),axis=-1)
+        if typ == 'softmax':
+            maxl = tf.stop_gradient(tf.reduce_max(opp,axis=-1))
+            maxl = tf.stop_gradient(tf.where(maxl>e,maxl,e))
+            e = e - maxl
+            opp = opp - tf.expand_dims(maxl,-1)
+            if full:
+                sump = tf.reduce_sum(tf.math.exp(opp),axis=-1)
+            else:
+                sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)                
+            return weight*(-e + tf.math.log(sump))
+        elif typ == 'hinge':
+            threshold = 0.2
+            l = tf.math.maximum(threshold-(tf.expand_dims(e,-1)-opp),0)
+            return weight*tf.reduce_sum(l,-1)
+            
         else:
-            sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)
-        
-        
-        return weight*(-e + tf.math.log(sump))
+            assert False, 'wrong loss typ'
             
             
    def loss___(x,y,class_weight=None, from_logits=True):
