@@ -849,9 +849,11 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                 if spec != 'empty':
                                     for i in spec:
                                         key = i.split(delim)
-                                        if key[0] not in annos:
+                                        if key[0] not in annos and not key[0]=='*':
                                             notfound = True
                                             break
+                                        if key[0]=='*':
+                                            key[0] = next(iter(annos))
                                         if len(key) == 1:
                                             for z in annos[key[0]]:
                                                 a = annos[key[0]][z]
@@ -865,7 +867,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                             if key[1] in annos[key[0]]:
                                                 a = annos[key[0]][key[1]]
                                                 p = a['coords'][0:nD]
-                                                p.append(a['size']*sizefac)
+                                                if 'size' in a:
+                                                    p.append(a['size']*sizefac)
+                                                else:
+                                                    p.append(sizefac)
                                                 if 'thresh' in a:
                                                     p.append(a['thresh'])
                                                 points.append(p)
@@ -1217,7 +1222,7 @@ def loadAnnotation_fcsv(file):
                                     float(k['y']),
                                     float(k['z']),1] })
 
-         return [{ "name":'*', "points":pset , "type":"pointset" } ] 
+         return {"annotations": [{ "name":'*', "points":pset , "type":"pointset" } ] }
              
        
     return

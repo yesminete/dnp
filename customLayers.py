@@ -668,6 +668,10 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0,typ='softmax'):
             threshold = 0.2
             l = tf.math.maximum(threshold-(tf.expand_dims(e,-1)-opp),0)
             return weight*tf.reduce_sum(l,-1)
+        elif typ == 'hingemax':
+            threshold = 0.2
+            l = tf.math.maximum(threshold-(tf.expand_dims(e,-1)-opp),0)
+            return weight*tf.reduce_max(l,-1)
             
         else:
             assert False, 'wrong loss typ'
