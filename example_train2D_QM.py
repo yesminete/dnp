@@ -411,8 +411,8 @@ for i in range(0,outer_num_its):
 
 #%%
 
-ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=500,num_chunks=1,generate_type='random',
-                                augment={"dphi":0.2},sampling_factor=1,
+ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=25,num_chunks=1,generate_type='random',
+                                augment={"dphi":0.2,'independent_augmentation':False},sampling_factor=1,branch_factor=1,lazyEval=0.5,
                                 #level='mix',
                                 scale_to_original=False)
 
