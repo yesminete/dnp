@@ -599,8 +599,8 @@ class QMembedding(layers.Layer):
             
           idx  = tf.where(Mp>maxp,Mi+k*bsize,idx)
           maxp = tf.where(Mp>maxp,Mp,maxp)
-#          idx = tf.where(p>maxp,k,idx)
-#          maxp = tf.where(p>maxp,p,maxp)
+
+      maxp = tf.where(idx==0,0.0,maxp)  
       if full:
           tmp = tf.concat(tmp,-1)
           maxp = tf.expand_dims(maxp,-1)
@@ -860,7 +860,7 @@ class HistoMaker(layers.Layer):
             x = tf.math.atan(x)
         else:
             assert False, 'invalid typ'
-        ch = ch + tf.where(tf.math.is_inf(y[...,k:k+1]),0,x)
+        ch = ch + tf.where(tf.math.is_inf(y[...,k:k+1]),0.0,x)
       
       if self.dropout_layer is not None:
           ch = self.dropout_layer(ch,training=True)

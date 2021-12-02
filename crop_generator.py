@@ -1572,13 +1572,16 @@ class CropGenerator():
         if patch_normalization is not None:
             if level == 0:
                 m = tf.reduce_mean(res_data,keepdims=True,axis=range(1,nD+1))
-                sd = tf.math.reduce_std(res_data,keepdims=True,axis=range(1,nD+1))+0.00001
-                slope_data = 1/sd
-                inter_data = -m/sd
+                sd = tf.math.reduce_std(res_data,keepdims=True,axis=range(1,nD+1))
+                #slope_data = 1/sd
+                #inter_data = -m/sd                
+                slope_data = sd+0.01
+                inter_data = m                
             else:
                 slope_data = tf.tile(crops['slope_data'],[N]+[1]*(nD+1))
                 inter_data = tf.tile(crops['inter_data'],[N]+[1]*(nD+1))
-            res_data = res_data*slope_data + inter_data
+#            res_data = res_data*slope_data + inter_data
+            res_data = (res_data-inter_data)/slope_data
         else:
             slope_data = None
             inter_data = None

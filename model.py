@@ -942,7 +942,8 @@ class PatchWorkModel(Model):
             if True:
                 for k in level:
                    idx,probs = r[0].QMembedding.apply(res[k])
-                   res[k] = tf.concat([idx,tf.cast(probs*10,dtype=tf.int64)],-1)
+                   probs = probs/tf.reduce_max(probs)
+                   res[k] = tf.concat([idx,tf.cast(probs*10000,dtype=tf.int64)],-1)
             else:
                 for k in level:
                    _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
