@@ -1288,6 +1288,8 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
         maxis = tf.gather_nd(x,idx)
         if labelidx is not None:
             maxis_idx = tf.gather_nd(labelidx,idx)
+            
+        print("number of local maxima: "  + str(maxis.shape[0]))
     
         sorted_ = tf.argsort(maxis,-1,'DESCENDING')
         for j in range(min(maxis.shape[0],maxpoints)):
@@ -1298,14 +1300,15 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
             
             score = maxis[k].numpy()
             if labelidx is not None:
-                theidx = maxis_idx[k].numpy()
+                theidx = maxis_idx[k].numpy()-1
+                
             else:
                 theidx = labelnum
 
             
             name = 'L'+str(theidx)+' score:'+str(score)
             if namemap is not None:
-                name = namemap(s,score)
+                name = namemap(theidx,score)
             
             points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
                             'name': name,
