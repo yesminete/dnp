@@ -422,6 +422,11 @@ plt.imshow(tf.squeeze(ew[1][:,:,:,0]))
 #    plt.imshow(tf.squeeze(ew[1][:,:,:,k]))
 #    plt.pause(0.001)
 
+#%%
+import improc_utils
+xx = improc_utils.getLocalMaximas(ew[1],ew[0].affine,1,idxMode=True,nD=2)
+#,threshold,namemap=None,maxpoints=50):
+
 
 
 
