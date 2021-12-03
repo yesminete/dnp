@@ -1297,7 +1297,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
             k = sorted_[j]
             p = tf.concat([idx[k,1:4],[1]],0).numpy()
             p = np.matmul(affine,p)
-            p = p[1:3]
+            p = p[0:3]
             #p = idx[k,1:4].numpy()
             
             score = maxis[k].numpy()
@@ -1307,8 +1307,9 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
             else:
                 theidx = labelnum
 
-            if min([np.sum((a-p)**2) for a in points_raw]) < size*size:
-                continue
+            if len(points_raw) > 0:
+                if min([np.sum((a-p)**2) for a in points_raw]) < size*size:
+                    continue
 
             points_raw.append(p)
             
@@ -1320,6 +1321,8 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
                             'name': name,
                             'size': size                              
                 })
+
+        print("number of local maxima after NMS: "  + str(len(points)))
             
         return points
 
