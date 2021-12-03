@@ -138,7 +138,7 @@ def conv_gauss3D_fft(img,std):
 def globalmax(x,dummy):
     s = x.shape
     axis = range(1,len(s)-1)
-    return x*0.0 + tf.reduce_max(x,axis=axis,keepdims=True)
+    return x*tf.cast(0.0,dtype=x.dtype) + tf.reduce_max(x,axis=axis,keepdims=True)
 
 
 def gaussian3D(std):  
@@ -167,7 +167,7 @@ def poolmax_boxcar3D(img,std):
   r = []
   if len(img.shape) < 5:
       img = tf.expand_dims(img,4)
-  r = tf.nn.max_pool3d(img,ksize=std,strides=[1,1,1],padding='SAME')
+  r = tf.cast(tf.nn.max_pool3d(tf.cast(img,tf.float32),ksize=std,strides=[1,1,1],padding='SAME'),dtype=img.dtype)
   return r
 
 def mixture_boxcar3D(img,std):

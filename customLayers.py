@@ -795,9 +795,9 @@ class HistoMaker(layers.Layer):
     
     if init is None:
         if nD == 2:
-            self.conv = layers.Conv2D(out,1)
+            self.conv = layers.Conv2D(out,1,bias_initializer=tf.keras.initializers.GlorotUniform())
         else:
-            self.conv = layers.Conv3D(out,1)
+            self.conv = layers.Conv3D(out,1,bias_initializer=tf.keras.initializers.GlorotUniform())
     else:
         if isinstance(init,str):
             if init == 'ct':        

@@ -1554,7 +1554,7 @@ class CropGenerator():
         local_boxes = tf.reshape(local_boxes,[tf.reduce_prod(local_boxes.shape[0:2]) ,nD+1,nD+1])
     
         
-        relres = [1]*nD
+        relres = patch_widths[level]/(out_patch_shapes[level]-1) / (src_width/(src_shape-1))
             
         if verbose:
           print("--------- cropping, level ",level)
