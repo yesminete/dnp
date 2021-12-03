@@ -1265,7 +1265,7 @@ def loadAnnotation(annos,asdict=True):
                 
             
         
-def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50,nD=3):
+def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50,nD=3,size=2):
 
     x = tf.expand_dims(res,0)
     if len(x.shape) < 5:
@@ -1276,6 +1276,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
         
     def getLM(x,labelnum=0,labelidx=None):
         points = []
+        points_raw = []
         if nD == 2:
             x = tf.squeeze(x,-1)
             if labelidx is not None:
@@ -1296,6 +1297,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
             k = sorted_[j]
             p = tf.concat([idx[k,1:4],[1]],0).numpy()
             p = np.matmul(affine,p)
+            p = p[1:3]
             #p = idx[k,1:4].numpy()
             
             score = maxis[k].numpy()
@@ -1305,6 +1307,10 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
             else:
                 theidx = labelnum
 
+            if min([np.sum((a-p)**2) for a in points_raw]) < size*size:
+                continue
+
+            points_raw.append(p)
             
             name = 'L'+str(theidx)+' score:'+str(score)
             if namemap is not None:
@@ -1312,7 +1318,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
             
             points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
                             'name': name,
-                            'size': 2                                
+                            'size': size                              
                 })
             
         return points

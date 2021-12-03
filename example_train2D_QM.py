@@ -34,7 +34,8 @@ import patchwork2 as patchwork
 # define your data sources 
 contrasts = [ { 'subj1' :  'example2d.nii.gz',  
                 'subj2' :  'example2d.nii.gz'  },
-          #    { 'subj2' :  'example2d.nii.gz'
+              { 'subj1' :  'example2d.nii.gz',
+               'subj2' :  'example2d.nii.gz' }
           #       },
           #    { 'subj1' :  'example2d.nii.gz'
           #        }
@@ -126,7 +127,7 @@ network = {
     "intermediate_loss":True,          
     "finalizeOnApply":False,
     "forward_type":"bridge",
-    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init=None,dropout=0,nD=nD,normalize=False,ignoreInf=True)
+ #   "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init=None,dropout=0,nD=nD,normalize=False,ignoreInf=True)
     }
 
 ## DATA IMPORT OPTIONS
@@ -411,8 +412,8 @@ for i in range(0,outer_num_its):
 
 #%%
 
-ew =    themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',repetitions=25,num_chunks=1,generate_type='random',
-                                augment={"dphi":0.2,'independent_augmentation':False},sampling_factor=1,branch_factor=1,lazyEval=0.5,
+ew =    themodel.apply_on_nifti(['example2d.nii.gz','example2d.nii.gz'],'xxx.nii',repetitions=25,num_chunks=1,generate_type='random',
+                                augment={"dphi":0.2,'independent_augmentation':False},sampling_factor=1,branch_factor=2,lazyEval=0.5,
                                 #level='mix',
                                 scale_to_original=False)
 
@@ -431,7 +432,7 @@ xx = improc_utils.getLocalMaximas(ew[1],ew[0].affine,1,idxMode=True,nD=2)
 
 
 #%%
-themodel = patchwork.PatchWorkModel.load('models/yourmodel.json')
+themodel = patchwork.PatchWorkModel.load('models/yourmodel2.json')
 
 
 
