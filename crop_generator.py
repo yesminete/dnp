@@ -335,68 +335,77 @@ class CropGenerator():
     self.dest_full_size = [None]*depth
 
 
+  def draw_center_bylabel(self,label,balance,generate_type,noisefac,nD,M):        
+            
+    if len(label.shape) < nD+2:
+        label = tf.expand_dims(label,3)
+  
+    ratio = balance['ratio']
+    label_weight = None
+    label_reduce = None
+    if 'label_reduce' in balance:
+        label_reduce = balance['label_reduce']
+    if 'label_weight' in balance and balance['label_weight'] is not None:
+        label_weight = balance['label_weight']
+        for k in range(nD):
+            label_weight = tf.expand_dims(label_weight,0)
       
-            
-
-    if auto_patch is not None:    
-
-        psize = 32
-        factor_thres = 0.75
-        dest_factor = 1
-        initial_scale = None
-        voxsize = None
-        if "psize" in auto_patch:
-            psize = auto_patch['psize']
-        if "factor_thres" in auto_patch:
-            factor_thres = auto_patch['factor_thres']
-        if "dest_factor" in auto_patch:
-            dest_factor =auto_patch['dest_factor']
-        if "initial_scale" in auto_patch:
-            initial_scale = auto_patch['initial_scale']
-        if "voxsize" in auto_patch:
-            voxsize = auto_patch['voxsize']
-            
-        shape = auto_patch['shape']
-        scfacs = []
-        patch_size = []
-        
-        
-        cf = lambda p,k : math.pow(dest_factor*p/shape[k],1/depth)            
-        if initial_scale is not None and depth > 1:
-            cf = lambda p,k : math.pow(dest_factor*p/shape[k]/initial_scale,1/(depth-1))
-
-        for k in range(0,ndim):
-            p = psize
-            f = cf(p,k)
-            while f > factor_thres and p>4:
-                p = p//2
-                f = cf(p,k)                    
-            scfacs.append(f)
-            patch_size.append(p)
-
-            
-        self.scale_fac = {}
- 
-        if initial_scale is not None and depth > 1:
-            self.scale_fac['level0'] = [initial_scale]*ndim
-            for k in range(1,depth):
-                self.scale_fac['level'+str(k)] = scfacs
+    points_tot = []
+    for k in range(label.shape[0]):
+        L = label[k,...]
+        if generate_type == 'random_fillholes': # only for application
+            L = L
+        elif self.categorial_label is None:
+            if label_weight is not None:
+                L = L*label_weight
         else:
-            for k in range(0,depth):
-                self.scale_fac['level'+str(k)] = scfacs
+            if label_weight is not None:
+                if self.categorical:
+                    L = tf.gather(tf.squeeze(label_weight),L)
+                else:
+                    if label_weight.shape[-1] == 1:
+                       L = tf.cast(L,dtype=tf.float32)
+                    else:
+                       L = tf.gather(tf.concat([[0],tf.squeeze(label_weight)],0),L)
+        if label_reduce is not None:
+            L =tf.reduce_sum(L,axis=-1,keepdims=True)
+        #import matplotlib.pyplot as plt
+        #plt.imshow(tf.squeeze(L))
+        #plt.pause(0.002)
+        L = np.amax(L,nD)
+        sz = L.shape
+        cnt=0
+  
+        numvx = np.prod(sz)
+        pos = tf.reduce_sum(L)
+        neg = numvx-pos
+        
+        if  pos == 0 or pos-numvx*ratio > -0.01:
+       #     print("warning: cannot achieve desired sample ratio, taking uniform")
+            P = L*0+1
+        else:
+            background_p = (1-ratio)*pos/(numvx*ratio-pos)
+            P = (L + background_p)
             
+        p = tf.reshape(P,[numvx])
+        p = tf.cast(p,dtype=tf.float64)
             
-        self.patch_size = patch_size
-        self.depth = depth
-        self.init_scale = -1
-        self.scale_fac_ref =  "perdim"
-
-        if voxsize is not None:
-            first = [""]*ndim
-            for k in range(0,ndim):
-                first[k] = self.scale_fac['level0'][k]*shape[k]*voxsize[k]
-            self.init_scale = ",".join(map(lambda x: str(x)+"mm",first))
-
+        p = p/tf.reduce_sum(p)
+        idx = np.random.choice(numvx,M,p=p)
+        R = np.transpose(np.unravel_index(idx,sz))
+        R = R + np.random.normal(size=R.shape)*tf.expand_dims(noisefac,0)*0.2                  
+        R = R + np.random.uniform(low=0,high=1,size=R.shape)
+        points = R/sz
+        
+        points = tf.expand_dims(tf.cast(points,dtype=tf.float32),1)
+                    
+        points_tot.append(points)
+    
+    centers = tf.concat(points_tot,1)            
+        
+    return centers
+        
+      
 
 
   def get_patchsize(self,level):   # patch_size could be eg [32,32], or a list [ [32,32], [32,32] ] corresponding to differne levels
@@ -867,14 +876,16 @@ class CropGenerator():
               else:
                  freqs = tf.reduce_sum(labels_,axis=range(0,self.ndim+1))
               numvx = np.prod(labels_.shape[0:-1])
-#              weights = 1/len(freqs)/(1+freqs)*tf.reduce_sum(freqs)
               pp = balance['autoweight']
-              weights = tf.reduce_sum(freqs)/tf.reduce_sum((freqs+1)**(1-pp)) / (freqs+1)**pp
+              
+              f2w = lambda freqs: tf.reduce_sum(freqs)/tf.reduce_sum((freqs+1)**(1-pp)) / (freqs+1)**pp
+              if self.categorical:
+                  weights = tf.concat([[0],f2w(freqs[1:])],0)
+              else:
+                  weights = f2w(freqs)
               balance['label_weight'] = weights
                   
-                  
-          
-      
+                                
         
       aug_fac = lambda level: 1.0
       vscale = 0
@@ -884,6 +895,34 @@ class CropGenerator():
                   vscale = augment['vscale']
               if 'gamma' in augment:
                   aug_fac = lambda level: ((level+1)/self.depth)**augment['gamma']
+
+
+
+      random_anchors = None
+
+      if balance is not None:
+        
+        num_labels = self.num_labels
+        balance = balance.copy()
+        if 'label_weight' in balance  and balance['label_weight'] is not None:
+            balance['label_weight'] = tf.cast(balance['label_weight'],dtype=trainset_.dtype)
+        else:
+            if self.categorical:
+                balance['label_weight'] = tf.cast([0]+[1]*(num_labels-1),dtype=trainset_.dtype)
+            else:
+                balance['label_weight'] = tf.cast([1]*num_labels,dtype=trainset_.dtype)
+
+    
+        #anlab
+        # if labels_ is not None:
+        #     N_anchor = 1000
+        #     random_anchors = self.draw_center_bylabel(labels_,balance,'random',0.0,self.ndim,N_anchor)
+        #     ledges = src_boxes_labels if src_boxes_labels is not None else src_boxes
+        #     random_anchors = random_anchors*tensor(labels_.shape[1:self.ndim+1])
+        #     random_anchors = tf.einsum('fbj,bij->fbi',random_anchors,ledges[:,0:-1,0:-1]) + ledges[...,0:-1,-1]
+        #     sz = random_anchors.shape
+        #     random_anchors = tf.reshape(random_anchors,[sz[0]*sz[1], sz[2]])
+
 
     
       localCrop = lambda x,level : self.createCropsLocal(trainset_,
@@ -895,6 +934,7 @@ class CropGenerator():
                          x, level,
                          patching_params,
                          generate_type=generate_type,
+                         random_anchors=random_anchors,
                          snapper=snapper,
                          jitter = jitter,
                          overlap = overlap,
@@ -929,12 +969,6 @@ class CropGenerator():
         x = localCrop(x,k+1)        
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
-
-      # cmp balances
-      # if labels_ is not None:
-      #     b = self.computeBalances(scales,verbose)
-      #     for k in range(self.depth):
-      #         balances[k].append(b[k])
 
 
         
@@ -991,12 +1025,6 @@ class CropGenerator():
                         ths[field] = tf.concat(tocat,0)
                     
                 
-        # p['data_cropped'] = tf.concat([p['data_cropped'],s['data_cropped']],0)
-        # if p['labels_cropped'] is not None:
-        #   p['labels_cropped'] = tf.concat([p['labels_cropped'],s['labels_cropped']],0)            
-        # p['local_box_index'] = tf.concat([p['local_box_index'],s['local_box_index']],0)
-        # if p['class_labels'] is not None:
-        #   p['class_labels'] = tf.concat([p['class_labels'],s['class_labels']],0)            
 
     intermediate_loss = True     # whether we save output of intermediate layers
     if self.model is not None:
@@ -1005,10 +1033,6 @@ class CropGenerator():
     print("")
 
       
-    # if len(balances[0]) > 0:
-    #     for k in range(self.depth):
-    #         cur_ratio = tf.reduce_mean(tf.concat(balances[k],1),1)
-    #         print(' level: ' + str(k) + ' avg. balance: ' + str(cur_ratio.numpy()) )
         
 
     return CropInstance(result_data,self,intermediate_loss)
@@ -1157,6 +1181,7 @@ class CropGenerator():
                          level,
                          patching_params,
                          generate_type='random',
+                         random_anchors=None,
                          snapper = None,
                          jitter = 0,
                          overlap = 0,
@@ -1176,16 +1201,7 @@ class CropGenerator():
                          branch_factor=1 ,
                          verbose=False):
         
-        if balance is not None:
-            
-            num_labels = self.num_labels
-            balance = balance.copy()
-            if 'label_weight' in balance  and balance['label_weight'] is not None:
-                balance['label_weight'] = tf.cast(balance['label_weight'],dtype=src_data.dtype)
-            else:
-                balance['label_weight'] = tf.cast([1]*num_labels,dtype=src_data.dtype)
-    
-    
+   
         tensor = lambda a : tf.cast(a,dtype=self.ftype)
         int32 = lambda a : tf.cast(a,dtype=tf.int32)
        
@@ -1276,6 +1292,37 @@ class CropGenerator():
             return R
         
         
+        def draw_center_from_anchors(random_anchors,edges,shape,N):
+            nD = edges.shape[-1]-1
+            iedges = tf.linalg.inv(edges,adjoint=False)
+            anchors = tf.cast(tf.floor(tf.einsum('sij,aj->sai',iedges[...,0:-1,0:-1],random_anchors) 
+                                       + tf.expand_dims(iedges[...,0:-1,-1],1)+0.5),dtype=tf.int32)
+            Prand = []
+            rshape = anchors.shape[0:-1] + [1]
+            for k in range(nD):
+                Prand.append(tf.random.uniform(rshape,minval=0,maxval=int(shape[k]),dtype=tf.int32))
+            Prand = tf.concat(Prand,-1)
+            shape = tf.cast(tf.expand_dims(tf.expand_dims(shape,0),2),dtype=tf.int32)
+            
+            Prand = tf.transpose(Prand,[0,2,1])
+            anchors = tf.transpose(anchors,[0,2,1])
+
+            valid = tf.logical_and(anchors>=0,anchors<shape)
+            anchors = tf.where(valid,anchors,Prand)
+            
+            sortcrit = tf.cast(valid,dtype=tf.float32) + tf.random.uniform(valid.shape,minval=-0.5,maxval=0.5)
+            _,idx = tf.math.top_k(sortcrit,N)
+            points = tf.gather(anchors, idx, batch_dims=-1)
+            
+            #points = tf.where(tf.logical_or(anchors<0,anchors>(shape-1)),Prand,anchors)                        
+            #idx = tf.random.uniform([N],minval=0,maxval=points.shape[1],dtype=tf.int32)            
+            #points = tf.gather(points,idx,axis=1)
+            
+            
+            points = tf.transpose(points,[2,0,1])
+            return tf.cast(points,dtype=tf.float32)
+            #points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
+        
         def quaternion(q):
             x = tf.expand_dims(q[...,0:1],2)
             y = tf.expand_dims(q[...,1:2],2)
@@ -1301,73 +1348,6 @@ class CropGenerator():
                                tf.concat([Ryx,Ryy,Ryz,null],1),
                                tf.concat([Rzx,Rzy,Rzz,null],1),
                                tf.concat([null,null,null,1+null],1)],2)
-        
-        def draw_center_bylabel(label,balance,noisefac,nD,M):        
-            
-              if len(label.shape) < nD+2:
-                  label = tf.expand_dims(label,3)
-            
-              ratio = balance['ratio']
-              label_weight = None
-              label_reduce = None
-              if 'label_reduce' in balance:
-                  label_reduce = balance['label_reduce']
-              if 'label_weight' in balance and balance['label_weight'] is not None:
-                  label_weight = balance['label_weight']
-                  for k in range(nD):
-                      label_weight = tf.expand_dims(label_weight,0)
-                
-              points_tot = []
-              for k in range(label.shape[0]):
-                  L = label[k,...]
-                  if generate_type == 'random_fillholes': # only for application
-                      L = L
-                  elif self.categorial_label is None:
-                      if label_weight is not None:
-                          L = L*label_weight
-                  else:
-                      if label_weight is not None:
-                          if self.categorical:
-                              L = tf.gather(tf.squeeze(label_weight),L)
-                          else:
-                              if label_weight.shape[-1] == 1:
-                                 L = tf.cast(L,dtype=tf.float32)
-                              else:
-                                 L = tf.gather(tf.concat([[0],tf.squeeze(label_weight)],0),L)
-                  if label_reduce is not None:
-                      L =tf.reduce_sum(L,axis=-1,keepdims=True)
-                  L = np.amax(L,nD)
-                  sz = L.shape
-                  cnt=0
-            
-                  numvx = np.prod(sz)
-                  pos = tf.reduce_sum(L)
-                  neg = numvx-pos
-                  
-                  if  pos == 0 or pos-numvx*ratio > -0.01:
-                 #     print("warning: cannot achieve desired sample ratio, taking uniform")
-                      P = L*0+1
-                  else:
-                      background_p = (1-ratio)*pos/(numvx*ratio-pos)
-                      P = (L + background_p)
-                      
-                  p = tf.reshape(P,[numvx])
-                  p = tf.cast(p,dtype=tf.float64)
-                      
-                  p = p/tf.reduce_sum(p)
-                  idx = np.random.choice(numvx,M,p=p)
-                  R = np.transpose(np.unravel_index(idx,sz))
-                  R = R + np.random.normal(size=R.shape)*tf.expand_dims(noisefac,0)*0.2                  
-                  R = R + np.random.uniform(low=0,high=1,size=R.shape)
-                  points = R/sz
-                  
-                  points = tf.expand_dims(tf.cast(points,dtype=tf.float32),1)
-                              
-                  points_tot.append(points)
-              
-              centers = tf.concat(points_tot,1)            
-                  
-              return centers
         
          
         def draw_boxes(edges,shape,width,out_shape,out_width,label,N):
@@ -1396,13 +1376,14 @@ class CropGenerator():
         
             # rnd points inside patches
             if generate_type == "random" or generate_type == "random_fillholes" or generate_type == "random_deprec":
-                if balance is not None:
-                    points = draw_center_bylabel(label,balance,out_width/width*shape,nD,N)         
+                if random_anchors is not None:
+                    points = draw_center_from_anchors(random_anchors,edges,shape,N)
+                elif balance is not None:
+                    points = self.draw_center_bylabel(label,balance,generate_type,out_width/width*shape,nD,N)         
+                    points = points*(shape-1)
                 else:
                     points = tf.random.uniform([N,b,nD],minval=0,maxval=1,dtype=edges.dtype)
-#                    points = tf.random.uniform([N,b,nD],minval=-1,maxval=1,dtype=edges.dtype)
- #                   points = 0.5*(1+tf.math.sign(points) * tf.math.pow(1-tf.math.abs(points),2))                    
-                points = points*(shape-1)
+                    points = points*(shape-1)
                                                 
             elif generate_type == "tree":
                 # tree 
@@ -1645,7 +1626,7 @@ class CropGenerator():
                 if x[p] is not None:
                     x[p] = tf.gather(x[p],(idx),axis=0)      
         return x
-                
+  
 
   ############## teststuff
 

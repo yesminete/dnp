@@ -46,7 +46,8 @@ labels   = [  { 'subj1' :  'example2d_label.nii.gz',
 subjects = [ 'subj1', 'subj2'];
 
 # define ou want some validation dta
-valid_ids = [1]
+valid_ids = []
+#valid_ids = [1]
 
 
 modelfi = "models/yourmodel2"
@@ -94,15 +95,15 @@ patching = {
     "scheme":{ 
         "patch_size":[32,32],                
         "destvox_mm": None,
-        "destvox_rel":[4,4],
+        "destvox_rel":[1,1],
         "fov_mm":None,
-        "fov_rel":[0.7,0.7],
+        "fov_rel":[0.9,0.9],
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
     #"categorial_label" :None,
     #"categorial_label" : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],#list(range(1,14)),
-    "categorial_label" :[1,2,7,8,12,14,15,16],
+    "categorial_label" :[12,14,15],
     
     "interp_type" : "NN",    
     "scatter_type" : "NN",
@@ -171,11 +172,11 @@ loading = {
 
 
 training = {
-   "num_patches":200,
+   "num_patches":250,
    "augment": {},#{"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":5,
+   "epochs":1,
    "num_its":100,                
-   "balance":{"ratio":0.9,"autoweight":True},
+   "balance":{"ratio":0.9,"autoweight":2},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
