@@ -95,7 +95,7 @@ patching = {
     "scheme":{ 
         "patch_size":[32,32],                
         "destvox_mm": None,
-        "destvox_rel":[1,1],
+        "destvox_rel":[4,4],
         "fov_mm":None,
         "fov_rel":[0.9,0.9],
      },
@@ -191,21 +191,27 @@ training = {
 if True: #QMedbedding
     dim_embedding = 3
     
+    categorical = False
+        
     if 'categorial_label' not in patching or patching['categorial_label'] is None:
         raise ValueError('QMenbedding only with categorial labels')
-
-    num_labels_cat = len(patching['categorial_label'])+1
-    training['loss'] = [patchwork.customLayers.QMloss(typ='hinge')]*patching['depth']
+    if categorical:
+        patching['categorical'] = True        
+        qmlosstype='hinge'
+        num_labels_cat = len(patching['categorial_label'])+1
+    else:
+        patching['categorical'] = False    
+        qmlosstype='binary_hinge'
+        num_labels_cat = len(patching['categorial_label'])+1
+        
+    training['loss'] = [patchwork.customLayers.QMloss(typ=qmlosstype)]*patching['depth']
     #training['loss'] = [patchwork.customLayers.QMloss(num_samples=20)]*patching['depth']
     training['dontcare'] =False
-    patching['categorical'] = True
     network["finalBlock"]= patchwork.customLayers.QMembedding(num_labels_cat,dim_embedding)
     if 'block_out' not in network or network['block_out'] is None:            
         network["block_out"] = [2*dim_embedding]*(patching['depth']-1) + [dim_embedding]
-    network["finalBlock_all_levels"]=True
-    
+    network["finalBlock_all_levels"]=True    
     training["optimizer"] = tf.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=True)
-
     network["intermediate_loss"]=True
 
 
@@ -413,7 +419,7 @@ for i in range(0,outer_num_its):
 
 #%%
 
-ew =    themodel.apply_on_nifti(['example2d.nii.gz','example2d.nii.gz'],'xxx.nii',repetitions=25,num_chunks=1,generate_type='random',
+ew =    themodel.apply_on_nifti(['example2d.nii.gz','example2d.nii.gz'],'xxx.nii',repetitions=250,num_chunks=1,generate_type='random',
                                 augment={"dphi":0.2,'independent_augmentation':False},sampling_factor=1,branch_factor=2,lazyEval=0.5,
                                 #level='mix',
                                 scale_to_original=False)

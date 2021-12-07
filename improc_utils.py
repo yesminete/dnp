@@ -1265,7 +1265,7 @@ def loadAnnotation(annos,asdict=True):
                 
             
         
-def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50,nD=3,size=2):
+def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,typ='localmax',maxpoints=50,nD=3,size=2):
 
     x = tf.expand_dims(res,0)
     if len(x.shape) < 5:
@@ -1277,28 +1277,53 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
     def getLM(x,labelnum=0,labelidx=None):
         points = []
         points_raw = []
-        if nD == 2:
-            x = tf.squeeze(x,-1)
+        
+        if typ == 'localmax':
+            if nD == 2:
+                x = tf.squeeze(x,-1)
+                if labelidx is not None:
+                    labelidx = tf.squeeze(labelidx,-1)
+                a = x==tf.nn.max_pool2d(x,3,1,'SAME')
+            else:
+                a = x==tf.nn.max_pool3d(x,3,1,'SAME')
+            a = tf.math.logical_and(a,x>threshold)
+            idx = tf.where(a)
+            maxis = tf.gather_nd(x,idx)
             if labelidx is not None:
-                labelidx = tf.squeeze(labelidx,-1)
-            a = x==tf.nn.max_pool2d(x,3,1,'SAME')
+                maxis_idx = tf.gather_nd(labelidx,idx)
+            idx = idx[:,1:]
+            
         else:
-            a = x==tf.nn.max_pool3d(x,3,1,'SAME')
-        a = tf.math.logical_and(a,x>threshold)
-        idx = tf.where(a)
-        maxis = tf.gather_nd(x,idx)
-        if labelidx is not None:
-            maxis_idx = tf.gather_nd(labelidx,idx)
+            if nD == 2:
+                p = tf.squeeze(tf.squeeze(x,-1),0)
+                if labelidx is not None:
+                    labelidx = tf.squeeze(labelidx,-1)
+                R = tf.meshgrid(list(range(0,labelidx.shape[1])),list(range(0,labelidx.shape[2])),indexing='ij')
+                R = list(map(lambda x: tf.cast(tf.expand_dims(x,nD),dtype=tf.float32),R))
+                X = tf.concat([1+0.0*p,p,p*R[0],p*R[1]],nD)
+            else:
+                p = tf.squeeze(x,0)
+                R = tf.meshgrid(list(range(0,labelidx.shape[1])),list(range(0,labelidx.shape[2])),list(range(0,labelidx.shape[3])),indexing='ij')                
+                R = list(map(lambda x: tf.cast(tf.expand_dims(x,nD),dtype=tf.float32),R))
+                X = tf.concat([1+0.0*p,p,p*R[0],p*R[1],p*R[2]],nD)
+            labelidx = tf.squeeze(labelidx,0)            
+            num_labels = tf.reduce_max(labelidx)
+            accum = tf.scatter_nd(labelidx,X,[num_labels+1,nD+2])
+            vol = accum[:,1:nD]
+            idx = accum[:,nD:] / vol
+            maxis_idx = tf.range(num_labels+1)
+            maxis = tf.squeeze(vol,-1)
+            
+            
             
         print("number of local maxima: "  + str(maxis.shape[0]))
     
         sorted_ = tf.argsort(maxis,-1,'DESCENDING')
         for j in range(min(maxis.shape[0],maxpoints)):
             k = sorted_[j]
-            p = tf.concat([idx[k,1:4],[1]],0).numpy()
+            p = tf.concat([idx[k,0:nD],[1]*(4-nD)],0).numpy()
             p = np.matmul(affine,p)
             p = p[0:3]
-            #p = idx[k,1:4].numpy()
             
             score = maxis[k].numpy()
             if labelidx is not None:

@@ -664,6 +664,16 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0,typ='softmax'):
             else:
                 sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)                
             return weight*(-e + tf.math.log(sump))
+        elif typ == 'binary_hinge':
+            threshold = 0.1
+            l = tf.math.maximum(threshold-tf.expand_dims(e,-1),0)
+            l = l + tf.math.maximum(threshold+opp,0)
+            return weight*tf.reduce_sum(l,-1)
+        elif typ == 'binary_hingemax':
+            threshold = 0.2
+            l1 = tf.math.maximum(threshold-e,0)
+            l0 = tf.math.maximum(threshold+opp,0)
+            return weight*(l1+tf.reduce_max(l0,-1))
         elif typ == 'hinge':
             threshold = 0.2
             l = tf.math.maximum(threshold-(tf.expand_dims(e,-1)-opp),0)
