@@ -1308,7 +1308,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,maxpoints=50
                 theidx = labelnum
 
             if len(points_raw) > 0:
-                if min([np.sum((a-p)**2) for a in points_raw]) < size*size:
+                if min([np.sum((a-p)**2) for a in points_raw]) < 4*size*size:
                     continue
 
             points_raw.append(p)

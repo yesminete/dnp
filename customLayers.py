@@ -594,6 +594,10 @@ class QMembedding(layers.Layer):
                     
           if full:
               tmp.append(tf.expand_dims(p,-1))
+              
+          #if k == 0:
+          #    bgnd = p[...,-1]
+              
           Mp = tf.reduce_max(p,-1)  
           Mi = tf.argmax(p,-1)
             
