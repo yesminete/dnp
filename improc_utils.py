@@ -1309,15 +1309,15 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,typ='localma
             labelidx = tf.squeeze(labelidx,0)            
             num_labels = tf.reduce_max(labelidx)
             accum = tf.scatter_nd(labelidx,X,[num_labels+1,nD+2])
-            vol = accum[:,1:nD]
-            idx = accum[:,nD:] / vol
+            vol = accum[:,1:2]
+            idx = accum[:,2:] / vol
             maxis_idx = tf.range(num_labels+1)
             maxis = tf.squeeze(vol,-1)
             
             
             
         print("number of local maxima: "  + str(maxis.shape[0]))
-    
+        colorhex = ['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff','#ff8000','#ff0080','#80ff80','#0080ff','#808080','#b9aa9b']
         sorted_ = tf.argsort(maxis,-1,'DESCENDING')
         for j in range(min(maxis.shape[0],maxpoints)):
             k = sorted_[j]
@@ -1341,12 +1341,13 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,typ='localma
             name = 'L'+str(theidx)+' score:'+str(score)
             if namemap is not None:
                 name = namemap(theidx,score)
-            
-            points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
-                            'name': name,
-                            'size': size                              
-                })
-
+            if not np.isnan(p[0]):
+                points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
+                                'name': name,
+                                'color': colorhex[theidx%len(colorhex)],
+                                'size': size                              
+                    })
+    
         print("number of local maxima after NMS: "  + str(len(points)))
             
         return points
