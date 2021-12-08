@@ -1220,12 +1220,11 @@ class PatchWorkModel(Model):
                              pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
                  if out_typ.find('atls') != -1 or out_typ == 'idx':
                      probs = None
-                     if self.cropper.categorical:           
-                         if out_typ == 'idx':
-                             tmp = res_[...,0:1]
-                             probs = res_[...,1:2]
-                         else:
-                             tmp = np.argmax(res_,axis=-1)
+                     if out_typ == 'idx':
+                         tmp = res_[...,0:1]
+                         probs = res_[...,1:2]
+                     elif self.cropper.categorical:           
+                         tmp = np.argmax(res_,axis=-1)
                      else:
                          tmp = res_>threshold
                          if len(tmp.shape) == nD:
@@ -1597,7 +1596,7 @@ class PatchWorkModel(Model):
         #w = f / tf.reduce_sum(f)
         #w = 1/w
         #w = tf.where(f==0,1,w)
-        if self.cropper.categorial_label is not None and not self.cropper.categorical:
+        if self.cropper.categorial_label is not None and not self.cropper.categorical and not hasattr(pred,'QMembedding'):
             lmat = 0.0
             cnt = 0
             for j in self.cropper.categorial_label:
