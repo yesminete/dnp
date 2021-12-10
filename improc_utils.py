@@ -874,6 +874,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                                 if 'thresh' in a:
                                                     p.append(a['thresh'])
                                                 points.append(p)
+                                            else:
+                                                print('key ' + key[1] + ' not present for ' + fname)
+                                                
                                     if notfound:
                                         break
                                     if len(points) == 0:
@@ -881,7 +884,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                         notfound=True
                                         if exclude_incomplete_labels:
                                             break
-                                print('rendering ' + str(len(points)) + ' markers')
+                                print('.',end="")
                                 img = render(points)
                                 img,_ = crop_spatial(img,scrop)                            
                                 img = np.expand_dims(img,0)
@@ -896,7 +899,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                     if notfound:
                                         img = img*0 + label_cval                                                                    
                                     labs.append(img)
-                                    
+                            print(" labels rendered " + str(label_num))       
                         elif class_selector is not None:
                             delim='.'
                             if 'delim' in class_selector:

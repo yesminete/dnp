@@ -1165,6 +1165,7 @@ class PatchWorkModel(Model):
       pred_nii = None
       if ofname is not None:
           def savenii(name,res_,out_typ,labelidx=None):       
+             nonlocal res
              threshold = None
              if out_typ == 'idx':
                  fac = 1
@@ -1224,7 +1225,11 @@ class PatchWorkModel(Model):
                          tmp = res_[...,0:1]
                          probs = res_[...,1:2]
                      elif self.cropper.categorical:           
-                         tmp = np.argmax(res_,axis=-1)
+                         tmp = np.expand_dims(np.argmax(res_,axis=-1),-1)
+                         probs = np.max(res_,axis=-1,keepdims=True)
+                         probs = np.int32( (probs * 10000) * (tmp>0))
+                         tmp = np.int32(tmp)
+                         
                      else:
                          tmp = res_>threshold
                          if len(tmp.shape) == nD:
@@ -1238,6 +1243,7 @@ class PatchWorkModel(Model):
                          tmp = tf.gather(idxmap,tmp)
                          if probs is not None:
                              tmp = tf.concat([tmp,probs],-1)
+                             res = tmp
                      
                      
                      pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)

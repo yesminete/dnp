@@ -651,11 +651,12 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0,typ='softmax'):
         full = num_samples >= E.shape[0]
                 
         if full:
-            opp = tf.tile(tf.reshape(tf.range(E.shape[0]),[1]*(nD+1) + [E.shape[0]]),x.shape[0:-1]+[1])
+            opp = tf.tile(tf.reshape(tf.range(E.shape[0]-1),[1]*(nD+1) + [E.shape[0]-1]),x.shape[0:-1]+[1])
         else:
             rshape = x.shape[0:-1] + [bsize]
             opp = tf.random.uniform(rshape,minval=0,maxval=E.shape[0]-1,dtype=tf.int32)
-            opp = tf.where(opp>=x,opp+1,opp)
+            
+        opp = tf.where(opp>=x,opp+1,opp)
         opp = tf.squeeze(tf.gather(E,opp))
         opp = inp2(opp)
         if typ == 'softmax':
