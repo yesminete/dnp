@@ -664,10 +664,7 @@ def QMloss(bias=1,num_samples=4,background_weight=1.0,typ='softmax'):
             maxl = tf.stop_gradient(tf.where(maxl>e,maxl,e))
             e = e - maxl
             opp = opp - tf.expand_dims(maxl,-1)
-            if full:
-                sump = tf.reduce_sum(tf.math.exp(opp),axis=-1)
-            else:
-                sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)                
+            sump = tf.math.exp(e) + tf.reduce_sum(tf.math.exp(opp),axis=-1)                
             return weight*(-e + tf.math.log(sump))
         elif typ == 'binary_hinge':
             threshold = 0.1
