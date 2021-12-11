@@ -377,6 +377,45 @@ def createUnet_v3(depth=5,outK=1,feature_dim=None,nD=3,
 
 
 
+def createFFTnet(depth=5,outK=1,feature_dim=None,nD=3,kmax=2,
+                  padding='SAME',verbose=False,input_shape=None):
+  if nD == 3:
+      strides = [2,2,2]
+      _convD = lambda *args, **kwargs: layers.Conv3D(*args, **kwargs,strides=strides)
+  elif nD == 2:
+      strides = [2,2]
+      _convD = lambda *args, **kwargs: layers.Conv2D(*args, **kwargs,strides=strides)
+    
+  nlin = layers.LeakyReLU
+
+  def conv_down(fdim):
+         return [ _convD(fdim,2,padding='SAME'), layers.BatchNormalization(), nlin()] 
+         
+  if feature_dim is None:
+      fdims = [16,16,32,32,64,64,128,128]
+
+  if input_shape is not None:
+     tmp = input_shape
+     input_shape = []
+     input_shape.extend(tmp)
+      
+      
+  theLayers = {}
+  for z in range(depth):
+           
+    fdim = fdims[z]
+    id_d = str(1000 + z+1)
+    
+    theLayers[id_d+"0_conv"] = conv_down(fdim)
+    
+                
+  theLayers["9_final"] = iFFTlayer(out_shape=input_shape,out_fdim=outK,kmax=kmax)
+      
+  return CNNblock(theLayers,verbose=verbose)
+
+
+
+
 
 def createUnet_bi(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,verbose=False):
 
@@ -543,6 +582,73 @@ class identity(layers.Layer):
       return image
   
 custom_layers['identity'] = identity
+
+
+
+    
+class iFFTlayer(layers.Layer):
+  def __init__(self,out_shape=[32,32,32],out_fdim=6,kmax=2,**kwargs):    
+    super().__init__(**kwargs)
+    self.nD = len(out_shape)
+    self.out_shape = out_shape
+    self.out_fdim = out_fdim
+    self.kmax = kmax
+    self.flatten = tf.keras.layers.Flatten()
+    self.numP = (2*kmax+1)**self.nD *  out_fdim
+    self.dense = tf.keras.layers.Dense(self.numP)
+    
+
+    
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'out_shape': self.out_shape,
+            'out_fdim': self.out_fdim,
+            'kmax': self.kmax
+        } )    
+        return config                  
+    
+        
+  def call(self, image):         
+      x = self.flatten(image)
+      print(x.shape)
+      
+      x = self.dense(x)
+      print(x.shape)
+      sh = [x.shape[0],self.out_fdim] + [(2*self.kmax+1)]*self.nD
+      
+      totsz = tf.math.reduce_prod(sh)
+      
+      xran = lambda x: tf.math.mod(tf.range(-self.kmax,self.kmax+1),x)
+      
+      out_shape2 = list(map(lambda x:x*2,self.out_shape))
+      
+      if self.nD == 3:
+          I = tf.meshgrid(tf.range(sh[0]),tf.range(sh[1]),xran(out_shape2[0]),xran(out_shape2[1]),xran(out_shape2[2]),indexing='ij')
+      else:
+          I = tf.meshgrid(tf.range(sh[0]),tf.range(sh[1]),xran(out_shape2[0]),xran(out_shape2[1]),indexing='ij')
+      I = list(map(lambda i:tf.reshape(i,[totsz,1]),I))
+      I = tf.concat(I,1)
+      
+      
+      X = tf.scatter_nd(I,tf.reshape(x,[x.shape[0]*x.shape[1]]),
+                            [x.shape[0],self.out_fdim] + out_shape2)
+      X = tf.complex(X,0.0)
+      if self.nD == 3:
+          X = tf.signal.fft3d(X)
+          X = tf.math.real(X)+tf.math.imag(X)
+          X = X[:,:,0:self.out_shape[0],0:self.out_shape[1],0:self.out_shape[2]]
+          X = tf.transpose(X,[0,2,3,4,1])
+      else:
+          X = tf.signal.fft2d(X)
+          X = tf.math.real(X)+tf.math.imag(X)
+          X = X[:,:,0:self.out_shape[0],0:self.out_shape[1]]
+          X = tf.transpose(X,[0,2,3,1])
+            
+      return X
+
+custom_layers['iFFTlayer'] = iFFTlayer
 
 
 
