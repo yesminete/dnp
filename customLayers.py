@@ -393,6 +393,8 @@ def createFFTnet(depth=5,outK=1,feature_dim=None,nD=3,kmax=2,
          
   if feature_dim is None:
       fdims = [16,16,32,32,64,64,128,128]
+  else:
+      fdims = feature_dim
 
   if input_shape is not None:
      tmp = input_shape
