@@ -121,7 +121,12 @@ patching = {
 
 network = {    
     "blockCreator": lambda level,outK,input_shape : 
-        patchwork.customLayers.createUnet_v2(depth=3,outK=outK,nD=nD,input_shape=input_shape,feature_dim=[8,16,32,64,64],nonlin='linear'),
+        patchwork.customLayers.createUnet_v2(depth=3,outK=outK,nD=nD,
+                                             input_shape=input_shape,
+                                             feature_dim=[5,6,7,8,8],
+                                             #nonlin='relu',
+                                             nonlin='binaryLookup',
+                                             ),
     # "finalBlock": patchwork.customLayers.QMembedding(20,4),
     #"block_out":[6,7,6,4],
     #"finalBlock_all_levels":True,
