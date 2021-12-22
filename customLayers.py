@@ -120,6 +120,8 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
   def BNrelu():
       if nonlin is None:
           return [layers.BatchNormalization(), layers.LeakyReLU()]
+      elif nonlin == 'binaryLookup':
+          return [layers.BatchNormalization(), binaryLookup()]
       else:
           return [layers.BatchNormalization(), layers.Activation(nonlin)]
   
@@ -294,6 +296,43 @@ def createUnet_v3(depth=5,outK=1,feature_dim=None,nD=3,
 
 
     
+
+
+class binaryLookup(layers.Layer):
+
+  def __init__(self,out=-1,**kwargs):
+    super().__init__(**kwargs)
+    self.encoding = None
+    self.out = out
+
+    
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'out': self.out,
+        } )    
+        return config                  
+    
+  def call(self, image):         
+      if self.encoding is None:
+          self.N = image.shape[-1]
+          if self.out == -1:
+              self.out = self.N
+          self.encoding = self.add_weight(shape=[2**self.N,self.out], 
+                        initializer=tf.keras.initializers.RandomNormal, trainable=True,name=self.name)
+
+      e = 2**tf.range(self.N)
+      for k in range(len(image.shape)-1):
+          e = tf.expand_dims(e,0)
+      idx = tf.reduce_sum(tf.where(image>0,e,0),-1)
+      out = tf.gather(self.encoding,idx)
+      out = out * tf.reduce_mean(tf.abs(image),keepdims=True,axis=-1)
+      
+      return out
+
+    
+custom_layers['binaryLookup'] = binaryLookup
 
 
 class simple_self_att(layers.Layer):
