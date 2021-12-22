@@ -614,10 +614,10 @@ class iFFTlayer(layers.Layer):
         
   def call(self, image):         
       x = self.flatten(image)
-      print(x.shape)
+      #print(x.shape)
       
       x = self.dense(x)
-      print(x.shape)
+      #print(x.shape)
       sh = [x.shape[0],self.out_fdim] + [(2*self.kmax+1)]*self.nD
       
       totsz = tf.math.reduce_prod(sh)
@@ -1082,7 +1082,14 @@ class warpLayer(layers.Layer):
      C = tf.where(C<0,0.0,C)
      C = tf.where(C>self.shape_mult-2,self.shape_mult-2,C)
           
+     nD = self.nD
      W = self.lin_interp(self.weight,C)
+     
+     m = tf.reduce_mean(W,keepdims=True,axis=range(1,nD+1))
+     sd = tf.math.reduce_std(W,keepdims=True,axis=range(1,nD+1))
+     W = (W-m)/(0.00001+sd)
+     
+     
      return tf.concat([W,image],self.nD+1)
      
       

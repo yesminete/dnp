@@ -615,7 +615,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            label_transform=None,
                            integer_labels=False,
                            verbose=False,
-                           threshold=0.5,
+                           threshold=None,
                            label_cval=np.nan,
                            nD=3,ftype=tf.float32):
 
@@ -688,6 +688,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
 
         crop_idx = []
 
+        
         if (exclude_incomplete_labels == 1) and not use_unlabeled_data:
             incomplete = False
             for j in range(len(labels)):
