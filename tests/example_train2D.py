@@ -255,6 +255,23 @@ def get_data(n=None):
    return patchwork.improc_utils.load_data_structured(
                        contrasts=contrasts,labels=labels,subjects=subjects,max_num_data=n, **loading)
 
+   tset = dat[0]
+   lset = dat[1]
+   subj = dat[-1]
+   
+   fdim = tset[0].shape[-1]
+   for k in range(1,len(tset)):
+       if tset[k].shape[-1] != fdim:
+           print("warning: fdim of data inconsistent " + str(fdim) + " != " + str(tset[k].shape[-1]) + " for subject " + subj[k])
+   
+   fdim = lset[0].shape[-1]
+   for k in range(1,len(lset)):
+       if lset[k].shape[-1] != fdim:
+           print("warning: fdim of labels inconsistent " + str(fdim) + " != " + str(lset[k].shape[-1]) + " for subject " + subj[k])
+
+    
+   return dat
+
 print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> loading first example for init.")
 
 with tf.device("/cpu:0"):    
@@ -369,8 +386,10 @@ for i in range(0,outer_num_its):
 
 
 #%%
-res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=128,num_chunks=4,
-                                  generate_type='random_fillholes',
+res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=20,num_chunks=1,
+                                  augment={},
+                                  generate_type='random',
+                                  window='cos2',
                                   lazyEval={'fraction':1}
                                   )
 
@@ -384,7 +403,7 @@ plt.imshow(res[1][:,:,0,0])
 themodel = patchwork.PatchWorkModel.load(themodel.modelname)
 
 res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=10,num_chunks=4,
-                                  generate_type='random_fillholes',
+                                  generate_type='random',
                                   lazyEval={'fraction':1}
                                   )
 

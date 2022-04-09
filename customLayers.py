@@ -1123,10 +1123,10 @@ class warpLayer(layers.Layer):
           
      nD = self.nD
      W = self.lin_interp(self.weight,C)
-     
-     m = tf.reduce_mean(W,keepdims=True,axis=range(1,nD+1))
+     W = W * 0.0005
+    # m = tf.reduce_mean(W,keepdims=True,axis=range(1,nD+1))
      #sd = tf.math.reduce_std(W,keepdims=True,axis=range(1,nD+1))
-     W = W/(0.00001+m)
+    # W = W/(0.00001+m)
      
      
      return tf.concat([W,image],self.nD+1)

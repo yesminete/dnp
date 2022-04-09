@@ -894,7 +894,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                     if label_num == 1:
                                         labs.append(img)
                                     else:
-                                        labs[0] = labs[0] + label_num*img
+                                        #labs[0] = labs[0] + label_num*img
+                                        selector = tf.math.logical_or(tf.math.logical_and(img>0,labs[0]==0),
+                                                                      tf.math.logical_and(img>0,tf.random.uniform(img.shape)>0.5) )
+                                        labs[0] = tf.where(selector,label_num,labs[0])
                                     label_num = label_num + 1                                        
                                 else:
                                     if notfound:
@@ -964,7 +967,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                     order = 0
                                 else:
                                     order = 1
-                                print("reslicing label order " + str(order))
+                                print("reslicing label, interp. order " + str(order))
                                 if len(img.shape) == 3:
                                     img= resample_from_to(img, (template_shape ,template_affine),order=order,cval=label_cval)                                    
                                 else:
@@ -1044,6 +1047,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
                             X = X/(sz[1]-1)*2*np.pi
                             Y = Y/(sz[2]-1)*2*np.pi
+                          #  img = img / (0.0001+tf.reduce_mean(img,axis=[1,2],keepdims=True))                            
                             img = tf.concat([img,tf.math.cos(X),tf.math.sin(X),tf.math.cos(Y),tf.math.sin(Y)],nD+1)
                         if nD==3:
                             X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
@@ -1053,6 +1057,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             X = X/(sz[1]-1)*2*np.pi
                             Y = Y/(sz[2]-1)*2*np.pi
                             Z = Z/(sz[3]-1)*2*np.pi
+                            img = img * 0.0005
+                          #  img = img / (0.0001+tf.reduce_mean(img,axis=[1,2,3],keepdims=True))
                             img = tf.concat([img,tf.math.cos(X),tf.math.sin(X),tf.math.cos(Y),tf.math.sin(Y),tf.math.cos(Z),tf.math.sin(Z)],nD+1)                            
                     elif exclude_incomplete_labels == -1:
                         print("  missing label " + str(j) + " for subject " + k + ", extending with nans (dont care label)")
@@ -1241,6 +1247,7 @@ def loadAnnotation(annos,asdict=True):
                 for ss in aa['points']:
                     key = ss['name']
                     key = key.replace('<br>','')
+                    key = key.strip()
                     if key in x:
                         cnt = 1
                         while True:

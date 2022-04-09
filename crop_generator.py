@@ -37,8 +37,8 @@ class CropInstanceLazy:
           return self.lastscale['data_cropped'],self.lastscale['local_box_index']
       return getNext
             
-  def stitchResult(self,r,level):
-     return stitchResult(r,level,self.scales,self.cropper.scatter_type)
+  def stitchResult(self,r,level,window=None):
+     return stitchResult_normal(r,level,self.scales,self.cropper.scatter_type,window=window)
 
 
 
@@ -183,11 +183,11 @@ class CropInstance:
         
     return out
 
-  def stitchResult(self,r,level):
-     return stitchResult(r,level,self.scales,self.cropper.scatter_type)
+  def stitchResult(self,r,level,window=None):
+     return stitchResult_normal(r,level,self.scales,self.cropper.scatter_type,window=window)
 
 # stitched results (output of network) back into full image
-def stitchResult(r,level, scales,scatter_type):
+def stitchResult_normal(r,level, scales,scatter_type,window=None):
     qq = r[level]
     numlabels = qq.shape[-1]
     sc = scales[level]
@@ -195,7 +195,22 @@ def stitchResult(r,level, scales,scatter_type):
     sha = tf.concat([sc['dest_full_size'],[numlabels]],0)
     sha = tf.cast(sha,dtype=pbox_index.dtype)
     if scatter_type=='NN':        
-        return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
+        if window == 'cos' or window == 'cos2' :
+            shape = qq.shape[1:]
+            nD =  len(shape)-1
+            if nD == 2:
+                A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),indexing='ij')
+            if nD == 3:
+                A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),tf.range(0,shape[2],dtype=tf.float32),indexing='ij')
+            win = 1.0
+            for k in range(nD):
+                win = win*tf.math.sin(A[k]/(shape[k]-1)*np.pi)
+            win = tf.expand_dims(tf.expand_dims(win,0),-1)
+            if window == 'cos2':
+                win = tf.math.sqrt(tf.math.abs(win))
+            return tf.scatter_nd(pbox_index,qq*win,sha), tf.scatter_nd(pbox_index,(qq*0+1)*win,sha);
+        else:        
+            return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
     else:
         return scatter_interp(pbox_index,qq,sha)
 
@@ -356,6 +371,7 @@ class CropGenerator():
         if generate_type == 'random_fillholes': # only for application
             L = L
         elif self.categorial_label is None:
+            L = tf.where(tf.math.is_nan(L),0,L)
             if label_weight is not None:
                 L = L*label_weight
         else:
@@ -533,7 +549,7 @@ class CropGenerator():
               balances_sum[k]= tf.expand_dims(tf.math.reduce_sum(indicator,axis=0),1)   
               np.set_printoptions(precision=3,linewidth=1000)
               if verbose:
-                  if cur_ratio.shape[0] < 10 or k == self.depth-1:
+           #       if cur_ratio.shape[0] < 10 or k == self.depth-1:
                       print(' level: ' + str(k) + ' balance: ' + str(np.transpose(cur_ratio.numpy())[0]) ) # + "/" + str(np.transpose(balances_sum[k].numpy())[0]) )
       return balances,balances_sum
 

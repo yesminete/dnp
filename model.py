@@ -179,6 +179,8 @@ class myHistory :
                         continue
                     x = [ i/1000 for i, j in loss_hist[k] ]
                     y = [ j for i, j in loss_hist[k] ]
+                    x_orig = x
+                    y_orig = y
                     n = int(np.ceil(len(y)/20.0))
                     y = np.convolve(y,np.ones([n])/n,mode='valid')
                     if n > 1:
@@ -197,6 +199,7 @@ class myHistory :
                             plt.semilogy(x,y,'y',label=labeltxt, linestyle='dashdot')
                         else:    
                             plt.semilogy(x,y,cols[cnt],label=labeltxt)
+                            plt.semilogy(x_orig,y_orig,cols[cnt],label=labeltxt,alpha=.3)
                     cnt+=1
 
  
@@ -697,6 +700,8 @@ class PatchWorkModel(Model):
                  patch_size_factor=1,
                  sampling_factor=1,
                  lazyEval = None,
+                 window = None,
+                 sparse_suppression=None,
                  max_patching=False,
                  patch_stats= False,
                  stitch_immediate=False,
@@ -879,7 +884,7 @@ class PatchWorkModel(Model):
                         else:
                             level_to_stitch = level
                         for k in level_to_stitch:            
-                          a,b = x.stitchResult(r,k)
+                          a,b = x.stitchResult(r,k,window=window)
                           pred[k] += a
                           sumpred[k] += b        
                     print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[-1][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[-1].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
@@ -915,7 +920,10 @@ class PatchWorkModel(Model):
                     print(">>> time elapsed, mixing: " + str(timer() - start) )
 
                 else:
-                    res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
+                    if sparse_suppression is not None:
+                        res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b**2+sparse_suppression*3) )    
+                    else:
+                        res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
              
                 
          if sampling_factor > 1:    
@@ -981,6 +989,9 @@ class PatchWorkModel(Model):
                  augment=None,
                  along4dim=False,
                  align_physical=None,
+                 ce_threshold=0.01,
+                 window=None,
+                 sparse_suppression=None,
                  patch_size_factor=1,
                  sampling_factor=1,                 
                  crop_fdim=None,
@@ -1114,6 +1125,8 @@ class PatchWorkModel(Model):
                                         lazyEval = lazyEval,
                                         patch_size_factor=patch_size_factor,
                                         sampling_factor=sampling_factor,
+                                        window=window,
+                                        sparse_suppression=sparse_suppression,
                                         verbose=verbose,
                                         testIT=testIT,
                                         scale_to_original=scale_to_original)
@@ -1204,6 +1217,7 @@ class PatchWorkModel(Model):
              else:
                  assert(False,"out_typ not implemented")
                  
+                 
              if threshold is not None:
                  if out_typ.find('mask') != -1:
                      out_typ = 'uint8'   
@@ -1224,9 +1238,14 @@ class PatchWorkModel(Model):
                      if out_typ == 'idx':
                          tmp = res_[...,0:1]
                          probs = res_[...,1:2]
+                         threshold_ = int(10000*ce_threshold)
+                         tmp = tf.where(probs<threshold_,0,tmp)
+                         probs = tf.where(probs<threshold_,0,probs)
+                         tmp = np.int32(tmp)
                      elif self.cropper.categorical:           
                          tmp = np.expand_dims(np.argmax(res_,axis=-1),-1)
                          probs = np.max(res_,axis=-1,keepdims=True)
+                         tmp = tf.where(probs<ce_threshold,0.0,tmp)
                          probs = np.int32( (probs * 10000) * (tmp>0))
                          tmp = np.int32(tmp)
                          
@@ -2075,11 +2094,11 @@ class PatchWorkModel(Model):
         
         if hard_mining is not None and hard_mining>0:
            with tf.device(DEVCPU):    
+              hard_mining_ratio = 1-1/(1+hard_mining)
               if hard_mining_order == 'balance':
                   targetdata = c_data.getTargetData(sampletyp)
                   patches = targetdata[-1]
                   labelfreqs = []
-                  hard_mining_ratio = 1-1/(1+hard_mining)
 
                   for k in range(self.num_labels):
                       if self.cropper.categorial_label is not None:
