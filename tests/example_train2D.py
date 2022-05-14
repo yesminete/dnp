@@ -159,9 +159,9 @@ loading = {
 
 
 training = {
-   "num_patches":256,
+   "num_patches":32,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":5,
+   "epochs":2,
    "num_its":100,                
    "balance":{"ratio":0.5,"autoweight":1},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),

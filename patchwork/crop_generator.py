@@ -113,7 +113,7 @@ class CropInstance:
       inp['cropcoords'+str(cnt)] = self.extb2dim(x['local_box_index'],batchdim2)
       cnt = cnt + 1
     inp['batchindex'] = tf.range(inp['input0'].shape[0])
-
+ 
     if sampletyp[0] is not None:      
         cnt = 0
         for x in self.scales:
@@ -522,10 +522,10 @@ class CropGenerator():
 
   def computeBalances(self,scales,verbose,balance):
       # print balance info
-      balances = [None]*self.depth
-      balances_sum = [None]*self.depth
+      balances = [None]*len(scales)
+      balances_sum = [None]*len(scales)
 
-      for k in range(self.depth):
+      for k in range(len(scales)):
           if scales[k]['labels_cropped'] is not None:
               labs = scales[k]['labels_cropped']
                            
@@ -574,6 +574,7 @@ class CropGenerator():
              patch_size_factor=1,     #  actual patch shaoe are scaled by this factor
              dphi=0,                  #  deprectaed augmnt
              overlap=0,
+             max_depth=None,
              balance=None,
              augment=None,
              test=False,
@@ -980,8 +981,11 @@ class CropGenerator():
       x = localCrop(None,0)
       x['class_labels'] = extend_classlabels(x,class_labels_)
         
+      if max_depth is None:
+          max_depth = self.depth
+        
       scales = [x]
-      for k in range(self.depth-1):
+      for k in range(max_depth-1):
         x = localCrop(x,k+1)        
         x['class_labels'] = extend_classlabels(x,class_labels_)    
         scales.append(x)
@@ -1025,7 +1029,7 @@ class CropGenerator():
     else:            # only cat those which are necessary during training, and do it on GPU
         with tf.device("/gpu:0"):      
             result_data = []
-            for k in range(self.depth):
+            for k in range(max_depth):
                 ths = {}
                 result_data.append(ths)
                 for field in ['data_cropped','labels_cropped','local_box_index','class_labels']:

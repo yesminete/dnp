@@ -133,7 +133,7 @@ class myHistory :
     
   def show_train_stat(self):
 
-    try: 
+#    try: 
         
         import matplotlib.pyplot as plt
         from matplotlib import gridspec
@@ -239,7 +239,19 @@ class myHistory :
             
 
 #%%           
-            plt.legend(loc=3)
+
+            handles_, labels_ = ax.get_legend_handles_labels()
+            labels_unique = {}
+            labels = []
+            handles = []
+            for k in range(len(labels_)):
+                if labels_[k] not in labels_unique:
+                    labels_unique[labels_[k]] = 1
+                    labels.append(labels_[k])
+                    handles.append(handles_[k])
+        
+            ax.legend(handles, labels,loc=3,fontsize=7)
+
             plt.grid()
                 
             
@@ -295,12 +307,12 @@ class myHistory :
 
                  
 #%%            
-    except Exception as e:
-        if 'DISPLAY' in os.environ:        
-            print("Exception:" + str(e))
-            print("problems during plotting. Wrong Display?? (DISPLAY="+os.environ['DISPLAY']+")")
-        else:                                                                                       
-            print("problems during plotting. No DISPLAY set!")
+    # except Exception as e:
+    #     if 'DISPLAY' in os.environ:        
+    #         print("Exception:" + str(e))
+    #         print("problems during plotting. Wrong Display?? (DISPLAY="+os.environ['DISPLAY']+")")
+    #     else:                                                                                       
+    #         print("problems during plotting. No DISPLAY set!")
             
     #%%
 
@@ -518,6 +530,10 @@ class PatchWorkModel(Model):
     res_nonspatial = None
     #################### main loop over depth
     for k in range(self.cropper.depth):
+              
+      if not callable(inputs):
+          if ('input'+str(k)) not in inputs:
+             break
 
       # lazy Evaluation
       idx = None
@@ -1523,6 +1539,8 @@ class PatchWorkModel(Model):
             hard_mining_order='loss',
             shuffle_buffer_size=1000,
             self_validation=False,
+            max_depth=None,
+            depth_schedule=None,
             batch_size=32,
             verbose=1,
             debug=False,
@@ -1549,13 +1567,15 @@ class PatchWorkModel(Model):
             callback=None
             ):
       
-    def f1_metric(y_true, y_pred,valid=False,start_reduce=0):
+    import logging
+    logging.getLogger('tensorflow').setLevel(logging.ERROR)      
+    def f1_metric(y_true, y_pred,from_logits=False,start_reduce=0):
         
         sz = y_true.shape
         def sumy(x):
             return tf.reduce_sum(x,axis=list(range(start_reduce,self.cropper.ndim+1)))
         
-        if self.finalizeOnApply and not valid:
+        if from_logits:
             y_pred = tf.nn.sigmoid(y_pred)
         true_positives = sumy(kb.round(kb.clip(y_true * y_pred, 0, 1)))
         false_positives = sumy(kb.round(kb.clip((1-y_true) * y_pred, 0, 1)))
@@ -1567,8 +1587,8 @@ class PatchWorkModel(Model):
 #        f1_val = (true_positives)/(possible_positives+predicted_positives+1)
         return f1_val      
       
-    def f1_metric_best(y_true, y_pred,valid=False):
-        if self.finalizeOnApply and not valid:
+    def f1_metric_best(y_true, y_pred,from_logits=False):
+        if from_logits:
             y_pred = tf.nn.sigmoid(y_pred)
         
         sz = y_pred.shape
@@ -1615,10 +1635,10 @@ class PatchWorkModel(Model):
         with tf.device(DEVCPU):    
     
             if traintype == 'random' or traintype ==  'random_deprec' :
-                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,
+                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
                                         num_patches=np,augment=aug_,balance=balance,dphi=dphi,training=True)
             elif traintype == 'tree':
-                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,
+                c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
                                         jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,training=True)
                 
         return c
@@ -1640,7 +1660,7 @@ class PatchWorkModel(Model):
             lmat = fun(label,pred)#,class_weight=w)
         return lmat
 
-    def computeF1perf(label,pred,valid=False):
+    def computeF1perf(label,pred,from_logits=False):
         f1=[]
         th=[]
         cnt = 0
@@ -1649,16 +1669,16 @@ class PatchWorkModel(Model):
                 predQM,probs = pred.QMembedding.apply(pred)
             for j in self.cropper.categorial_label:
                 if hasattr(pred,'QMembedding'):
-                    f1_ = tf.reduce_mean(f1_metric(tf.cast(label==j,dtype=tf.float32),tf.cast(predQM==j,tf.float32),valid=valid))
+                    f1_ = tf.reduce_mean(f1_metric(tf.cast(label==j,dtype=tf.float32),tf.cast(predQM==j,tf.float32),from_logits=from_logits))
                     th_ = tf.cast(0.5,tf.float32)
                 else:
-                    f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid)
+                    f1_,th_ = f1_metric_best(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],from_logits=from_logits)
                 f1.append(f1_)
                 th.append(th_)
                 cnt=cnt+1
         else:                       
             for j in range(0,self.num_labels):
-                f1_,th_ = f1_metric_best(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid)
+                f1_,th_ = f1_metric_best(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],from_logits=from_logits)
                 f1.append(f1_)
                 th.append(th_)
                 cnt=cnt+1
@@ -1670,18 +1690,18 @@ class PatchWorkModel(Model):
                 
         return f1,th,meanf1
 
-    def computeF1perf_center(label,pred,valid=False):
+    def computeF1perf_center(label,pred,from_logits=False):
         f1=0
         th=0
         cnt = 0
         if self.cropper.categorial_label is not None:
             for j in self.cropper.categorial_label:
-                f1_ = f1_metric(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],valid=valid,start_reduce=1)
+                f1_ = f1_metric(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1],from_logits=from_logits,start_reduce=1)
                 f1+=f1_
                 cnt=cnt+1
         else:                       
             for j in range(0,self.num_labels):
-                f1_ = f1_metric(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],valid=valid,start_reduce=1)
+                f1_ = f1_metric(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],from_logits=from_logits,start_reduce=1)
                 f1+=f1_
                 cnt=cnt+1
         f1 /= cnt
@@ -1712,7 +1732,7 @@ class PatchWorkModel(Model):
             loss += l
             if k == len(labels)-1:
                 hist[prefix+'_output_'+str(k+1)+'_loss'] = l
-                f1list,th,f1 = computeF1perf(masked_label,masked_pred,valid=False)
+                f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=self.finalizeOnApply)
                 hist[prefix+'_output_'+str(k+1)+'_f1'] = 10**f1
                 hist[prefix+'_output_'+str(k+1)+'_threshold'] = 10**(sum(th)/len(th))
                 hist[prefix+'_nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
@@ -1749,10 +1769,10 @@ class PatchWorkModel(Model):
                     masked_label = labels[k]
                 lmat = computeloss(lossfun[k],masked_label,masked_pred)
                 l = tf.reduce_mean(lmat)
-                if k == depth-1:
-                    hist['output_' + str(k+1) + '_loss'] = l                    
-                    f1list,th,f1 = computeF1perf(masked_label,masked_pred)
-                                        
+                if k == depth-1 or depth_schedule is not None:
+                    from_logits = self.finalizeOnApply or (k < self.cropper.depth-1)
+                    hist['output_' + str(k+1) + '_loss'] = l                                
+                    f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=from_logits)                                        
                     hist['output_' + str(k+1) + '_f1'] = 10**f1
                     hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
                     hist['nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
@@ -1761,7 +1781,7 @@ class PatchWorkModel(Model):
                     if hard_mining > 0:
                         order = lmat
                         if hard_mining_order=='f1':
-                            order = computeF1perf_center(masked_label,masked_pred)
+                            order = computeF1perf_center(masked_label,masked_pred,from_logits=from_logits)
                             
                         if len(order.shape) < self.cropper.ndim+1:
                             hist['loss_per_patch'] = tf.reduce_mean(order,axis=1)
@@ -1883,13 +1903,18 @@ class PatchWorkModel(Model):
     loss = self.loss
     
     
+    trained_blocks = len(self.blocks)
+    if max_depth is not None:
+        trained_blocks = max_depth
+    
     self.block_variables = list([])
-    for b in self.blocks:
-        self.block_variables += b.trainable_variables
+    for b in range(trained_blocks):
+        self.block_variables += self.blocks[b].trainable_variables
         
     self.disc_variables = list([])
-    for b in self.classifiers:
-        self.disc_variables += b.trainable_variables
+    for b in range(trained_blocks):
+        if b < len(self.classifiers):
+            self.disc_variables += self.classifiers[b].trainable_variables
     
     
 
@@ -1950,7 +1975,18 @@ class PatchWorkModel(Model):
     else:
         hard_data = None
         
+    epochs_ = epochs
+        
+            
+    
+        
+        
     for i in range(num_its):
+
+        if depth_schedule == 1:
+            max_depth=(i%self.cropper.depth)+1
+            epochs=(4-max_depth)*epochs_
+
         print("----------------------------------------- iteration:" + str(i))
         
         ### sampling
