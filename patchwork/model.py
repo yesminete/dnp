@@ -585,7 +585,7 @@ class PatchWorkModel(Model):
          if self.forward_type == 'noinput':
              inp = last_cropped
          elif self.forward_type == 'simple' or  self.forward_type == 'bridge' :
-             if testIT:
+             if testIT == True:
                 inp = last_cropped
              else:
                 inp = tf.concat([inp,last_cropped],(nD+1))
@@ -602,7 +602,7 @@ class PatchWorkModel(Model):
           
 
       ## now, apply the network at the current scale       
-      if testIT:
+      if testIT==True:
          res=inp
          output.append(res)
          
@@ -689,7 +689,8 @@ class PatchWorkModel(Model):
                  jitter=0.05,
                  jitter_border_fix = False,
                  overlap=0,
-                 repetitions=1,           
+                 repetitions=1,         
+                 num_patches=None,
                  dphi=0,
                  augment=None,
                  branch_factor=None,
@@ -726,6 +727,11 @@ class PatchWorkModel(Model):
      
      pred = [0.0] * self.cropper.depth
      sumpred = [0.0]  * self.cropper.depth
+     
+     
+     if num_patches is not None:
+         repetitions = num_patches
+     
      
      reps = 1
      if generate_type == 'random' or generate_type == 'random_fillholes' or generate_type == 'random_deprec' :
@@ -887,7 +893,7 @@ class PatchWorkModel(Model):
                           a,b = x.stitchResult(r,k,window=window)
                           pred[k] += a
                           sumpred[k] += b        
-                    print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[-1][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[-1].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
+                    print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[level_to_stitch[-1]][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[level_to_stitch[-1]].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
                     print(">>> time elapsed, stitching: " + str(timer() - start) )
                       
 
@@ -979,7 +985,8 @@ class PatchWorkModel(Model):
                  overlap=0,
                  jitter=0.05,
                  jitter_border_fix=False,
-                 repetitions=5,
+                 repetitions=5, # deprecated
+                 num_patches=None,
                  branch_factor=None,
                  num_chunks=1,
                  scale_to_original=True,
@@ -1116,6 +1123,7 @@ class PatchWorkModel(Model):
                                         jitter_border_fix=jitter_border_fix,
                                         overlap=overlap,                            
                                         repetitions=repetitions,
+                                        num_patches=num_patches,
                                         num_chunks=num_chunks,
                                         branch_factor=branch_factor,
                                         dphi=dphi,
@@ -1246,7 +1254,7 @@ class PatchWorkModel(Model):
                          tmp = np.expand_dims(np.argmax(res_,axis=-1),-1)
                          probs = np.max(res_,axis=-1,keepdims=True)
                          tmp = tf.where(probs<ce_threshold,0.0,tmp)
-                         probs = np.int32( (probs * 10000) * (tmp>0))
+                         probs = np.int32( (probs * 10000) * np.int32(tmp>0))
                          tmp = np.int32(tmp)
                          
                      else:

@@ -89,13 +89,13 @@ patching = {
     "scheme":{ 
         "patch_size":[32,32],                
         "destvox_mm": None,
-        "destvox_rel":[4,4],
+        "destvox_rel":[2,2],
         "fov_mm":None,
         "fov_rel":[0.7,0.7],
      },
     "smoothfac_data" : 0,   
     "smoothfac_label" : 0, 
-    "categorial_label" :[6,50],
+    "categorial_label" :[2],
     #"categorial_label" :None,
     "interp_type" : "NN",    
     "scatter_type" : "NN",
@@ -159,11 +159,11 @@ loading = {
 
 
 training = {
-   "num_patches":32,
+   "num_patches":256,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
-   "epochs":3,
+   "epochs":5,
    "num_its":100,                
-   "balance":{"ratio":0.9,"autoweight":1},
+   "balance":{"ratio":0.5,"autoweight":1},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
@@ -386,17 +386,49 @@ for i in range(0,outer_num_its):
 
 
 #%%
-res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=20,num_chunks=1,
+
+import nibabel as nib
+import numpy as np
+img = nib.load('example2d.nii.gz')
+a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
+a = tf.convert_to_tensor(a,dtype=tf.float32) 
+resol = {"voxsize":img.header['pixdim'][1:4],"input_edges":img.affine}
+
+res =     themodel.apply_full(a,resolution=resol,
+                              num_patches=100,num_chunks=1,
                                   augment={},
                                   generate_type='random',
-                                  window='cos2',
-                                  lazyEval={'fraction':1}
+                      #            window='cos2',
+ #                                 verbose=2,
+ level=2,
+                           testIT=2,
+                                  lazyEval={'fraction':0.5},
+                                  branch_factor=2
+                                  )
+
+
+plt.imshow(res,vmax=10)
+
+
+#%%
+
+
+#%%
+
+
+res =     themodel.apply_full('example2d.nii.gz','xxx.nii',out_typ='mask',num_patches=500,num_chunks=1,
+  #                                augment={},
+                                  generate_type='random',
+#                                  window='cos2',
+ #                                 verbose=2,
+                                  lazyEval={'fraction':0.5},
+                                  branch_factor=2
                                   )
 
 
 
 
-plt.imshow(res[1][:,:,0,0])
+
 
 
 #%% 
