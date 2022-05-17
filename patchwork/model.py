@@ -168,7 +168,7 @@ class myHistory :
             def plothist(loss_hist,txt,nodisp=False):
                 import matplotlib.pyplot as plt
                 
-                cols = 'rbmckrbmck'   
+                cols = 'rbmckyrbmckyrbmcky'   
                 cnt = 0
                 for k in sorted(loss_hist):
                     if nodisp:
@@ -1769,7 +1769,7 @@ class PatchWorkModel(Model):
                     masked_label = labels[k]
                 lmat = computeloss(lossfun[k],masked_label,masked_pred)
                 l = tf.reduce_mean(lmat)
-                if k == depth-1 or depth_schedule is not None:
+                if k == depth-1:# or depth_schedule is not None:
                     from_logits = self.finalizeOnApply or (k < self.cropper.depth-1)
                     hist['output_' + str(k+1) + '_loss'] = l                                
                     f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=from_logits)                                        
@@ -1977,15 +1977,20 @@ class PatchWorkModel(Model):
         
     epochs_ = epochs
         
-            
+    if depth_schedule is not None:
+        recompile_loss_optim = True
     
         
         
     for i in range(num_its):
 
         if depth_schedule == 1:
-            max_depth=(i%self.cropper.depth)+1
-            epochs=(4-max_depth)*epochs_
+            #max_depth=3
+            max_depth=((i+self.cropper.depth-1)%self.cropper.depth)+1
+            #max_depth=((i)%self.cropper.depth)+1
+            #epochs=(self.cropper.depth+1-max_depth)*epochs_
+
+        print("------- train depth:" + str(max_depth))
 
         print("----------------------------------------- iteration:" + str(i))
         
