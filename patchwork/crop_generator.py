@@ -608,7 +608,6 @@ class CropGenerator():
 
     tensor = lambda a : tf.cast(a,dtype=self.ftype)
 
-
     classifier_train = False
     spatial_max_train = False
     spatial_train = True
@@ -668,7 +667,6 @@ class CropGenerator():
 
       # get the data 
       trainset_ = trainset[j]
-      
       
       patch_normalization=None
       if self.normalize_input == 'ct':
@@ -1716,17 +1714,106 @@ class CropGenerator():
 
   #  worker.getData()
 
-from multiprocessing import Process,Queue
+import multiprocessing as mp
+import multiprocessing as multiprocessing
+import threading
 import time
+
+class LoggedProcess(multiprocessing.Process):
+
+    class LoggerWriter:
+        def __init__(self, queue):
+            self.queue = queue
+
+        def write(self, message):
+            for line in message.rstrip().splitlines():
+                self.queue.put(line.rstrip())
+
+        def flush(self):
+            pass
+
+    @staticmethod
+    def logged_worker(logger_queue, worker, *args, **kwargs):
+        import sys
+        sys.stdout = sys.stderr = LoggedProcess.LoggerWriter(logger_queue)
+        logging.basicConfig(format="%(message)s", level=logging.INFO)
+        try:
+            worker(*args, **kwargs)
+        except:
+            pass
+        logger_queue.put(None)
+
+    @staticmethod
+    def process_logger(process, logger_queue, name):
+        while True:
+            try:
+                if not process.is_alive():
+                    raise EOFError()
+                msg = logger_queue.get(timeout=1)
+                if msg is None:
+                    raise EOFError()
+                logging.getLogger().log(logging.INFO, f"[PROCESS {process.pid} {name}] {msg}")
+            except Exception:
+                break # queue closed
+
+    def __init__(self, target, log_name='', args=(), kwargs={}):
+        self.logger_queue = multiprocessing.Queue()
+        self.log_name = log_name
+        super().__init__(target=self.logged_worker, args=(self.logger_queue, target, *args), kwargs=kwargs)
+
+
+    def start(self):
+        super().start()
+        logger_t = threading.Thread(target=self.process_logger, args=(self, self.logger_queue, self.log_name))
+        logger_t.setDaemon(True)
+        logger_t.start()
+
+    def terminate(self):
+        super().terminate()
+        super().join()
+        self.logger_queue.put(None)
 
 class DummyModel:
       pass
 
-class PatchWorker:
+
+def patchingloop2(queue,cropper_args,model,sample_args):
+ #   cropper = CropGenerator(**cropper_args)
+ #   cropper.model = model
+   # import sys
+    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>patchloop stdout")
 
 
-   def patchingloop(queue,cropper_args,model,sample_args):
+
+    import tensorflow as tf 
+        
+    # Disable all GPUS
+    tf.config.set_visible_devices([], 'GPU')
+    visible_devices = tf.config.get_visible_devices()
+    for device in visible_devices:
+        assert device.device_type != 'GPU'
+    
+    
+    print("-------- helllo of pl1 --------------------------------------------------------------------------test")
+    
+    #x =  tf.ones([1,2,3]) # 
+    x =  sample_args
+    print("-------- helllo of pl2 --------------------------------------------------------------------------test")
+    print(tf.reduce_sum(x))
+    print("-------- helllo of pl3 --------------------------------------------------------------------------test")
+    
+
+def patchingloop(queue,cropper_args,model,sample_args):
        
+    
+      #sys.stdout = sys.__stdout__
+    
+      print("hello from patchingloop")
+      #sys.stdout.write("patchloop stdout")
+      #sys.stderr.write("patchloop stderr")
+      #import os
+      #os.environ['CUDA_VISIBLE_DEVICES'] = ""
+    
       cropper = CropGenerator(**cropper_args)
       cropper.model = model
 
@@ -1744,26 +1831,36 @@ class PatchWorker:
       if sample_args['resolutions'] is not None:
           rset = [sample_args['resolutions'][i] for i in subset]      
 
-      
+      print("hello from worker")
       while True:
                             
           if queue.full():
               time.sleep(1)
               continue
                 
+          print("-----------> worker is patching")
           with tf.device("/cpu:0"):    
         
-              if traintype == 'random' or traintype ==  'random_deprec' :
-                  c = cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
-                                          num_patches=np,augment=aug_,balance=balance,training=True)
-              elif traintype == 'tree':
-                  c = cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
-                                          jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,training=True)
+           if traintype == 'random' or traintype ==  'random_deprec' :
+                
+                c = cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
+                                        num_patches=np,augment=aug_,balance=balance,training=True,verbose=True)
+           elif traintype == 'tree':
+                c = cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
+                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,training=True)
+           print("----------->  worker fniished patching")
 
-              queue.put(c)
+           queue.put(c)
 
-
+class PatchWorker:
+ 
    def __init__(self,smodel,sample_args):
+
+
+      #try:
+      #  mp.set_start_method('spawn')
+      #except:
+      #  print('already ...')    
        
 
       model = DummyModel()      
@@ -1772,10 +1869,20 @@ class PatchWorker:
       model.spatial_max_train = smodel.spatial_max_train
       model.spatial_train = smodel.spatial_train 
       model.intermediate_loss = smodel.intermediate_loss
-       
-      self.queue  = Queue(2)
-      self.process = Process(target=patchingloop,args=[self.queue,model.cropper.serialize_(),model,sample_args])
+#      ctx = mp.get_context('spawn')
+      
+      #p = mp.Process(target=patchingloop,args=[])
+      #p.start()
+      self.queue  = mp.Queue(2)
+      xx = tf.ones([300,300])
+      testy = {'x':xx.numpy() } #, 'y':sample_args['trainset'][0]}
+      #self.process = mp.Process(target=patchingloop2,args=[self.queue,smodel.cropper.serialize_(),model,sample_args])
+      self.process = mp.Process(target=patchingloop2,args=[self.queue,smodel.cropper.serialize_(),model, xx])
+      #self.process = mp.Process(target=patchingloop2,args=[self.queue,smodel.cropper.serialize_(),model, []])
+      print("starting process")
       self.process.start()
+      self.process.join()
+      print("joined")
        
    def getData(self):
       return self.queue.get()

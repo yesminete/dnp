@@ -20,10 +20,22 @@ from tensorflow.keras import layers
 import matplotlib.pyplot as plt
 
 
+#os.environ['CUDA_VISIBLE_DEVICES'] = "-1"
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork2 as patchwork
+import patchwork_dev.patchwork as patchwork
+
+print("hallo0000------------------------>" + __name__)
+if __name__ != '__main__':
+   print('exiting')
+   exit()
+
+
+
+import multiprocessing
+multiprocessing.set_start_method('spawn')
+
 
 
 #%
@@ -162,7 +174,7 @@ training = {
    "num_patches":32,
    "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
    "epochs":2,
-   "num_its":100,                
+   "num_its":2,                
    "balance":{"ratio":0.5,"autoweight":1},
    #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
    #"hard_mining":0.1,
@@ -204,7 +216,7 @@ if reload_after_it is not None:
 
 
 
-#%
+
 
 def get_gpu_memory():
      try:    
@@ -225,7 +237,7 @@ def get_gpu_memory():
 
 
 # mem check on GPU
-mem_limit = 2500
+mem_limit = -1 #2500
 
 if "CUDA_VISIBLE_DEVICES" in os.environ:
  
@@ -324,7 +336,12 @@ if "align_physical" in loading:
 
 
     
-#%% start training    
+#% start training    
+
+print("hallo-1111----------------------->" + __name__)
+if __name__ != '__main__':
+   exit()
+
 
 
 # initial_learning_rate = 0.1

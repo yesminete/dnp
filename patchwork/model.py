@@ -1980,6 +1980,26 @@ class PatchWorkModel(Model):
         
             
     
+    
+    
+
+    worker = PatchWorker(self,
+                           { 
+                               'trainidx':trainidx,
+                               'trainset':trainset,
+                               'labelset':labelset,
+                               'resolutions':resolutions,
+                               'max_depth':max_depth,
+                               'traintype':traintype,
+                               'augment':augment,
+                               'num_patches':num_patches,
+                               'balance':balance,
+                              
+                              
+                               })
+
+    #worker.getData()
+    
         
         
     for i in range(num_its):
@@ -1994,6 +2014,7 @@ class PatchWorkModel(Model):
         print("sampling patches for training")
         start = timer()
         c_data = getSample(trainidx,num_patches)    
+#        c_data = worker.getData()
         print("balances")
         pixelratio,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
         self.pixelfreqs = pixelfreqs
