@@ -1785,7 +1785,7 @@ def patchingloop2(queue,cropper_args,model,sample_args):
 
 
 
-    import tensorflow as tf 
+  #  import tensorflow as tf 
         
     # Disable all GPUS
     tf.config.set_visible_devices([], 'GPU')
@@ -1876,6 +1876,7 @@ class PatchWorker:
       self.queue  = mp.Queue(2)
       xx = tf.ones([300,300])
       testy = {'x':xx.numpy() } #, 'y':sample_args['trainset'][0]}
+      testy = {'x':xx } #, 'y':sample_args['trainset'][0]}
       #self.process = mp.Process(target=patchingloop2,args=[self.queue,smodel.cropper.serialize_(),model,sample_args])
       self.process = mp.Process(target=patchingloop2,args=[self.queue,smodel.cropper.serialize_(),model, xx])
       #self.process = mp.Process(target=patchingloop2,args=[self.queue,smodel.cropper.serialize_(),model, []])
