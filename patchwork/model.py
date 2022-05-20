@@ -1619,6 +1619,9 @@ class PatchWorkModel(Model):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
         rset = None
+        if resolutions is not None:
+            rset = [resolutions[i] for i in subset]      
+
         
         dphi = rot_intrinsic
         aug_ = augment
@@ -1629,8 +1632,6 @@ class PatchWorkModel(Model):
         self.cropper.dest_full_size = [None]*self.cropper.depth
 
         
-        if resolutions is not None:
-            rset = [resolutions[i] for i in subset]      
             
         with tf.device(DEVCPU):    
     

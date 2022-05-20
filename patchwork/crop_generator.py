@@ -1648,6 +1648,15 @@ class CropGenerator():
         return x
   
 
+
+      
+      
+      
+      
+      
+      
+      
+      
   ############## teststuff
 
   def testtree(self,im):
@@ -1682,6 +1691,111 @@ class CropGenerator():
       ax = plt.subplot(2,self.depth,level+1+self.depth)
       qq = self.scatter_valid(pbox_index,dqq*0+1,[sha[1],sha[2],1])
       ax.imshow(tf.transpose(qq[:,:,0],[0,1]))
+
+
+
+
+
+ 
+        
+
+  # worker = PatchWorker(model,
+  #                         { 
+  #                             'trainidx':trainidx,
+  #                             'trainset':trainset,
+  #                             'labelset':labelset,
+  #                             'resolutions':resolutions,
+  #                             'max_depth':max_depth,
+  #                             'traintype':traintype,
+  #                             'augment':augment,
+  #                             'num_patches':np,
+  #                             'balance':balance,
+                              
+                              
+  #                             })
+
+  #  worker.getData()
+
+from multiprocessing import Process,Queue
+import time
+
+class DummyModel:
+      pass
+
+class PatchWorker:
+
+
+   def patchingloop(queue,cropper_args,model,sample_args):
+       
+      cropper = CropGenerator(**cropper_args)
+      cropper.model = model
+
+      aug_ = sample_args['augment']
+      np = sample_args['num_patches']
+      subset = sample_args['trainidx']
+      balance = sample_args['balance']
+      traintype= sample_args['traintype']
+      max_depth= sample_args['max_depth']
+      traintype= sample_args['traintype']
+
+      tset = [sample_args['trainset'][i] for i in subset]
+      lset = [sample_args['labelset'][i] for i in subset]      
+      rset = None
+      if sample_args['resolutions'] is not None:
+          rset = [sample_args['resolutions'][i] for i in subset]      
+
+      
+      while True:
+                            
+          if queue.full():
+              time.sleep(1)
+              continue
+                
+          with tf.device("/cpu:0"):    
+        
+              if traintype == 'random' or traintype ==  'random_deprec' :
+                  c = cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
+                                          num_patches=np,augment=aug_,balance=balance,training=True)
+              elif traintype == 'tree':
+                  c = cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
+                                          jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,training=True)
+
+              queue.put(c)
+
+
+   def __init__(self,smodel,sample_args):
+       
+
+      model = DummyModel()      
+      model.num_labels  = smodel.num_labels  
+      model.classifier_train = smodel.classifier_train
+      model.spatial_max_train = smodel.spatial_max_train
+      model.spatial_train = smodel.spatial_train 
+      model.intermediate_loss = smodel.intermediate_loss
+       
+      self.queue  = Queue(2)
+      self.process = Process(target=patchingloop,args=[self.queue,model.cropper.serialize_(),model,sample_args])
+      self.process.start()
+       
+   def getData(self):
+      return self.queue.get()
+       
+
+
+      
+          
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
