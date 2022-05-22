@@ -12,39 +12,29 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 
-import numpy as npss
+import numpy as np
 import tensorflow as tf
 import math
 from tensorflow.keras import Model
 from tensorflow.keras import layers
 import matplotlib.pyplot as plt
-
 import multiprocessing
 
-if __name__ != '__main__':
-    print("CUDA_VISIBLE_DEVICES=-1")
-    os.environ['CUDA_VISIBLE_DEVICES'] = "-1"
     
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork_dev.patchwork as patchwork
+import patchwork_master.patchwork as patchwork
 
-print("hallo0000------------------------>" + __name__)
-if __name__ == '__main__':
-
+if __name__ != '__main__':
+    print("CUDA_VISIBLE_DEVICES=-1")
+    os.environ['CUDA_VISIBLE_DEVICES'] = "-1"
+else:
     
     try:    
         multiprocessing.set_start_method('forkserver')
     except:
         pass
-    
-    
-    
-    #%
-    
-    #% definition data sources
-    
     
     # define your data sources 
     contrasts = [ { 'subj1' :  'example2d.nii.gz',  
@@ -174,16 +164,17 @@ if __name__ == '__main__':
     
     
     training = {
-       "num_patches":32,
+       "num_patches":128,
        "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
        "epochs":2,
-       "num_its":2,                
+       "num_its":10,                
        "balance":{"ratio":0.5,"autoweight":1},
        #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
        #"hard_mining":0.1,
        #"hard_mining_maxage":50,
        "reload_after_it":5,
        "samples_per_it":15,
+       "parallel":True,
        }
     
     
@@ -340,13 +331,7 @@ if __name__ == '__main__':
     
         
     #% start training    
-    
-    print("hallo-1111----------------------->" + __name__)
-    if __name__ != '__main__':
-       exit()
-    
-    
-    
+        
     # initial_learning_rate = 0.1
     # lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
     #     initial_learning_rate,

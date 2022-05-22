@@ -1560,6 +1560,7 @@ class PatchWorkModel(Model):
             recompile_loss_optim=False,
             dontcare=True,
             patch_on_cpu=True,
+            parallel=False,
             fit_type='custom',
             train_S = True,
             train_U = True,
@@ -1978,30 +1979,14 @@ class PatchWorkModel(Model):
         
     epochs_ = epochs
         
-            
-    
-    
-    
-
-    worker = PatchWorker(self,
-                           { 
-                               'trainidx':trainidx,
-                               'trainset':trainset,
-                               'labelset':labelset,
-                               'resolutions':resolutions,
-                               'max_depth':max_depth,
-                               'traintype':traintype,
-                               'augment':augment,
-                               'num_patches':num_patches,
-                               'balance':balance,
-                              
-                              
-                               })
-
-    #worker.getData()
-    
         
-        
+    if parallel:
+        worker = PatchWorker(self,{'trainidx':trainidx,'trainset':trainset, 'labelset':labelset, 'resolutions':resolutions,
+                                   'traintype':traintype, 'max_depth':max_depth,
+                                   'augment':augment,'num_patches':num_patches, 'balance':balance,
+                                   'jitter':jitter, 'jitter_border_fix':jitter_border_fix
+                                   })
+        del trainset            
     for i in range(num_its):
 
         if depth_schedule == 1:
@@ -2011,17 +1996,20 @@ class PatchWorkModel(Model):
         print("----------------------------------------- iteration:" + str(i))
         
         ### sampling
-        print("sampling patches for training")
-        start = timer()
-        c_data = getSample(trainidx,num_patches)    
-#        c_data = worker.getData()
-        print("balances")
+        if parallel:
+            c_data = worker.getData()
+        else:            
+            print("sampling patches for training")
+            start = timer()
+            c_data = getSample(trainidx,num_patches)    
+            end = timer()
+            ratio = (end-start)/(len(trainidx)*num_patches)*1000
+            print("sampled " + str(len(trainidx)*num_patches) + " patches with %.2f ms/sample"%ratio,flush=True)
+
         pixelratio,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
         self.pixelfreqs = pixelfreqs
         self.myhist.pixelratio = pixelratio
         
-        end = timer()
-        print("time elapsed, sampling: " + str(end - start) + " (for " + str(len(trainidx)*num_patches) + ")")
         
         if hard_data is not None:
            with tf.device(DEVCPU):              
@@ -2090,9 +2078,16 @@ class PatchWorkModel(Model):
                     self.compiled["train_step_discrim"] = tf.function(train_step_discriminator)
                     self.compiled["train_step_unsuper"] = tf.function(train_step_unsupervised)
             
-            
             patchloss = []
-            for e in range(epochs):
+            
+            actual_epochs = epochs            
+            if parallel:
+                actual_epochs = 1000             
+            for e in range(actual_epochs):
+                
+                if parallel:
+                    if worker.queue.full() and e >= epochs:
+                        break
 
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
                 print(infostr + ", batchsize: " + str(batch_size) , end=',  ')
@@ -2129,7 +2124,7 @@ class PatchWorkModel(Model):
                 self.trained_epochs+=numsamples
 #                log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
  #               self.trained_epochs+=1
-                end = timer()
+                end = timer()                
                 print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
                 for k in log:
                     print(k + ":" + str(log[k][0]),end=" ")
@@ -2241,7 +2236,11 @@ class PatchWorkModel(Model):
 
         if showplot:
             self.myhist.show_train_stat()
+
+
             
+    worker.kill()
+
             
 #%%
 
