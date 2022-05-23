@@ -24,7 +24,7 @@ import multiprocessing
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork_master.patchwork as patchwork
+import patchwork_dev.patchwork as patchwork
 
 if __name__ != '__main__':
     print("CUDA_VISIBLE_DEVICES=-1")
@@ -46,7 +46,7 @@ else:
     subjects = [ 'subj1', 'subj2'];
     
     # define ou want some validation dta
-    valid_ids = []
+    valid_ids = [1]
     
     
     modelfi = "models/yourmodel"

@@ -1986,7 +1986,6 @@ class PatchWorkModel(Model):
                                    'augment':augment,'num_patches':num_patches, 'balance':balance,
                                    'jitter':jitter, 'jitter_border_fix':jitter_border_fix
                                    })
-        del trainset            
     for i in range(num_its):
 
         if depth_schedule == 1:
@@ -1997,7 +1996,10 @@ class PatchWorkModel(Model):
         
         ### sampling
         if parallel:
+            print("getting patches from patchworker")
+            start = timer()
             c_data = worker.getData()
+            print("received patches in  %.2f ms"%(timer()-start),flush=True)
         else:            
             print("sampling patches for training")
             start = timer()
