@@ -135,6 +135,9 @@ class myHistory :
 
 #    try: 
         
+        import warnings
+        warnings.filterwarnings('ignore', '.*plotlib is currently using agg.*', )
+
         import matplotlib.pyplot as plt
         from matplotlib import gridspec
         
@@ -2246,8 +2249,8 @@ class PatchWorkModel(Model):
             self.myhist.show_train_stat()
 
 
-            
-    worker.kill()
+    if parallel:        
+        worker.kill()
 
             
 #%%
