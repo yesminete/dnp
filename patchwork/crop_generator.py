@@ -368,6 +368,7 @@ class CropGenerator():
     points_tot = []
     for k in range(label.shape[0]):
         L = label[k,...]
+        L = tf.where(L<0,0,L) 
         if generate_type == 'random_fillholes': # only for application
             L = L
         elif self.categorial_label is None:
@@ -608,7 +609,6 @@ class CropGenerator():
 
     tensor = lambda a : tf.cast(a,dtype=self.ftype)
 
-
     classifier_train = False
     spatial_max_train = False
     spatial_train = True
@@ -668,7 +668,6 @@ class CropGenerator():
 
       # get the data 
       trainset_ = trainset[j]
-      
       
       patch_normalization=None
       if self.normalize_input == 'ct':
@@ -1648,6 +1647,15 @@ class CropGenerator():
         return x
   
 
+
+      
+      
+      
+      
+      
+      
+      
+      
   ############## teststuff
 
   def testtree(self,im):
@@ -1682,6 +1690,104 @@ class CropGenerator():
       ax = plt.subplot(2,self.depth,level+1+self.depth)
       qq = self.scatter_valid(pbox_index,dqq*0+1,[sha[1],sha[2],1])
       ax.imshow(tf.transpose(qq[:,:,0],[0,1]))
+
+
+
+
+import multiprocessing as mp
+import threading
+import time
+
+
+class DummyModel:
+      pass
+
+def patchingloop(queue,cropper_args,model,sample_args):       
+    
+      print("WORKER: hello from patchworker",flush=True)
+       
+      with tf.device("/cpu:0"):                
+          
+          cropper = CropGenerator(**cropper_args)
+          cropper.model = model
+    
+          aug_ = sample_args['augment']
+          np = sample_args['num_patches']
+          subset = sample_args['trainidx']
+          balance = sample_args['balance']
+          traintype= sample_args['traintype']
+          max_depth= sample_args['max_depth']
+          traintype= sample_args['traintype']
+          jitter_border_fix = sample_args['jitter_border_fix']
+          jitter = sample_args['jitter']
+    
+          tset = [sample_args['trainset'][i] for i in subset]
+          lset = [sample_args['labelset'][i] for i in subset]      
+          rset = None
+          if sample_args['resolutions'] is not None:
+              rset = [sample_args['resolutions'][i] for i in subset]      
+    
+          while True:                  
+              if queue.full():
+                   time.sleep(1)
+                   continue                         
+              start = timer()
+              print("WORKER: started patching",flush=True)
+              if traintype == 'random' or traintype ==  'random_deprec' :                
+                  c = cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
+                                            num_patches=np,augment=aug_,balance=balance,training=True)
+              elif traintype == 'tree':
+                  c = cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
+                                            jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,training=True)
+              end = timer()
+              ratio = 1000*(end-start)/(len(subset)*np)
+              print("WORKER: sampled " + str(len(subset)*np) + " patches in " + str(round(end-start)) + " seconds, with %.2f ms/sample"%ratio,flush=True)
+              queue.put(c)
+
+class PatchWorker:
+ 
+   def __init__(self,smodel,sample_args):
+
+      model = DummyModel()      
+      model.num_labels  = smodel.num_labels  
+      model.classifier_train = smodel.classifier_train
+      model.spatial_max_train = smodel.spatial_max_train
+      model.spatial_train = smodel.spatial_train 
+      model.intermediate_loss = smodel.intermediate_loss
+      model.cls_intermediate_loss = smodel.cls_intermediate_loss
+      
+      self.queue  = mp.Manager().Queue(1)
+      #self.queue  = mp.Queue(1)
+
+      self.process = mp.Process(target=patchingloop,args=[self.queue,smodel.cropper.serialize_(),model, sample_args])
+      print("starting patchWORKER process")
+      self.process.start()
+
+      #self.process.join()
+      #print("joined")
+       
+   def getData(self):
+      return self.queue.get()
+       
+   def kill(self):
+     # self.queue.close()
+      self.process.terminate()
+      
+
+      
+          
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
