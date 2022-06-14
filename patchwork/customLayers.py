@@ -1407,9 +1407,10 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalt
         else:
             loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5))
 
+    fac = 0.01
     sumloss = 0.0
-    if combi:
-        sumloss = tf.reduce_mean(loss,axis=list(range(1,len(sz))))*ncl
+    if combi>0:
+        sumloss = tf.reduce_mean(loss,axis=list(range(1,len(sz))))*ncl*combi/fac
         
     isz = [-1,nvx,ncl]
     loss = tf.reshape(loss,isz)
@@ -1427,8 +1428,8 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalt
            vpos = tf.math.logical_and(vpos,x<0.5)
            vneg = tf.math.logical_and(vneg,x>0.5)
         
-    neg = tf.where(vpos,loss,0)
-    pos = tf.where(vneg,loss,0)
+    pos = tf.where(vpos,loss,0)
+    neg = tf.where(vneg,loss,0)
     
     for j in range(ncl):
         numpos = tf.cast(tf.reduce_sum(tf.where(vpos[...,j],1.0,0)),dtype=tf.int32)+1
@@ -1449,7 +1450,7 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalt
             valsneg,_ = tf.nn.top_k(neg[...,j],k=mK)
             sumloss = sumloss + tf.reduce_mean(valsneg,axis=1)
 
-    return tf.expand_dims(sumloss,1)*0.01
+    return tf.expand_dims(sumloss,1)*fac
 
 def TopK_loss3D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
     def loss(x,y,from_logits=True):

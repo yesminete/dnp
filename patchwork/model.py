@@ -40,6 +40,7 @@ from .customLayers import *
 
 
 class FilterOut(object):
+    
     def __init__(self, filterstr, *args):
         self.handles = [sys.__stderr__]
         self.omitted = 0
@@ -2097,7 +2098,7 @@ class PatchWorkModel(Model):
             for e in range(actual_epochs):
                 
                 if parallel:
-                    if worker.queue.full() and e >= epochs:
+                    if worker.queue.qq.full() and e >= epochs:
                         break
 
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')

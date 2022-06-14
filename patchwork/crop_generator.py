@@ -5,7 +5,7 @@ Created on Mon Mar 23 15:37:03 2020
 
 @author: reisertm
 """
-
+import os
 import tensorflow as tf
 from timeit import default_timer as timer
 from collections.abc import Iterable
@@ -1693,10 +1693,92 @@ class CropGenerator():
 
 
 
+####################### multi processing stuff
+# This paralleizes (by calling train(...,parallel=True)) patching and learning on the GPU
+# by running a separate patching process.
+#
+# You have to run parallel training with
+# multiprocessing.set_start_method('forkserver') or multiprocessing.set_start_method('spawn')
+#
+# don't forget in your entryscript to skip main code by __name__ != '__main__':
+#
+
+
+
 
 import multiprocessing as mp
-import threading
+import _multiprocessing as _mp
+from threading import Thread
+from queue import Queue as Queue_
 import time
+import weakref
+
+## credits to https://github.com/WeiTang114/FMQ for the fast Queue
+class Queue():
+    def __init__(self, maxsize=0, debug=False):
+        if maxsize <= 0:
+            # same as mp.Queue
+            maxsize = _mp.SemLock.SEM_VALUE_MAX
+
+        self.mpq = mp.Queue(maxsize=maxsize)
+        self.qq = Queue_(maxsize=maxsize)
+        self.maxsize = maxsize
+        Queue._steal_daemon(self.mpq, self.qq, self)
+        self.debug = debug
+
+    def __del__(self):
+       # if self.debug:
+       print("del")
+ 
+    def put(self, item):
+        """
+        TODO: maybe support "block" and "timeout"
+        """
+        self.mpq.put(item)
+
+    def get(self):
+        return self.qq.get()
+
+    def qsize(self):
+        """
+        can be 2*(maxsize), because this is the sum of qq.size and mpq.size
+        """
+        return self.qq.qsize() + self.mpq.qsize()
+
+    def empty(self):
+        return self.qq.empty() and self.mpq.empty()
+
+    def full(self):
+        return self.qq.full() and self.mpq.full()
+
+    # static for not referencing "self" strongly
+    # but only weakly-referencing "me"
+    @staticmethod
+    def _steal_daemon(srcq, dstq, me):
+        sentinel = object()
+
+        def steal(srcq, dstq, me_ref):
+            while me_ref():
+                start = timer()
+                obj = srcq.get()
+                if obj is sentinel:
+                    break
+                dstq.put(obj)
+                print("\nSTEALWORKER: received patches from patchworker in  %.3fs"%(timer()-start),flush=True)
+        
+        def stop(ref):
+            # print 'stop called'
+            srcq.put(sentinel)
+
+        # when the FastMyQueue object is GCed, stop the thread
+        # by the stop() callback
+        me1 = weakref.ref(me, stop)
+        stealer = Thread(target=steal, args=(srcq, dstq, me1,))
+        stealer.daemon = True
+        stealer.start()
+
+
+
 
 
 class DummyModel:
@@ -1704,45 +1786,52 @@ class DummyModel:
 
 def patchingloop(queue,cropper_args,model,sample_args):       
     
-      print("WORKER: hello from patchworker",flush=True)
+      print("\nWORKER: hello from patchworker",flush=True)
        
       with tf.device("/cpu:0"):                
-          
-          cropper = CropGenerator(**cropper_args)
-          cropper.model = model
-    
-          aug_ = sample_args['augment']
-          np = sample_args['num_patches']
-          subset = sample_args['trainidx']
-          balance = sample_args['balance']
-          traintype= sample_args['traintype']
-          max_depth= sample_args['max_depth']
-          traintype= sample_args['traintype']
-          jitter_border_fix = sample_args['jitter_border_fix']
-          jitter = sample_args['jitter']
-    
-          tset = [sample_args['trainset'][i] for i in subset]
-          lset = [sample_args['labelset'][i] for i in subset]      
-          rset = None
-          if sample_args['resolutions'] is not None:
-              rset = [sample_args['resolutions'][i] for i in subset]      
-    
-          while True:                  
-              if queue.full():
-                   time.sleep(1)
-                   continue                         
-              start = timer()
-              print("WORKER: started patching",flush=True)
-              if traintype == 'random' or traintype ==  'random_deprec' :                
-                  c = cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
-                                            num_patches=np,augment=aug_,balance=balance,training=True)
-              elif traintype == 'tree':
-                  c = cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
-                                            jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,training=True)
-              end = timer()
-              ratio = 1000*(end-start)/(len(subset)*np)
-              print("WORKER: sampled " + str(len(subset)*np) + " patches in " + str(round(end-start)) + " seconds, with %.2f ms/sample"%ratio,flush=True)
-              queue.put(c)
+                  
+          try:
+              cropper = CropGenerator(**cropper_args)
+              cropper.model = model
+        
+              aug_ = sample_args['augment']
+              np = sample_args['num_patches']
+              subset = sample_args['trainidx']
+              balance = sample_args['balance']
+              traintype= sample_args['traintype']
+              max_depth= sample_args['max_depth']
+              traintype= sample_args['traintype']
+              jitter_border_fix = sample_args['jitter_border_fix']
+              jitter = sample_args['jitter']
+        
+              tset = [sample_args['trainset'][i] for i in subset]
+              lset = [sample_args['labelset'][i] for i in subset]      
+              rset = None
+              if sample_args['resolutions'] is not None:
+                  rset = [sample_args['resolutions'][i] for i in subset]      
+        
+              while True:                  
+                  if queue.full():
+                       time.sleep(1)
+                       continue                         
+                  start = timer()
+                  print("\nWORKER: started patching",flush=True)
+                  if traintype == 'random' or traintype ==  'random_deprec' :                
+                      c = cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
+                                                num_patches=np,augment=aug_,balance=balance,training=True)
+                  elif traintype == 'tree':
+                      c = cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
+                                                jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,training=True)
+                  end = timer()
+                  ratio = 1000*(end-start)/(len(subset)*np)
+                  print("WORKER: sampled " + str(len(subset)*np) + " patches in " + str(round(end-start)) + " seconds, with %.2f ms/sample"%ratio,flush=True)
+                  queue.put(c)
+
+          except Exception as e:
+                  queue.put("ERROR in Worker")
+                  raise e 
+              
+
 
 class PatchWorker:
  
@@ -1756,10 +1845,12 @@ class PatchWorker:
       model.intermediate_loss = smodel.intermediate_loss
       model.cls_intermediate_loss = smodel.cls_intermediate_loss
       
-      self.queue  = mp.Manager().Queue(1)
+      
+      #self.queue  = mp.Manager().Queue(1)
+      self.queue  = Queue(1)
       #self.queue  = mp.Queue(1)
 
-      self.process = mp.Process(target=patchingloop,args=[self.queue,smodel.cropper.serialize_(),model, sample_args])
+      self.process = mp.Process(target=patchingloop,args=[self.queue.mpq,smodel.cropper.serialize_(),model, sample_args])
       print("starting patchWORKER process")
       self.process.start()
 
@@ -1767,7 +1858,12 @@ class PatchWorker:
       #print("joined")
        
    def getData(self):
-      return self.queue.get()
+      data = self.queue.get()
+      if isinstance(data,str):
+          print("\n" + data)
+          os._exit(127)
+          
+      return data
        
    def kill(self):
      # self.queue.close()
