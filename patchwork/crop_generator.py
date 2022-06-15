@@ -1695,9 +1695,9 @@ class CropGenerator():
 
 ####################### multi processing stuff
 # This paralleizes (by calling train(...,parallel=True)) patching and learning on the GPU
-# by running a separate patching process.
+# by running a separate patching process or thread.
 #
-# You have to run parallel training with
+# You have to run parallel training (typ=process) with
 # multiprocessing.set_start_method('forkserver') or multiprocessing.set_start_method('spawn')
 #
 # don't forget in your entryscript to skip main code by __name__ != '__main__':
@@ -1709,26 +1709,28 @@ class CropGenerator():
 import multiprocessing as mp
 import _multiprocessing as _mp
 from threading import Thread
-from queue import Queue as Queue_
 import time
 import weakref
 
+
+from queue import Queue
+#from queue import Queue as Queue_
 ## credits to https://github.com/WeiTang114/FMQ for the fast Queue
-class Queue():
+class SQueue():
     def __init__(self, maxsize=0, debug=False):
         if maxsize <= 0:
             # same as mp.Queue
             maxsize = _mp.SemLock.SEM_VALUE_MAX
 
         self.mpq = mp.Queue(maxsize=maxsize)
-        self.qq = Queue_(maxsize=maxsize)
+        self.qq = Queue(maxsize=maxsize)
         self.maxsize = maxsize
-        Queue._steal_daemon(self.mpq, self.qq, self)
+        SQueue._steal_daemon(self.mpq, self.qq, self)
         self.debug = debug
 
     def __del__(self):
        # if self.debug:
-       print("del")
+       print("FQueue killed")
  
     def put(self, item):
         """
@@ -1749,7 +1751,7 @@ class Queue():
         return self.qq.empty() and self.mpq.empty()
 
     def full(self):
-        return self.qq.full() and self.mpq.full()
+        return self.qq.full()
 
     # static for not referencing "self" strongly
     # but only weakly-referencing "me"
@@ -1784,10 +1786,12 @@ class Queue():
 class DummyModel:
       pass
 
+patchingloop_kill_flag = False
 def patchingloop(queue,cropper_args,model,sample_args):       
     
-      print("\nWORKER: hello from patchworker",flush=True)
-       
+      #print("\nWORKER: hello from patchworker",flush=True)
+      global patchingloop_kill_flag
+      
       with tf.device("/cpu:0"):                
                   
           try:
@@ -1810,7 +1814,7 @@ def patchingloop(queue,cropper_args,model,sample_args):
               if sample_args['resolutions'] is not None:
                   rset = [sample_args['resolutions'][i] for i in subset]      
         
-              while True:                  
+              while not patchingloop_kill_flag:                  
                   if queue.full():
                        time.sleep(1)
                        continue                         
@@ -1835,7 +1839,7 @@ def patchingloop(queue,cropper_args,model,sample_args):
 
 class PatchWorker:
  
-   def __init__(self,smodel,sample_args):
+   def __init__(self,smodel,typ,sample_args):
 
       model = DummyModel()      
       model.num_labels  = smodel.num_labels  
@@ -1845,13 +1849,15 @@ class PatchWorker:
       model.intermediate_loss = smodel.intermediate_loss
       model.cls_intermediate_loss = smodel.cls_intermediate_loss
       
-      
-      #self.queue  = mp.Manager().Queue(1)
-      self.queue  = Queue(1)
-      #self.queue  = mp.Queue(1)
+      self.typ = typ 
 
-      self.process = mp.Process(target=patchingloop,args=[self.queue.mpq,smodel.cropper.serialize_(),model, sample_args])
-      print("starting patchWORKER process")
+      if self.typ == 'thread':   
+          self.queue  = Queue(1)
+          self.process = Thread(target=patchingloop,args=[self.queue,smodel.cropper.serialize_(),model, sample_args])
+      else:
+          self.queue  = SQueue(1)
+          self.process = mp.Process(target=patchingloop,args=[self.queue.mpq,smodel.cropper.serialize_(),model, sample_args])
+      print("starting patchWORKER type: " + self.typ)
       self.process.start()
 
       #self.process.join()
@@ -1867,7 +1873,12 @@ class PatchWorker:
        
    def kill(self):
      # self.queue.close()
-      self.process.terminate()
+      if self.typ == 'thread':
+          global patchingloop_kill_flag
+          patchingloop_kill_flag = True
+          self.process.join()
+      else:
+          self.process.terminate()
       
 
       

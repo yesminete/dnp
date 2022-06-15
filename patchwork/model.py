@@ -25,6 +25,7 @@ import tensorflow.keras.backend as kb
 
 from timeit import default_timer as timer
 from os import path
+import os
 import nibabel as nib
 import json
 import warnings
@@ -76,6 +77,15 @@ class myHistory :
       self.trainloss_hist = {}
       self.validloss_hist = {}
       self.model = model
+
+  def getNumberOfSeenPatches(self):
+      if self.trainloss_hist is None:
+          return 0
+      k = list(self.trainloss_hist.keys())
+      if len(k) > 0:
+          return self.trainloss_hist[k[0]][-1][0]          
+      else:
+          return 0
 
   def accum(self,which,cur_hist,epochs,tensors=False,mean=False):
       
@@ -1387,6 +1397,11 @@ class PatchWorkModel(Model):
     fname = name + ".json"
     with open(fname) as f:
         x = json.load(f)
+    
+    if 'cropper' not in x:
+        raise(RuntimeError('not a valid patchwork model json'))
+        os._exit(127)
+
 
     if 'system' not in x['cropper']:
         print('deprecated: no system variable found, using system=matrix')
@@ -1532,6 +1547,7 @@ class PatchWorkModel(Model):
             resolutions=None,
             epochs=20, 
             num_its=100,
+            num_patches_to_train=None,
             traintype='random',
             num_patches=10,
             train_ids = None,
@@ -1985,9 +2001,15 @@ class PatchWorkModel(Model):
         
     if depth_schedule is not None:
         recompile_loss_optim = True
+
+    initial_number_of_trained_patches = self.myhist.getNumberOfSeenPatches()
+
         
     if parallel:
-        worker = PatchWorker(self,{'trainidx':trainidx,'trainset':trainset, 'labelset':labelset, 'resolutions':resolutions,
+        if parallel == True:
+            parallel = 'thread'
+        worker = PatchWorker(self,parallel,
+                                  {'trainidx':trainidx,'trainset':trainset, 'labelset':labelset, 'resolutions':resolutions,
                                    'traintype':traintype, 'max_depth':max_depth,
                                    'augment':augment,'num_patches':num_patches, 'balance':balance,
                                    'jitter':jitter, 'jitter_border_fix':jitter_border_fix
@@ -2092,13 +2114,15 @@ class PatchWorkModel(Model):
             
             patchloss = []
             
+            
             actual_epochs = epochs            
             if parallel:
                 actual_epochs = 1000             
             for e in range(actual_epochs):
                 
                 if parallel:
-                    if worker.queue.qq.full() and e >= epochs:
+                    #if worker.queue.qq.full() and e >= epochs:
+                    if worker.queue.full() and e >= epochs:
                         break
 
                 print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
@@ -2248,6 +2272,11 @@ class PatchWorkModel(Model):
 
         if showplot:
             self.myhist.show_train_stat()
+            
+        if num_patches_to_train is not None:
+           if self.myhist.getNumberOfSeenPatches()-initial_number_of_trained_patches > num_patches_to_train:
+               break
+            
 
 
     if parallel:        

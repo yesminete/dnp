@@ -164,7 +164,7 @@ else:
     
     
     training = {
-       "num_patches":4000,
+       "num_patches":400,
        "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
        "epochs":2,
        "num_its":10,                
