@@ -100,8 +100,8 @@ else:
          },
         "smoothfac_data" : 0,   
         "smoothfac_label" : 0, 
-        "categorial_label" :[2],
-        #"categorial_label" :None,
+       # "categorial_label" :[2],
+        "categorial_label" :None,
         "interp_type" : "NN",    
         "scatter_type" : "NN",
         "normalize_input" : 'mean',
@@ -164,17 +164,17 @@ else:
     
     
     training = {
-       "num_patches":400,
+       "num_patches":40,
        "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
        "epochs":2,
        "num_its":10,                
-       "balance":{"ratio":0.5,"autoweight":1},
+       "balance":None,#{"ratio":0.5,"autoweight":1},
        #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
        #"hard_mining":0.1,
        #"hard_mining_maxage":50,
        "reload_after_it":5,
        "samples_per_it":15,
-       "parallel":True,
+       "parallel":False,
        }
     
     
@@ -369,6 +369,10 @@ else:
         if i==0 and patching['categorial_label'] is not None:            
             lset[0] = tocateg(lset[0])
             lset[1] = tocateg(lset[1])
+    
+    
+        lset = [tf.cast([[0]],tf.float32),tf.cast([[1]],tf.float32)]
+        
     
             
         themodel.train(tset,lset,resolutions=rset,**training,
