@@ -297,13 +297,14 @@ class myHistory :
                     else:
                         b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
                         plt.title('f1 scores (train)')            
-                    plt.bar(range(len(b)),b)
-                    ax2.set_ylim([0, 1])
-                    plt.xticks(range(len(b)))
-                    if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                        ax2.set_xticklabels(self.categorial_label)
-                    else:
-                        ax2.set_xticklabels(range(1,1+len(b)))
+                    if len(b.shape) > 0:
+                        plt.bar(range(len(b)),b)
+                        ax2.set_ylim([0, 1])
+                        plt.xticks(range(len(b)))
+                        if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                            ax2.set_xticklabels(self.categorial_label)
+                        else:
+                            ax2.set_xticklabels(range(1,1+len(b)))
     
 
      #       ax2 = plt.subplot(gs[ax_f1add])            
@@ -1657,7 +1658,7 @@ class PatchWorkModel(Model):
             dphi=0
             aug_={'dphi':0,'dscale':0,'flip':0}
 
-        branch_factor = None
+        branch_factor = 1
         if lazyEval is not None and "branch_factor" in lazyEval:
             branch_factor = lazyEval['branch_factor']
         
