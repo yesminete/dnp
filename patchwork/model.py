@@ -923,8 +923,8 @@ class PatchWorkModel(Model):
                           a,b = x.stitchResult(r,k,window=window)
                           pred[k] += a
                           sumpred[k] += b        
-                    print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[level_to_stitch[-1]][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[level_to_stitch[-1]].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
-                    print(">>> time elapsed, stitching: " + str(timer() - start) )
+                        print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[level_to_stitch[-1]][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[level_to_stitch[-1]].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
+                        print(">>> time elapsed, stitching: " + str(timer() - start) )
                       
 
               

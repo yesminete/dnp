@@ -160,7 +160,7 @@ class CropInstance:
     depth = len(self.scales)
     for i in range(depth-1):
         x = self.scales[i]
-        if cls_intermediate_loss and classifier_train:
+        if cls_intermediate_loss and (classifier_train or spatial_max_train):
             out.append(x['class_labels'])            
         if intermediate_loss and spatial_train:
             out.append(x['labels_cropped'])
@@ -1727,8 +1727,10 @@ class SQueue():
         self.maxsize = maxsize
         SQueue._steal_daemon(self.mpq, self.qq, self)
         self.debug = debug
+        self.alive = True
 
     def __del__(self):
+       self.alive = False 
        # if self.debug:
        print("FQueue killed")
  
@@ -1795,6 +1797,7 @@ def patchingloop(queue,cropper_args,model,sample_args):
       with tf.device("/cpu:0"):                
                   
           try:
+              patchingloop_kill_flag = False
               cropper = CropGenerator(**cropper_args)
               cropper.model = model
         
@@ -1829,6 +1832,8 @@ def patchingloop(queue,cropper_args,model,sample_args):
                   end = timer()
                   ratio = 1000*(end-start)/(len(subset)*np)
                   print("WORKER: sampled " + str(len(subset)*np) + " patches in " + str(round(end-start)) + " seconds, with %.2f ms/sample"%ratio,flush=True)
+                  if hasattr(queue,"alive") and not queue.alive:
+                      break
                   queue.put(c)
 
           except Exception as e:
