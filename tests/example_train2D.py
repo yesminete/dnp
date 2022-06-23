@@ -306,7 +306,7 @@ else:
         else:
             network['num_labels']= lset[0].shape[nD+1]
             
-        network['num_labels'] = 1
+        #network['num_labels'] = 1
             
         print('numlabels:' + str(network['num_labels']))
     
@@ -375,7 +375,7 @@ else:
     
     
       
-        lset = [tf.cast([0],tf.float32),tf.cast([1],tf.float32)]
+       # lset = [tf.cast([0],tf.float32),tf.cast([1],tf.float32)]
     
             
         lazyTrain={"fraction":0.5,"branch_factor":2,"label":None}
@@ -387,7 +387,7 @@ else:
                        debug=False,              
                        patch_on_cpu=False,
                        
-                       lazyTrain=lazyTrain,
+                     #  lazyTrain=lazyTrain,
                        
                        
                   #     hard_mining=0.2,
