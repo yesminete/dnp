@@ -162,7 +162,6 @@ training = {
    #"augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
    "epochs":50,
    "num_its":100,                
-   "loss": tf.keras.losses.binary_crossentropy,
    #"hard_mining":0.1,
    #"hard_mining_maxage":50,
    "reload_after_it":5,
@@ -275,8 +274,10 @@ else:
     patching['ndim'] = nD    
     network['modelname'] = modelfi  
     network['num_labels']= -1
-    network['spatial_train']= False
-    network['classifier_train']= True
+    network['spatial_train']= True
+    network['spatial_max_train']= True
+    network['cls_intermediate_loss'] = True
+    network['classifier_train']= False
     network['num_classes'] = 1
     print('numlabels:' + str(network['num_labels']))
 
@@ -335,9 +336,9 @@ for i in range(0,outer_num_its):
         #     tset,lset,rset,subjs = get_data(num_samp)
         
     # lset = [tf.cast([[1,0]],tf.float32),tf.cast([[0,1]],tf.float32)]
-    # lset = [tf.cast([[1]],tf.float32),
-    #         tf.cast([[0]],tf.float32),
-    #         tf.cast([[0]],tf.float32)]
+    lset = [tf.cast([[1]],tf.float32),
+            tf.cast([[0]],tf.float32),
+            tf.cast([[0]],tf.float32)]
     # ff = 0.001;
     # tset[0] =tset[0]*ff
     # tset[1] =tset[1]*ff+100

@@ -24,7 +24,7 @@ import multiprocessing
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork_master.patchwork as patchwork
+import patchwork_dev.patchwork as patchwork
 
 if __name__ != '__main__':
     print("CUDA_VISIBLE_DEVICES=-1")
@@ -38,15 +38,15 @@ else:
     
     # define your data sources 
     contrasts = [ { 'subj1' :  'example2d.nii.gz',  
-                    'subj2' :  'example2d.nii.gz'  } ]
+                    'subj2' :  'example2d_b.nii.gz'  } ]
     labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
-                   'subj2' :  'example2d_label.nii.gz', 
+                   'subj2' :  'example2d_label_b.nii.gz', 
                      } ]
     
     subjects = [ 'subj1', 'subj2'];
     
     # define ou want some validation dta
-    valid_ids = [1]
+    valid_ids = []
     
     
     modelfi = "models/yourmodel"
@@ -164,10 +164,10 @@ else:
     
     
     training = {
-       "num_patches":40,
-       "augment": {"dphi":0.2, "flip":[1,0] , "dscale":[0.1,0.1] },
+       "num_patches":100,
+       "augment": {"dphi":0.2, "flip":[0,0] , "dscale":[0.1,0.1] },
        "epochs":2,
-       "num_its":10,                
+       "num_its":100,                
        "balance":None,#{"ratio":0.5,"autoweight":1},
        #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
        #"hard_mining":0.1,
@@ -305,6 +305,9 @@ else:
             network['num_labels']= len(patching['categorial_label'])
         else:
             network['num_labels']= lset[0].shape[nD+1]
+            
+        network['num_labels'] = 1
+            
         print('numlabels:' + str(network['num_labels']))
     
         
@@ -330,7 +333,7 @@ else:
     
     
         
-    #% start training    
+    #%% start training    
         
     # initial_learning_rate = 0.1
     # lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -371,13 +374,22 @@ else:
             lset[1] = tocateg(lset[1])
     
     
-        lset = [tf.cast([[0]],tf.float32),tf.cast([[1]],tf.float32)]
-        
+      
+        lset = [tf.cast([0],tf.float32),tf.cast([1],tf.float32)]
     
             
+        lazyTrain={"fraction":0.5,"branch_factor":2,"label":None}
+        lazyTrain['reduceFun'] =  tf.reduce_max             
+        lazyTrain['attentionFun'] = tf.math.sigmoid
+            
+    
         themodel.train(tset,lset,resolutions=rset,**training,
-                       debug=True,              
-                       patch_on_cpu=True,
+                       debug=False,              
+                       patch_on_cpu=False,
+                       
+                       lazyTrain=lazyTrain,
+                       
+                       
                   #     hard_mining=0.2,
                   #     hard_mining_order='balance',
                        verbose=2,inc_train_cycle=False,
@@ -398,44 +410,27 @@ else:
     
     import nibabel as nib
     import numpy as np
-    img = nib.load('example2d.nii.gz')
+    img = nib.load('example2d_b.nii.gz')
     a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
     a = tf.convert_to_tensor(a,dtype=tf.float32) 
     resol = {"voxsize":img.header['pixdim'][1:4],"input_edges":img.affine}
     
-    res =     themodel.apply_full(a,resolution=resol,
-                                  num_patches=100,num_chunks=1,
+    res,stats =     themodel.apply_full(a,resolution=resol,
+                                  num_patches=500,num_chunks=1,
                                       augment={},
                                       generate_type='random',
+                                      patch_stats=True,
                           #            window='cos2',
      #                                 verbose=2,
-     level=2,
+     #level=2,
                                testIT=2,
-                                      lazyEval={'fraction':0.5},
-                                      branch_factor=2
+                                      lazyEval={'fraction':0.3},
+                                      branch_factor=3
                                       )
     
-    
-    plt.imshow(res,vmax=10)
-    
-    
-    #%%
-    
-    
-    #%%
-    
-    
-    res =     themodel.apply_full('example2d.nii.gz','xxx.nii',out_typ='mask',num_patches=500,num_chunks=1,
-      #                                augment={},
-                                      generate_type='random',
-    #                                  window='cos2',
-     #                                 verbose=2,
-                                      lazyEval={'fraction':0.5},
-                                      branch_factor=2
-                                      )
-    
-    
-    
+    print(stats['max'])
+    plt.imshow(res,vmax=20)
+    print(tf.reduce_max(res))
     
     
     

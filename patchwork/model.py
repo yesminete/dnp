@@ -278,32 +278,33 @@ class myHistory :
 
         
             ax2 = plt.subplot(gs[ax_bal])            
-            b = tf.squeeze(self.pixelratio[-1])
-            if len(b.shape) > 0:
-                plt.bar(range(len(b)),b)
-                plt.title('balances')            
-                ax2.set_ylim([0, 1])
-                plt.xticks(range(len(b)))
-                if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                    ax2.set_xticklabels(self.categorial_label)
-                else:
-                    ax2.set_xticklabels(range(1,1+len(b)))
+            if hasattr(self,"pixelratio"):
+                b = tf.squeeze(self.pixelratio[-1])
+                if len(b.shape) > 0:
+                    plt.bar(range(len(b)),b)
+                    plt.title('balances')            
+                    ax2.set_ylim([0, 1])
+                    plt.xticks(range(len(b)))
+                    if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                        ax2.set_xticklabels(self.categorial_label)
+                    else:
+                        ax2.set_xticklabels(range(1,1+len(b)))
+        
+                    ax2 = plt.subplot(gs[ax_f1])
+                    if 'valid_nodisplay_class_f1' in self.validloss_hist:
+                        b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
+                        plt.title('f1 scores (valid)')            
+                    else:
+                        b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
+                        plt.title('f1 scores (train)')            
+                    plt.bar(range(len(b)),b)
+                    ax2.set_ylim([0, 1])
+                    plt.xticks(range(len(b)))
+                    if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                        ax2.set_xticklabels(self.categorial_label)
+                    else:
+                        ax2.set_xticklabels(range(1,1+len(b)))
     
-                ax2 = plt.subplot(gs[ax_f1])
-                if 'valid_nodisplay_class_f1' in self.validloss_hist:
-                    b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
-                    plt.title('f1 scores (valid)')            
-                else:
-                    b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
-                    plt.title('f1 scores (train)')            
-                plt.bar(range(len(b)),b)
-                ax2.set_ylim([0, 1])
-                plt.xticks(range(len(b)))
-                if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                    ax2.set_xticklabels(self.categorial_label)
-                else:
-                    ax2.set_xticklabels(range(1,1+len(b)))
-
 
      #       ax2 = plt.subplot(gs[ax_f1add])            
      #       plothist(self.trainloss_hist,'train_',True)
@@ -572,7 +573,7 @@ class PatchWorkModel(Model):
         if 'batchselection' in lazyEval:
             idx = lazyEval['batchselection'](idx,k)
 
-        print('lazyEval, level ' + str(k-1) + ': only forwarding ' + str(idx.shape[0]) + ' patches to next level')
+        #print('lazyEval, level ' + str(k-1) + ': only forwarding ' + str(idx.shape[0]) + ' patches to next level')
         res = tf.gather(res,idx,axis=0)
         if res_nonspatial is not None:
            res_nonspatial = tf.gather(res_nonspatial,idx,axis=0)
@@ -891,9 +892,9 @@ class PatchWorkModel(Model):
                 for k in level:
                     sz = r[k].shape
                     tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)))
-                    stat = {'max': tf.reduce_max(r[k],axis=list(range(1,len(sz)-1))),
-                                   'mean': tf.reduce_mean(r[k],axis=list(range(1,len(sz)-1))),
-                                   'mean2': tf.reduce_mean(tf.math.pow(r[k],2),axis=list(range(1,len(sz)-1))),
+                    stat = {'max': tf.reduce_max(r[k]), #,axis=list(range(1,len(sz)-1))),
+                                   'mean': tf.reduce_mean(r[k]),#,axis=list(range(1,len(sz)-1))),
+                                   'mean2': tf.reduce_mean(tf.math.pow(r[k],2)) #,axis=list(range(1,len(sz)-1))),
                                    }
                     if pstats[k] is None:
                         pstats[k] = stat
@@ -1549,14 +1550,18 @@ class PatchWorkModel(Model):
             num_its=100,
             num_patches_to_train=None,
             traintype='random',
+            lazyTrain=None,
             num_patches=10,
+            
             train_ids = None,
             unlabeled_ids = [],
             valid_ids = [],
             valid_num_patches=None,
+            
             hard_mining = 0,
             hard_mining_maxage=50,
             hard_mining_order='loss',
+                        
             shuffle_buffer_size=1000,
             self_validation=False,
             max_depth=None,
@@ -1651,6 +1656,10 @@ class PatchWorkModel(Model):
         if valid:
             dphi=0
             aug_={'dphi':0,'dscale':0,'flip':0}
+
+        branch_factor = None
+        if lazyEval is not None and "branch_factor" in lazyEval:
+            branch_factor = lazyEval['branch_factor']
         
         self.cropper.dest_full_size = [None]*self.cropper.depth
 
@@ -1660,10 +1669,10 @@ class PatchWorkModel(Model):
     
             if traintype == 'random' or traintype ==  'random_deprec' :
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
-                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi,lazyEval=lazyEval,training=True)
+                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi,lazyEval=lazyEval,branch_factor=branch_factor,training=True)
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
-                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,training=True)
+                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,branch_factor=branch_factor,training=True)
                 
         return c
     
@@ -1994,37 +2003,67 @@ class PatchWorkModel(Model):
             
     
     
-    if True:
+    if lazyTrain is not None:
 
-
+  
+        
+        scalarLabels = False
+        
+        if len(labelset[trainidx[0]].shape) == 1:
+            scalarLabels = True
+        
+        
         trainvars = self.block_variables
         trainvars = trainvars + self.finalBlock.trainable_variables
-        lazyEval={"fraction":0.5,"label":None}
-        lazyEval['reduceFun'] =  tf.reduce_mean                 
-        lazyEval['attentionFun'] = tf.math.sigmoid
-        
-        losslog = {}
 
 
-        with tf.GradientTape() as tape:
-             
-          theloss = [0]*self.cropper.depth;
-          for k in range(len(trainidx)):        
-              c_data = getSample([trainidx[k]],num_patches,lazyEval=lazyEval,skipLabels=True)    
-              preds = self(c_data.getInputData(), training=True,lazyEval=lazyEval)
-              for i in range(len(preds)):
-                  p = tf.reduce_max(preds[i])
-                  theloss[i] += loss[i](p,labelset[trainidx[k]])
+        def trainalt_step(i):
             
-          for i in range(len(theloss)):
-             losslog.update({'out_'+str(i) : theloss[i] })
+                with tf.GradientTape() as tape:                    
+                  losslog = {}
+                  theloss = [0]*self.cropper.depth
+                  total = 0
+                  for k in range(len(trainidx)):        
+                      c_data = getSample([trainidx[k]],num_patches,lazyEval=lazyTrain,
+                                                                   skipLabels=scalarLabels)    
+                      preds = self(c_data.getInputData(), training=True,lazyEval=lazyTrain)
+                      for i in range(len(preds)):
+                          if scalarLabels:
+                              p = tf.expand_dims(tf.reduce_max(preds[i]),0)
+                              theloss[i] += loss[i](labelset[trainidx[k]],p)
+                          else:
+                              p = preds[i]
+                              theloss[i] += loss[i](t[i],p)
+                          total = total + theloss[i]
+                    
+                  for i in range(len(theloss)):
+                     losslog.update({'out_'+str(i) : tf.reduce_mean(theloss[i]) })
+                     
+                self.myhist.accum('train',[losslog],len(trainidx),tensors=True,mean=True)
+                self.trained_epochs+=len(trainidx)
+    
+                for k in losslog:
+                    print(k + ":" + str(losslog[k].numpy()),end=" ")            
+                    
+                            
+                gradients = tape.gradient(total,trainvars)
+                self.optimizer.apply_gradients(zip(gradients, trainvars))
 
-          log.append(losslog)
 
-        fullloss = sum(theloss)
-        gradients = tape.gradient(fullloss,trainvars)
-        self.optimizer.apply_gradients(zip(gradients, trainvars))
-        
+        if (not "trainalt_step" in self.compiled) or recompile_loss_optim:
+            if debug:
+                self.compiled["trainalt_step"] = trainalt_step
+            else:
+                self.compiled["trainalt_step"] = tf.function(trainalt_step)
+
+        for i in range(num_its):
+            start = timer()
+            trainalt_step(i)
+            print("elapsed  %.3fs"%(timer()-start),flush=True)
+
+            if showplot:
+                self.myhist.show_train_stat()
+
 
     else:
         was_last_min = False
