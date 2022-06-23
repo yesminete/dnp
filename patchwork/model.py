@@ -278,32 +278,33 @@ class myHistory :
 
         
             ax2 = plt.subplot(gs[ax_bal])            
-            b = tf.squeeze(self.pixelratio[-1])
-            if len(b.shape) > 0:
-                plt.bar(range(len(b)),b)
-                plt.title('balances')            
-                ax2.set_ylim([0, 1])
-                plt.xticks(range(len(b)))
-                if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                    ax2.set_xticklabels(self.categorial_label)
-                else:
-                    ax2.set_xticklabels(range(1,1+len(b)))
+            if hasattr(self,"pixelratio"):
+                b = tf.squeeze(self.pixelratio[-1])
+                if len(b.shape) > 0:
+                    plt.bar(range(len(b)),b)
+                    plt.title('balances')            
+                    ax2.set_ylim([0, 1])
+                    plt.xticks(range(len(b)))
+                    if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                        ax2.set_xticklabels(self.categorial_label)
+                    else:
+                        ax2.set_xticklabels(range(1,1+len(b)))
+        
+                    ax2 = plt.subplot(gs[ax_f1])
+                    if 'valid_nodisplay_class_f1' in self.validloss_hist:
+                        b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
+                        plt.title('f1 scores (valid)')            
+                    else:
+                        b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
+                        plt.title('f1 scores (train)')            
+                    plt.bar(range(len(b)),b)
+                    ax2.set_ylim([0, 1])
+                    plt.xticks(range(len(b)))
+                    if hasattr(self,'categorial_label') and self.categorial_label is not None:
+                        ax2.set_xticklabels(self.categorial_label)
+                    else:
+                        ax2.set_xticklabels(range(1,1+len(b)))
     
-                ax2 = plt.subplot(gs[ax_f1])
-                if 'valid_nodisplay_class_f1' in self.validloss_hist:
-                    b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
-                    plt.title('f1 scores (valid)')            
-                else:
-                    b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
-                    plt.title('f1 scores (train)')            
-                plt.bar(range(len(b)),b)
-                ax2.set_ylim([0, 1])
-                plt.xticks(range(len(b)))
-                if hasattr(self,'categorial_label') and self.categorial_label is not None:
-                    ax2.set_xticklabels(self.categorial_label)
-                else:
-                    ax2.set_xticklabels(range(1,1+len(b)))
-
 
      #       ax2 = plt.subplot(gs[ax_f1add])            
      #       plothist(self.trainloss_hist,'train_',True)
@@ -572,7 +573,7 @@ class PatchWorkModel(Model):
         if 'batchselection' in lazyEval:
             idx = lazyEval['batchselection'](idx,k)
 
-        print('lazyEval, level ' + str(k-1) + ': only forwarding ' + str(idx.shape[0]) + ' patches to next level')
+        #print('lazyEval, level ' + str(k-1) + ': only forwarding ' + str(idx.shape[0]) + ' patches to next level')
         res = tf.gather(res,idx,axis=0)
         if res_nonspatial is not None:
            res_nonspatial = tf.gather(res_nonspatial,idx,axis=0)
@@ -891,9 +892,9 @@ class PatchWorkModel(Model):
                 for k in level:
                     sz = r[k].shape
                     tmp = tf.reduce_max(r[k],axis=list(range(1,len(sz)-1)))
-                    stat = {'max': tf.reduce_max(r[k],axis=list(range(1,len(sz)-1))),
-                                   'mean': tf.reduce_mean(r[k],axis=list(range(1,len(sz)-1))),
-                                   'mean2': tf.reduce_mean(tf.math.pow(r[k],2),axis=list(range(1,len(sz)-1))),
+                    stat = {'max': tf.reduce_max(r[k]), #,axis=list(range(1,len(sz)-1))),
+                                   'mean': tf.reduce_mean(r[k]),#,axis=list(range(1,len(sz)-1))),
+                                   'mean2': tf.reduce_mean(tf.math.pow(r[k],2)) #,axis=list(range(1,len(sz)-1))),
                                    }
                     if pstats[k] is None:
                         pstats[k] = stat
@@ -1549,14 +1550,18 @@ class PatchWorkModel(Model):
             num_its=100,
             num_patches_to_train=None,
             traintype='random',
+            lazyTrain=None,
             num_patches=10,
+            
             train_ids = None,
             unlabeled_ids = [],
             valid_ids = [],
             valid_num_patches=None,
+            
             hard_mining = 0,
             hard_mining_maxage=50,
             hard_mining_order='loss',
+                        
             shuffle_buffer_size=1000,
             self_validation=False,
             max_depth=None,
@@ -1636,9 +1641,11 @@ class PatchWorkModel(Model):
                     
         return f1,th
 
-    def getSample(subset,np,valid=False):
+    def getSample(subset,np,valid=False,lazyEval=None,skipLabels=False):
         tset = [trainset[i] for i in subset]
         lset = [labelset[i] for i in subset]      
+        if skipLabels:
+            lset=None
         rset = None
         if resolutions is not None:
             rset = [resolutions[i] for i in subset]      
@@ -1649,6 +1656,10 @@ class PatchWorkModel(Model):
         if valid:
             dphi=0
             aug_={'dphi':0,'dscale':0,'flip':0}
+
+        branch_factor = None
+        if lazyEval is not None and "branch_factor" in lazyEval:
+            branch_factor = lazyEval['branch_factor']
         
         self.cropper.dest_full_size = [None]*self.cropper.depth
 
@@ -1658,10 +1669,10 @@ class PatchWorkModel(Model):
     
             if traintype == 'random' or traintype ==  'random_deprec' :
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
-                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi,training=True)
+                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi,lazyEval=lazyEval,branch_factor=branch_factor,training=True)
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
-                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,training=True)
+                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,branch_factor=branch_factor,training=True)
                 
         return c
     
@@ -1990,297 +2001,362 @@ class PatchWorkModel(Model):
         print("unlabeled imgs: "+ str(len(unlabeled_ids)))        
     print("validate imgs: "+ str(len(valid_ids)))
             
-    was_last_min = False
     
-    if hard_mining is not None and hard_mining>0 and hasattr(self,'hard_data'):
-        hard_data = self.hard_data
-    else:
-        hard_data = None
-        
-    epochs_ = epochs
-        
-    if depth_schedule is not None:
-        recompile_loss_optim = True
+    
+    if lazyTrain is not None:
 
-    initial_number_of_trained_patches = self.myhist.getNumberOfSeenPatches()
-
+  
         
-    if parallel:
-        if parallel == True:
-            parallel = 'thread'
-        worker = PatchWorker(self,parallel,
-                                  {'trainidx':trainidx,'trainset':trainset, 'labelset':labelset, 'resolutions':resolutions,
-                                   'traintype':traintype, 'max_depth':max_depth,
-                                   'augment':augment,'num_patches':num_patches, 'balance':balance,
-                                   'jitter':jitter, 'jitter_border_fix':jitter_border_fix
-                                   })
-    for i in range(num_its):
-
-        if depth_schedule == 1:
-            #max_depth=3
-            max_depth=((i+self.cropper.depth-1)%self.cropper.depth)+1
-            #max_depth=((i)%self.cropper.depth)+1
-            #epochs=(self.cropper.depth+1-max_depth)*epochs_
-
-        print("------- train depth:" + str(max_depth))
-
-        print("----------------------------------------- iteration:" + str(i))
+        scalarLabels = False
         
-        ### sampling
-        if parallel:
-            print("getting patches from patchworker")
-            start = timer()
-            c_data = worker.getData()
-            print("received patches in  %.3fs"%(timer()-start),flush=True)
-        else:            
-            print("sampling patches for training")
-            start = timer()
-            c_data = getSample(trainidx,num_patches)    
-            end = timer()
-            ratio = (end-start)/(len(trainidx)*num_patches)*1000
-            print("sampled " + str(len(trainidx)*num_patches) + " patches with %.2f ms/sample"%ratio,flush=True)
-
-        pixelratio,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
-        self.pixelfreqs = pixelfreqs
-        self.myhist.pixelratio = pixelratio
+        if len(labelset[trainidx[0]].shape) == 1:
+            scalarLabels = True
         
         
-        if hard_data is not None:
-           with tf.device(DEVCPU):              
-               print("balance hard data")
-               self.cropper.computeBalances(hard_data.scales,True,balance)               
-               c_data.merge(hard_data)
-        
-        total_numpatches = c_data.num_patches()
-        if batch_size_intended > total_numpatches:
-            batch_size = total_numpatches        
-        else:
-            batch_size = batch_size_intended
-        if GAN_train:
-            if total_numpatches == 0:
-                unlabeled_num_patches = num_patches
+        trainvars = self.block_variables
+        trainvars = trainvars + self.finalBlock.trainable_variables
+
+
+        def trainalt_step(i):
+            
+                with tf.GradientTape() as tape:                    
+                  losslog = {}
+                  theloss = [0]*self.cropper.depth
+                  total = 0
+                  for k in range(len(trainidx)):        
+                      c_data = getSample([trainidx[k]],num_patches,lazyEval=lazyTrain,
+                                                                   skipLabels=scalarLabels)    
+                      preds = self(c_data.getInputData(), training=True,lazyEval=lazyTrain)
+                      for i in range(len(preds)):
+                          if scalarLabels:
+                              p = tf.expand_dims(tf.reduce_max(preds[i]),0)
+                              theloss[i] += loss[i](labelset[trainidx[k]],p)
+                          else:
+                              p = preds[i]
+                              theloss[i] += loss[i](t[i],p)
+                          total = total + theloss[i]
+                    
+                  for i in range(len(theloss)):
+                     losslog.update({'out_'+str(i) : tf.reduce_mean(theloss[i]) })
+                     
+                self.myhist.accum('train',[losslog],len(trainidx),tensors=True,mean=True)
+                self.trained_epochs+=len(trainidx)
+    
+                for k in losslog:
+                    print(k + ":" + str(losslog[k].numpy()),end=" ")            
+                    
+                            
+                gradients = tape.gradient(total,trainvars)
+                self.optimizer.apply_gradients(zip(gradients, trainvars))
+
+
+        if (not "trainalt_step" in self.compiled) or recompile_loss_optim:
+            if debug:
+                self.compiled["trainalt_step"] = trainalt_step
             else:
-                unlabeled_num_patches = total_numpatches // len(unlabeled_ids)
+                self.compiled["trainalt_step"] = tf.function(trainalt_step)
+
+        for i in range(num_its):
             start = timer()
-            c_unlabeled_data = getSample(unlabeled_ids,unlabeled_num_patches)              
-            end = timer()
-            total_unlabeled_numpatches = len(unlabeled_ids)*unlabeled_num_patches
-            if batch_size > total_unlabeled_numpatches:
-                batch_size = total_unlabeled_numpatches
-            print("time elapsed, sampling unlabeled data: " + str(end - start) + " (for " + str(total_unlabeled_numpatches) + ")")
+            trainalt_step(i)
+            print("elapsed  %.3fs"%(timer()-start),flush=True)
 
+            if showplot:
+                self.myhist.show_train_stat()
+
+
+    else:
+        was_last_min = False
         
-        ### fitting
-        sampletyp = [None, -1]
-        if max_agglomerative:
-            sampletyp[1] = num_patches
+        if hard_mining is not None and hard_mining>0 and hasattr(self,'hard_data'):
+            hard_data = self.hard_data
+        else:
+            hard_data = None
             
-
-        print("starting training")
-        start = timer()
-        
-        lam = tf.convert_to_tensor(0.1)
-
-
-        if fit_type == 'custom':
-            shuffle_buffer = max(shuffle_buffer_size,total_numpatches)
-            dataset = c_data.getDataset(sampletyp=sampletyp).shuffle(shuffle_buffer).batch(batch_size,drop_remainder=True)
-
-            if (not "train_step" in self.compiled) or recompile_loss_optim:
-                if debug:
-                    self.compiled["train_step"] = train_step_supervised
-                else:
-                    self.compiled["train_step"] = tf.function(train_step_supervised)
-                
+        epochs_ = epochs
             
-            numsamples = tf.data.experimental.cardinality(dataset).numpy() * batch_size
-            infostr = '#samples: ' + str(numsamples) 
-
-            unlabset = []
-            numsamples_unl = 0
-            if GAN_train:
-                unlabdata = c_unlabeled_data.getInputData(sampletyp)
-                unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).shuffle(total_unlabeled_numpatches).batch(batch_size,drop_remainder=True)
-                numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy() * batch_size
-                infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
-
-            if (not "train_step_discrim" in self.compiled) or recompile_loss_optim:
-                if debug:
-                    self.compiled["train_step_discrim"] = (train_step_discriminator)
-                    self.compiled["train_step_unsuper"] = (train_step_unsupervised)
-                else:
-                    self.compiled["train_step_discrim"] = tf.function(train_step_discriminator)
-                    self.compiled["train_step_unsuper"] = tf.function(train_step_unsupervised)
+        if depth_schedule is not None:
+            recompile_loss_optim = True
+    
+        initial_number_of_trained_patches = self.myhist.getNumberOfSeenPatches()
+    
             
-            patchloss = []
+        if parallel:
+            if parallel == True:
+                parallel = 'thread'
+            worker = PatchWorker(self,parallel,
+                                      {'trainidx':trainidx,'trainset':trainset, 'labelset':labelset, 'resolutions':resolutions,
+                                       'traintype':traintype, 'max_depth':max_depth,
+                                       'augment':augment,'num_patches':num_patches, 'balance':balance,
+                                       'jitter':jitter, 'jitter_border_fix':jitter_border_fix
+                                       })
+        for i in range(num_its):
+    
+            if depth_schedule == 1:
+                #max_depth=3
+                max_depth=((i+self.cropper.depth-1)%self.cropper.depth)+1
+                #max_depth=((i)%self.cropper.depth)+1
+                #epochs=(self.cropper.depth+1-max_depth)*epochs_
+    
+            print("------- train depth:" + str(max_depth))
+    
+            print("----------------------------------------- iteration:" + str(i))
             
-            
-            actual_epochs = epochs            
+            ### sampling
             if parallel:
-                actual_epochs = 1000             
-            for e in range(actual_epochs):
+                print("getting patches from patchworker")
+                start = timer()
+                c_data = worker.getData()
+                print("received patches in  %.3fs"%(timer()-start),flush=True)
+            else:            
+                print("sampling patches for training")
+                start = timer()
+                c_data = getSample(trainidx,num_patches)    
+                end = timer()
+                ratio = (end-start)/(len(trainidx)*num_patches)*1000
+                print("sampled " + str(len(trainidx)*num_patches) + " patches with %.2f ms/sample"%ratio,flush=True)
+    
+            pixelratio,pixelfreqs = self.cropper.computeBalances(c_data.scales,True,balance)        
+            self.pixelfreqs = pixelfreqs
+            self.myhist.pixelratio = pixelratio
+            
+            
+            if hard_data is not None:
+               with tf.device(DEVCPU):              
+                   print("balance hard data")
+                   self.cropper.computeBalances(hard_data.scales,True,balance)               
+                   c_data.merge(hard_data)
+            
+            total_numpatches = c_data.num_patches()
+            if batch_size_intended > total_numpatches:
+                batch_size = total_numpatches        
+            else:
+                batch_size = batch_size_intended
+            if GAN_train:
+                if total_numpatches == 0:
+                    unlabeled_num_patches = num_patches
+                else:
+                    unlabeled_num_patches = total_numpatches // len(unlabeled_ids)
+                start = timer()
+                c_unlabeled_data = getSample(unlabeled_ids,unlabeled_num_patches)              
+                end = timer()
+                total_unlabeled_numpatches = len(unlabeled_ids)*unlabeled_num_patches
+                if batch_size > total_unlabeled_numpatches:
+                    batch_size = total_unlabeled_numpatches
+                print("time elapsed, sampling unlabeled data: " + str(end - start) + " (for " + str(total_unlabeled_numpatches) + ")")
+    
+            
+            ### fitting
+            sampletyp = [None, -1]
+            if max_agglomerative:
+                sampletyp[1] = num_patches
                 
+    
+            print("starting training")
+            start = timer()
+            
+            lam = tf.convert_to_tensor(0.1)
+    
+    
+            if fit_type == 'custom':
+                shuffle_buffer = max(shuffle_buffer_size,total_numpatches)
+                dataset = c_data.getDataset(sampletyp=sampletyp).shuffle(shuffle_buffer).batch(batch_size,drop_remainder=True)
+    
+                if (not "train_step" in self.compiled) or recompile_loss_optim:
+                    if debug:
+                        self.compiled["train_step"] = train_step_supervised
+                    else:
+                        self.compiled["train_step"] = tf.function(train_step_supervised)
+                    
+                
+                numsamples = tf.data.experimental.cardinality(dataset).numpy() * batch_size
+                infostr = '#samples: ' + str(numsamples) 
+    
+                unlabset = []
+                numsamples_unl = 0
+                if GAN_train:
+                    unlabdata = c_unlabeled_data.getInputData(sampletyp)
+                    unlabset = tf.data.Dataset.from_tensor_slices(unlabdata).shuffle(total_unlabeled_numpatches).batch(batch_size,drop_remainder=True)
+                    numsamples_unl = tf.data.experimental.cardinality(unlabset).numpy() * batch_size
+                    infostr += ', #unlabeled_samples: ' + str(numsamples_unl) 
+    
+                if (not "train_step_discrim" in self.compiled) or recompile_loss_optim:
+                    if debug:
+                        self.compiled["train_step_discrim"] = (train_step_discriminator)
+                        self.compiled["train_step_unsuper"] = (train_step_unsupervised)
+                    else:
+                        self.compiled["train_step_discrim"] = tf.function(train_step_discriminator)
+                        self.compiled["train_step_unsuper"] = tf.function(train_step_unsupervised)
+                
+                patchloss = []
+                
+                
+                actual_epochs = epochs            
                 if parallel:
-                    #if worker.queue.qq.full() and e >= epochs:
-                    if worker.queue.full() and e >= epochs:
-                        break
-
-                print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
-                print(infostr + ", batchsize: " + str(batch_size) , end=',  ')
-                sttime = timer()
-                log = []
-                diter = iter(dataset)
-                uiter = iter(unlabset)
-                while True:
-                    losslog = {}
-                    labeled_element = next(diter,None)
-                    if labeled_element is not None and train_S:
-                        losslog.update( self.compiled["train_step"](labeled_element,loss) )
-                        if 'loss_per_patch' in losslog:
-                            patchloss.append(tf.concat([tf.expand_dims(tf.cast(labeled_element[0]['batchindex'],dtype=tf.float32),1),
-                                                        tf.expand_dims(losslog['loss_per_patch'],1)],1))
-                            del losslog['loss_per_patch']
+                    actual_epochs = 1000             
+                for e in range(actual_epochs):
+                    
+                    if parallel:
+                        #if worker.queue.qq.full() and e >= epochs:
+                        if worker.queue.full() and e >= epochs:
+                            break
+    
+                    print("EPOCH " + str(e+1) + "/"+str(epochs),end=',  ')
+                    print(infostr + ", batchsize: " + str(batch_size) , end=',  ')
+                    sttime = timer()
+                    log = []
+                    diter = iter(dataset)
+                    uiter = iter(unlabset)
+                    while True:
+                        losslog = {}
+                        labeled_element = next(diter,None)
+                        if labeled_element is not None and train_S:
+                            losslog.update( self.compiled["train_step"](labeled_element,loss) )
+                            if 'loss_per_patch' in losslog:
+                                patchloss.append(tf.concat([tf.expand_dims(tf.cast(labeled_element[0]['batchindex'],dtype=tf.float32),1),
+                                                            tf.expand_dims(losslog['loss_per_patch'],1)],1))
+                                del losslog['loss_per_patch']
+                            
+                        if GAN_train:    
+                            unlabeled_element = next(uiter,None)
+                            if unlabeled_element is not None:
+                                if labeled_element is not None and train_D:                            
+                                    losslog.update( self.compiled["train_step_discrim"](labeled_element[0],unlabeled_element) )
+                                if train_U:
+                                    losslog.update( self.compiled["train_step_unsuper"](unlabeled_element,lam) )
+                        if labeled_element is None and (not GAN_train or unlabeled_element is None):
+                            break
                         
-                    if GAN_train:    
-                        unlabeled_element = next(uiter,None)
-                        if unlabeled_element is not None:
-                            if labeled_element is not None and train_D:                            
-                                losslog.update( self.compiled["train_step_discrim"](labeled_element[0],unlabeled_element) )
-                            if train_U:
-                                losslog.update( self.compiled["train_step_unsuper"](unlabeled_element,lam) )
-                    if labeled_element is None and (not GAN_train or unlabeled_element is None):
-                        break
+                        log.append(losslog)
+                        print('.', end='') 
+                        
                     
+                    
+                    log, new_min = self.myhist.accum('train',log,numsamples,tensors=True,mean=True)
+                    self.trained_epochs+=numsamples
+    #                log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
+     #               self.trained_epochs+=1
+                    end = timer()                
+                    print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
+                    for k in log:
+                        print(k + ":" + str(log[k][0]),end=" ")
+                    print("")
+                    print("learning rate: " + str(self.optimizer._decayed_lr(tf.float32).numpy()))
+    
+                if len(patchloss) > 0:
+                    patchloss = tf.concat(patchloss,0)
+                    patchloss = tf.scatter_nd(tf.cast(patchloss[:,0:1],dtype=tf.int32),patchloss[:,1:2],[total_numpatches,1])
+    
+            else:
+                inputdata = c_data.getInputData(sampletyp)
+                targetdata = c_data.getTargetData(sampletyp)
+                
+                history = History()
+                self.fit(inputdata,targetdata,
+                          epochs=epochs,
+                          verbose=verbose,
+                          steps_per_epoch=steps_per_epoch,
+                          batch_size=batch_size,
+                          callbacks=[history])
+                self.myhist.accum('train',history.history,epochs)
+                self.trained_epochs += epochs
+                del inputdata
+                del targetdata
+    
+            end = timer()
+            
+            if hard_mining is not None and hard_mining>0:
+               with tf.device(DEVCPU):    
+                  hard_mining_ratio = 1-1/(1+hard_mining)
+                  if hard_mining_order == 'balance':
+                      targetdata = c_data.getTargetData(sampletyp)
+                      patches = targetdata[-1]
+                      labelfreqs = []
+    
+                      for k in range(self.num_labels):
+                          if self.cropper.categorial_label is not None:
+                                labelfreqs.append(tf.reduce_max(tf.cast(patches==self.cropper.categorial_label[k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                          else:
+                                labelfreqs.append(tf.reduce_max(tf.cast(patches[...,k:k+1],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
+                          
+                      labelfreqs = tf.concat(labelfreqs,1)
+                      labelfreqs = labelfreqs / (0.00001+tf.reduce_sum(labelfreqs,axis=0))
+                      probs = tf.reduce_mean(labelfreqs,axis=1,keepdims=True)
+                      probs = tf.concat([probs,tf.expand_dims(c_data.getAge(),1)],1)
+                      c_data.subsetProb(probs,hard_mining_ratio,hard_mining_maxage)    
+                      
+                  else:
+                      patchloss = tf.concat([patchloss,tf.expand_dims(c_data.getAge(),1)],1)                                          
+                      c_data.subsetOrder(patchloss,hard_mining_ratio,hard_mining_maxage)    
+                  self.myhist.age = c_data.getAge()
+                  hard_data = c_data
+                  self.hard_data = hard_data
+            else:
+               del c_data.scales
+               del c_data
+               if hasattr(self.myhist,'age'):
+                   del self.myhist.age
+               c_data = None
+    
+            
+                        
+            print("time elapsed, fitting: " + str(end - start) )
+            
+            
+            
+    
+            ### validation
+            def do_validation(idx,npatches,prefix):
+                c = getSample(idx,npatches,valid=True)    
+                print("validating")
+                dataset = c.getDataset().batch(batch_size)
+                log = []
+                for images in dataset:
+                    losslog = valid_step_supervised(images,loss,prefix)            
                     log.append(losslog)
-                    print('.', end='') 
-                    
-                
-                
-                log, new_min = self.myhist.accum('train',log,numsamples,tensors=True,mean=True)
-                self.trained_epochs+=numsamples
-#                log, new_min = self.myhist.accum('train',log,1,tensors=True,mean=True)
- #               self.trained_epochs+=1
-                end = timer()                
-                print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
+                    print('.', end='')                
+                print('| ')                                
+                log, new_min = self.myhist.accum(prefix,log,1,tensors=True,mean=True)
                 for k in log:
                     print(k + ":" + str(log[k][0]),end=" ")
                 print("")
-                print("learning rate: " + str(self.optimizer._decayed_lr(tf.float32).numpy()))
-
-            if len(patchloss) > 0:
-                patchloss = tf.concat(patchloss,0)
-                patchloss = tf.scatter_nd(tf.cast(patchloss[:,0:1],dtype=tf.int32),patchloss[:,1:2],[total_numpatches,1])
-
-        else:
-            inputdata = c_data.getInputData(sampletyp)
-            targetdata = c_data.getTargetData(sampletyp)
+                return new_min
+    
             
-            history = History()
-            self.fit(inputdata,targetdata,
-                      epochs=epochs,
-                      verbose=verbose,
-                      steps_per_epoch=steps_per_epoch,
-                      batch_size=batch_size,
-                      callbacks=[history])
-            self.myhist.accum('train',history.history,epochs)
-            self.trained_epochs += epochs
-            del inputdata
-            del targetdata
-
-        end = timer()
-        
-        if hard_mining is not None and hard_mining>0:
-           with tf.device(DEVCPU):    
-              hard_mining_ratio = 1-1/(1+hard_mining)
-              if hard_mining_order == 'balance':
-                  targetdata = c_data.getTargetData(sampletyp)
-                  patches = targetdata[-1]
-                  labelfreqs = []
-
-                  for k in range(self.num_labels):
-                      if self.cropper.categorial_label is not None:
-                            labelfreqs.append(tf.reduce_max(tf.cast(patches==self.cropper.categorial_label[k],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
-                      else:
-                            labelfreqs.append(tf.reduce_max(tf.cast(patches[...,k:k+1],dtype=tf.float32),axis=range(1,self.cropper.ndim+1)))
-                      
-                  labelfreqs = tf.concat(labelfreqs,1)
-                  labelfreqs = labelfreqs / (0.00001+tf.reduce_sum(labelfreqs,axis=0))
-                  probs = tf.reduce_mean(labelfreqs,axis=1,keepdims=True)
-                  probs = tf.concat([probs,tf.expand_dims(c_data.getAge(),1)],1)
-                  c_data.subsetProb(probs,hard_mining_ratio,hard_mining_maxage)    
-                  
-              else:
-                  patchloss = tf.concat([patchloss,tf.expand_dims(c_data.getAge(),1)],1)                                          
-                  c_data.subsetOrder(patchloss,hard_mining_ratio,hard_mining_maxage)    
-              self.myhist.age = c_data.getAge()
-              hard_data = c_data
-              self.hard_data = hard_data
-        else:
-           del c_data.scales
-           del c_data
-           if hasattr(self.myhist,'age'):
-               del self.myhist.age
-           c_data = None
-
-        
-                    
-        print("time elapsed, fitting: " + str(end - start) )
-        
-        
-        
-
-        ### validation
-        def do_validation(idx,npatches,prefix):
-            c = getSample(idx,npatches,valid=True)    
-            print("validating")
-            dataset = c.getDataset().batch(batch_size)
-            log = []
-            for images in dataset:
-                losslog = valid_step_supervised(images,loss,prefix)            
-                log.append(losslog)
-                print('.', end='')                
-            print('| ')                                
-            log, new_min = self.myhist.accum(prefix,log,1,tensors=True,mean=True)
-            for k in log:
-                print(k + ":" + str(log[k][0]),end=" ")
-            print("")
-            return new_min
-
-        
-        if self_validation:        
-            print("sampling patches for self validtion")
-            new_min_self = do_validation(trainidx,max(5,num_patches//10),'selfv')
-        
-        if len(valid_ids) > 0:
-            print("sampling patches for validtion")
-            new_min_valid = do_validation(valid_ids,valid_num_patches,'valid')
+            if self_validation:        
+                print("sampling patches for self validtion")
+                new_min_self = do_validation(trainidx,max(5,num_patches//10),'selfv')
             
-
+            if len(valid_ids) > 0:
+                print("sampling patches for validtion")
+                new_min_valid = do_validation(valid_ids,valid_num_patches,'valid')
+                
+    
+                
+            if callback is not None:
+                callback(i)
+    
+            if cp_interval != -1:
+                if (i+1)%cp_interval == 0:
+                    self.train_cycle += 1
             
-        if callback is not None:
-            callback(i)
-
-        if cp_interval != -1:
-            if (i+1)%cp_interval == 0:
-                self.train_cycle += 1
-        
-        if autosave:
-           if self.modelname is None:
-               print("no name given, not able to save model!")
-           else:
-               self.save(self.modelname)
-
-        if showplot:
-            self.myhist.show_train_stat()
-            
-        if num_patches_to_train is not None:
-           if self.myhist.getNumberOfSeenPatches()-initial_number_of_trained_patches > num_patches_to_train:
-               break
-            
-
-
-    if parallel:        
-        worker.kill()
+            if autosave:
+               if self.modelname is None:
+                   print("no name given, not able to save model!")
+               else:
+                   self.save(self.modelname)
+    
+            if showplot:
+                self.myhist.show_train_stat()
+                
+            if num_patches_to_train is not None:
+               if self.myhist.getNumberOfSeenPatches()-initial_number_of_trained_patches > num_patches_to_train:
+                   break
+                
+    
+    
+        if parallel:        
+            worker.kill()
 
             
 #%%
