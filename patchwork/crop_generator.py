@@ -808,7 +808,7 @@ class CropGenerator():
           if self.system == 'world':
               final_width = tf.gather(final_width,idxperm_inv)
             
-            
+          final_width = final_width*patch_size_factor
             
           if depth == 1:
                 patch_widths = [tensor(final_width)]
@@ -827,7 +827,7 @@ class CropGenerator():
           for k in range(len(out_patch_shapes)):
             w = divide1(patch_widths[k],out_patch_shapes[k]-1)
             wperm = tf.gather(w,idxperm)
-            dshape = int32(destshape_size_factor*input_width/wperm+1)
+            dshape = int32(destshape_size_factor*patch_size_factor*input_width/wperm+1)
             vsz =  divide1(input_width,tensor(dshape-1))
             dedge = tf.matmul(input_edges[0,:,:],tf.linalg.diag(tf.concat([vsz/input_voxsize,[1]],0)))
             dest_edges.append(tf.expand_dims(dedge,0))
