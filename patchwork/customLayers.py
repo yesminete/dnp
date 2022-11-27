@@ -107,6 +107,8 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
                   padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
   if nD == 3:
       strides = [2,2,2]
+      if input_shape is not None:
+          strides = tf.minimum(input_shape,strides).numpy()
       _conv = layers.Conv3D
       _convT = lambda *args, **kwargs: layers.Conv3DTranspose(*args, **kwargs,strides=strides)
       _maxpool = lambda: layers.MaxPooling3D(pool_size=strides)
@@ -381,6 +383,8 @@ def createUnet_v3(depth=5,outK=1,feature_dim=None,nD=3,
       
   if feature_dim is None:
       fdims = [16,16,32,32,64,64,128,128]
+  else:
+      fdims = feature_dim
 
   if input_shape is not None:
      tmp = input_shape
@@ -1386,6 +1390,62 @@ def Maxpool_loss3D(K=1,losstype='bc',threshold=1):
         return a+b
     
     return theloss
+
+        
+def topk_loss2(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalty=False,nD=3):
+    sz = y.shape
+    if nD==2:
+        nvx = sz[1]*sz[2]
+    else:
+        nvx = sz[1]*sz[2]*sz[3]
+    ncl = sz[-1]
+    if losstype=='bc':
+        if nD == 2:
+            loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,4),tf.expand_dims(x,4),from_logits=from_logits)
+        else:
+            loss = tf.keras.losses.binary_crossentropy(tf.expand_dims(y,5),tf.expand_dims(x,5),from_logits=from_logits)
+    elif losstype=='hinge':
+        if not from_logits:
+            assert False,"hinge only working for logits"
+        if nD == 2:
+            loss = tf.keras.losses.hinge(tf.expand_dims(y,4),tf.expand_dims(x,4))
+        else:
+            loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5))
+    
+
+    fac = 0.01
+    sumloss = 0.0
+    if combi>0:
+        sumloss = tf.reduce_mean(loss,axis=list(range(1,len(sz))))*ncl*combi/fac
+        
+    isz = [-1,nvx,ncl]
+    loss = tf.reshape(loss,isz)
+    x = tf.reshape(x,isz)
+    y = tf.reshape(y,isz)
+    
+    vpos=y>0.5
+    vneg=y<0.5
+
+    pos = tf.where(vpos,loss,0)
+    neg = tf.where(vneg,loss,0)
+    
+    for j in range(ncl):
+        if K[0] == 'inf':
+            valspos = pos[...,j]
+        else:
+            valspos,_ = tf.nn.top_k(pos[...,j],k=K[0])
+            
+        sumloss = sumloss + tf.reduce_sum(valspos,axis=1)/(1+tf.reduce_sum(tf.where(valspos>0,1.0,0.0),axis=1))
+
+        if K[1] == 'inf':
+            valsneg = neg[...,j]
+        else:
+            valsneg,_ = tf.nn.top_k(neg[...,j],k=K[1])
+        sumloss = sumloss + tf.reduce_sum(valsneg,axis=1)/(1+tf.reduce_sum(tf.where(valsneg>0,1.0,0.0),axis=1))
+
+    return tf.expand_dims(sumloss,1)*fac
+
+
         
 def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalty=False,nD=3):
     sz = y.shape
@@ -1406,6 +1466,8 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalt
             loss = tf.keras.losses.hinge(tf.expand_dims(y,4),tf.expand_dims(x,4))
         else:
             loss = tf.keras.losses.hinge(tf.expand_dims(y,5),tf.expand_dims(x,5))
+
+    rmean = 1
 
     fac = 0.01
     sumloss = 0.0
@@ -1433,29 +1495,40 @@ def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalt
     
     for j in range(ncl):
         numpos = tf.cast(tf.reduce_sum(tf.where(vpos[...,j],1.0,0)),dtype=tf.int32)+1
-#        if numpos > 0:
         if K == "inf":
             sumloss = sumloss + tf.reduce_mean(pos[...,j],axis=1)            
         else:
             mK = tf.math.minimum(K,numpos)
             valspos,_ = tf.nn.top_k(pos[...,j],k=mK)
-            sumloss = sumloss + tf.reduce_mean(valspos,axis=1)
+            if rmean:
+                sumloss = sumloss + tf.reduce_sum(valspos,axis=1)/(1+tf.reduce_sum(tf.where(valspos>0,1.0,0.0),axis=1))
+            else:                
+                sumloss = sumloss + tf.reduce_mean(valspos,axis=1)
 
         numneg = tf.cast(tf.reduce_sum(tf.where(vneg[...,j],1.0,0)),dtype=tf.int32)+1
-        #if numneg > 0:
         if K == "inf":
             sumloss = sumloss + tf.reduce_mean(neg[...,j],axis=1)            
         else:
             mK = tf.math.minimum(K,numneg)
             valsneg,_ = tf.nn.top_k(neg[...,j],k=mK)
-            sumloss = sumloss + tf.reduce_mean(valsneg,axis=1)
+            if rmean:
+                sumloss = sumloss + tf.reduce_sum(valsneg,axis=1)/(1+tf.reduce_sum(tf.where(valsneg>0,1.0,0.0),axis=1))
+            else:                
+                sumloss = sumloss + tf.reduce_mean(valsneg,axis=1)
 
     return tf.expand_dims(sumloss,1)*fac
 
-def TopK_loss3D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
-    def loss(x,y,from_logits=True):
-        return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=3,mismatch_penalty=mismatch_penalty)
-    return loss   
+
+def TopK_loss3D(K=1,losstype='bc',combi=False,mismatch_penalty=False,version=1):
+    if version == 1:
+        def loss(x,y,from_logits=True):
+            return topk_loss(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=3,mismatch_penalty=mismatch_penalty)
+        return loss   
+    else:
+        def loss(x,y,from_logits=True):
+            return topk_loss2(x,y,K=K,from_logits=from_logits,losstype=losstype,combi=combi,nD=3)
+        return loss   
+        
 
 def TopK_loss2D(K=1,losstype='bc',combi=False,mismatch_penalty=False):
     def loss(x,y,from_logits=True):

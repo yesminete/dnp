@@ -691,14 +691,15 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         
         if (exclude_incomplete_labels == 1) and not use_unlabeled_data:
             incomplete = False
-            for j in range(len(labels)):
-                if not k in labels[j]:
-                    if verbose:
+            if labels is not None:
+                for j in range(len(labels)):
+                    if not k in labels[j]:
+                       # if verbose:
                         print("  missing label " + str(j) + " for subject " + k + ", skipping")
-                    else:
-                        print("O",end="")                        
-                    incomplete = True
-                    break
+                       # else:
+                       #     print("O",end="")                        
+                        incomplete = True
+                        break
             if incomplete:
                 continue
 
@@ -734,8 +735,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     toarr = lambda a: list(map(float,filter(lambda x: x!="",a.split(" "))))
                     bval = toarr(eh['bval'])
                     bvecs = eh['bvec'].split("\n")
-                    bvecs = [toarr(bvecs[0]),toarr(bvecs[1]),toarr(bvecs[2])]                
-                    resolution = { 'voxsize' : resolution, 'bval':bval,'bvec':bvecs}
+                    bvecs = [toarr(bvecs[0]),toarr(bvecs[1]),toarr(bvecs[2])]       
+                    resolution['bval'] = bval;
+                    resolution['bvec'] = bvecs;
                 except Exception as e:
                     print('exthdr found, expect diff.info. , but failed to parse ...')
                 
@@ -958,6 +960,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                         img = load_nifti(fname)   
                         if verbose: 
                             print("   loading file:" + fname)
+                            
+                            
                         #if nD == 3:
                         sz1 = img.header.get_data_shape()
                         sz2 = template_nii.header.get_data_shape()
@@ -974,6 +978,15 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                                     img= resample_from_to(img, (template_shape + (img.shape[-1],),template_affine),order=order,cval=label_cval)
                         else:
                             resolution['output_edges'] = img.affine
+
+
+                            
+                        if len(img.header.extensions) > 0:
+                            exthdr = str(img.header.extensions[0].get_content())
+                            exthdr = exthdr.replace("\\n","").replace("\'","")
+                            exthdr = exthdr[1:]
+                            resolution['exthdr'] = {'xml':exthdr}
+
                             
                         img = np.squeeze(img.get_fdata());
                         img,_ = crop_spatial(img,scrop)                        
@@ -1134,6 +1147,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                 
             labelset.append(labs)
 
+        
+
+
+
         resolutions.append(resolution)
         subjects_names.append(k)
         
@@ -1149,6 +1166,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
         return trainset,classset,resolutions,subjects_names;
     if labels is not None:
         return trainset,labelset,resolutions,subjects_names;
+
+    return trainset,resolutions,subjects_names;
 
 
 def renderpoints(header,ftype,nD,normalize=False,img_inputcontrast=None):
@@ -1317,7 +1336,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,typ='localma
                 R = tf.meshgrid(list(range(0,labelidx.shape[1])),list(range(0,labelidx.shape[2])),list(range(0,labelidx.shape[3])),indexing='ij')                
                 R = list(map(lambda x: tf.cast(tf.expand_dims(x,nD),dtype=tf.float32),R))
                 X = tf.concat([1+0.0*p,p,p*R[0],p*R[1],p*R[2]],nD)
-            labelidx = tf.squeeze(labelidx,0)            
+                labelidx = tf.squeeze(labelidx,0)
             num_labels = tf.reduce_max(labelidx)
             accum = tf.scatter_nd(labelidx,X,[num_labels+1,nD+2])
             vol = accum[:,1:2]

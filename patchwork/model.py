@@ -984,13 +984,16 @@ class PatchWorkModel(Model):
         
             
          if hasattr(r[0],'QMembedding') and not init:
-            print("do full QM pred.")
             if True:
+                print("doing QM prediction")
                 for k in level:
                    idx,probs = r[0].QMembedding.apply(res[k])
+                   #idx = tf.cast(res[k][...,0],dtype=tf.int64)
+                   #probs = res[k][...,0]
                    probs = probs/tf.reduce_max(probs)
                    res[k] = tf.concat([idx,tf.cast(probs*10000,dtype=tf.int64)],-1)
             else:
+                print("doing FULL QM pred.")
                 for k in level:
                    _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
                 
@@ -1037,6 +1040,7 @@ class PatchWorkModel(Model):
                  crop_sdim=None,
                  out_typ='int16',
                  label_names=None,
+                 label_colors=None,
                  testIT=False,
                  verbose=False,
                  return_nibabel=True,
@@ -1077,7 +1081,7 @@ class PatchWorkModel(Model):
 
 
       if label_names is None:
-          if self.info is not None:
+          if self.info is not None:              
               if 'annotations_selector' in self.info:
                   if 'labels' in self.info['annotations_selector']:
                     lbls = self.info['annotations_selector']['labels']
@@ -1227,7 +1231,7 @@ class PatchWorkModel(Model):
                  fac = 32000/maxi                    
              elif out_typ == 'uint8':
                  fac = 255/maxi                    
-             elif out_typ == 'float32':
+             elif out_typ == 'float32' or out_typ == 'float' or out_typ == 'single':
                  fac = 1        
              elif (out_typ.find('mask') != -1) | (out_typ.find('atls') != -1):
 
@@ -1294,7 +1298,9 @@ class PatchWorkModel(Model):
                          if len(tmp.shape) == nD:
                              tmp = tf.cast(tmp,dtype=tf.int32)
                          else:
-                             tmp = (np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0)
+                             tmp = tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1)
+                             probs = tf.expand_dims(np.int32( np.amax(res_,axis=-1) * 10000),-1) * np.int32(tmp>0)
+                             
                      out_typ = 'uint16'
                          
                      if self.cropper.categorial_label is not None:
@@ -1306,33 +1312,41 @@ class PatchWorkModel(Model):
                      
                      
                      pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
-                     
-                     
-                     colors = [[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255],[0,255,255],[255,128,0],[255,0,128],[128,255,128],[0,128,255],[128,128,128],[185,170,155]]
-                     xmlpre = '<?xml version="1.0" encoding="UTF-8"?> <CaretExtension>  <Date><![CDATA[2013-07-14T05:45:09]]></Date>   <VolumeInformation Index="0">   <LabelTable>'
-                     body = ''
-                     
-                     num_labels = self.num_labels
-                     
-                     if self.cropper.categorical:                         
-                         num_labels = self.num_labels-1
-                     for k in range(num_labels):
-                        key = k+1
-                        if self.cropper.categorial_label is not None:
-                            key = self.cropper.categorial_label_original[k]
-                        
-                        if label_names is None:
-                            labelname = "L" + str(k+1)
+                     #j = KColormap.jet; str = ""; for (var k = 0; k < 256; k++) str += "[" +j[0][k] +"," +j[1][k] +"," +j[2][k] +"],"; 
+                     if self.info is not None and 'xml' in self.info:
+                        xml = self.info['xml']
+                     else:
+                         colors = [[0,0,0],[0,0,135],[0,0,139],[0,0,143],[0,0,147],[0,0,151],[0,0,155],[0,0,159],[0,0,163],[0,0,167],[0,0,171],[0,0,175],[0,0,179],[0,0,183],[0,0,187],[0,0,191],[0,0,195],[0,0,199],[0,0,203],[0,0,207],[0,0,211],[0,0,215],[0,0,219],[0,0,223],[0,0,227],[0,0,231],[0,0,235],[0,0,239],[0,0,243],[0,0,247],[0,0,251],[0,0,255],[0,4,255],[0,8,255],[0,12,255],[0,16,255],[0,20,255],[0,24,255],[0,28,255],[0,32,255],[0,36,255],[0,40,255],[0,44,255],[0,48,255],[0,52,255],[0,56,255],[0,60,255],[0,64,255],[0,68,255],[0,72,255],[0,76,255],[0,80,255],[0,84,255],[0,88,255],[0,92,255],[0,96,255],[0,100,255],[0,104,255],[0,108,255],[0,112,255],[0,116,255],[0,120,255],[0,124,255],[0,128,255],[0,131,255],[0,135,255],[0,139,255],[0,143,255],[0,147,255],[0,151,255],[0,155,255],[0,159,255],[0,163,255],[0,167,255],[0,171,255],[0,175,255],[0,179,255],[0,183,255],[0,187,255],[0,191,255],[0,195,255],[0,199,255],[0,203,255],[0,207,255],[0,211,255],[0,215,255],[0,219,255],[0,223,255],[0,227,255],[0,231,255],[0,235,255],[0,239,255],[0,243,255],[0,247,255],[0,251,255],[0,255,255],[4,255,251],[8,255,247],[12,255,243],[16,255,239],[20,255,235],[24,255,231],[28,255,227],[32,255,223],[36,255,219],[40,255,215],[44,255,211],[48,255,207],[52,255,203],[56,255,199],[60,255,195],[64,255,191],[68,255,187],[72,255,183],[76,255,179],[80,255,175],[84,255,171],[88,255,167],[92,255,163],[96,255,159],[100,255,155],[104,255,151],[108,255,147],[112,255,143],[116,255,139],[120,255,135],[124,255,131],[128,255,128],[131,255,124],[135,255,120],[139,255,116],[143,255,112],[147,255,108],[151,255,104],[155,255,100],[159,255,96],[163,255,92],[167,255,88],[171,255,84],[175,255,80],[179,255,76],[183,255,72],[187,255,68],[191,255,64],[195,255,60],[199,255,56],[203,255,52],[207,255,48],[211,255,44],[215,255,40],[219,255,36],[223,255,32],[227,255,28],[231,255,24],[235,255,20],[239,255,16],[243,255,12],[247,255,8],[251,255,4],[255,255,0],[255,251,0],[255,247,0],[255,243,0],[255,239,0],[255,235,0],[255,231,0],[255,227,0],[255,223,0],[255,219,0],[255,215,0],[255,211,0],[255,207,0],[255,203,0],[255,199,0],[255,195,0],[255,191,0],[255,187,0],[255,183,0],[255,179,0],[255,175,0],[255,171,0],[255,167,0],[255,163,0],[255,159,0],[255,155,0],[255,151,0],[255,147,0],[255,143,0],[255,139,0],[255,135,0],[255,131,0],[255,128,0],[255,124,0],[255,120,0],[255,116,0],[255,112,0],[255,108,0],[255,104,0],[255,100,0],[255,96,0],[255,92,0],[255,88,0],[255,84,0],[255,80,0],[255,76,0],[255,72,0],[255,68,0],[255,64,0],[255,60,0],[255,56,0],[255,52,0],[255,48,0],[255,44,0],[255,40,0],[255,36,0],[255,32,0],[255,28,0],[255,24,0],[255,20,0],[255,16,0],[255,12,0],[255,8,0],[255,4,0],[255,0,0],[251,0,0],[247,0,0],[243,0,0],[239,0,0],[235,0,0],[231,0,0],[227,0,0],[223,0,0],[219,0,0],[215,0,0],[211,0,0],[207,0,0],[203,0,0],[199,0,0],[195,0,0],[191,0,0],[187,0,0],[183,0,0],[179,0,0],[175,0,0],[171,0,0],[167,0,0],[163,0,0],[159,0,0],[155,0,0],[151,0,0],[147,0,0],[143,0,0],[139,0,0],[135,0,0],[131,0,0],[128,0,0]]
+                         #colors = [[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255],[0,255,255],[255,128,0],[255,0,128],[128,255,128],[0,128,255],[128,128,128],[185,170,155]]
+                         xmlpre = '<?xml version="1.0" encoding="UTF-8"?> <CaretExtension>  <Date><![CDATA[2013-07-14T05:45:09]]></Date>   <VolumeInformation Index="0">   <LabelTable>'
+                         body = ''
+                         
+                         num_labels = self.num_labels
+                         
+                         if self.cropper.categorical:                         
+                             num_labels = self.num_labels-1
+                         for k in range(num_labels):
+                            key = k+1
                             if self.cropper.categorial_label is not None:
-                                if k+1 != self.cropper.categorial_label_original[k]:
-                                    labelname = "L" + str(k+1) +"_"+ str(self.cropper.categorial_label_original[k])
-                                    
-                        else:
-                            labelname = label_names[k] + "-" + str(k+1)
-                        rgb = colors[k%len(colors)]
-                        body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
-                     xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
-                     xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n              "
+                                key = self.cropper.categorial_label_original[k]
+                            
+                            if label_names is None:
+                                labelname = "L" + str(k+1)
+                                if self.cropper.categorial_label is not None:
+                                    if k+1 != self.cropper.categorial_label_original[k]:
+                                        labelname = "L" + str(k+1) +"_"+ str(self.cropper.categorial_label_original[k])
+                                        
+                            else:
+                                labelname = label_names[k] + "-" + str(k+1)
+                            if label_colors is None:     
+                                rgb = colors[(key*32)%256]
+                                #rgb = colors[k%len(colors)]
+                            else:
+                                rgb = label_colors[k]
+                            body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
+                         xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
+                         xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n              "
+                     
                      pred_nii.header.extensions.append(nib.nifti1.Nifti1Extension(0,bytes(xml,'utf-8')))
 
                      
@@ -1353,8 +1367,11 @@ class PatchWorkModel(Model):
              return pred_nii
                         
           if isinstance(ofname,list):
-             for s in range(len(ofname)):                    
-                 pred_nii = savenii(ofname[s],res[...,s],out_typ,s)
+             if len(ofname) == 1:
+                 pred_nii = savenii(ofname[0],res,out_typ)
+             else:
+                 for s in range(len(ofname)):                    
+                     pred_nii = savenii(ofname[s],res[...,s],out_typ,s)
           else:
              pred_nii = savenii(ofname,res,out_typ)
               
@@ -2010,7 +2027,7 @@ class PatchWorkModel(Model):
         
         scalarLabels = False
         
-        if len(labelset[trainidx[0]].shape) == 1:
+        if len(labelset[trainidx[0]].shape) == 2:
             scalarLabels = True
         
         
@@ -2019,18 +2036,18 @@ class PatchWorkModel(Model):
 
 
         def trainalt_step(i):
-            
                 with tf.GradientTape() as tape:                    
                   losslog = {}
                   theloss = [0]*self.cropper.depth
                   total = 0
                   for k in range(len(trainidx)):        
+                      print(".",end="" )                      
                       c_data = getSample([trainidx[k]],num_patches,lazyEval=lazyTrain,
                                                                    skipLabels=scalarLabels)    
                       preds = self(c_data.getInputData(), training=True,lazyEval=lazyTrain)
                       for i in range(len(preds)):
                           if scalarLabels:
-                              p = tf.expand_dims(tf.reduce_max(preds[i]),0)
+                              p = tf.expand_dims(tf.expand_dims(tf.reduce_max(preds[i]),0),1)
                               theloss[i] += loss[i](labelset[trainidx[k]],p)
                           else:
                               p = preds[i]
@@ -2038,32 +2055,45 @@ class PatchWorkModel(Model):
                           total = total + theloss[i]
                     
                   for i in range(len(theloss)):
-                     losslog.update({'out_'+str(i) : tf.reduce_mean(theloss[i]) })
-                     
-                self.myhist.accum('train',[losslog],len(trainidx),tensors=True,mean=True)
-                self.trained_epochs+=len(trainidx)
-    
-                for k in losslog:
-                    print(k + ":" + str(losslog[k].numpy()),end=" ")            
-                    
+                     losslog.update({'out_'+str(i) : tf.reduce_mean(theloss[i])/len(trainidx) })
+                                         
                             
                 gradients = tape.gradient(total,trainvars)
                 self.optimizer.apply_gradients(zip(gradients, trainvars))
 
+                return losslog
 
-        if (not "trainalt_step" in self.compiled) or recompile_loss_optim:
-            if debug:
-                self.compiled["trainalt_step"] = trainalt_step
-            else:
-                self.compiled["trainalt_step"] = tf.function(trainalt_step)
+        # if (not "trainalt_step" in self.compiled) or recompile_loss_optim:
+        #     if debug:
+        #         self.compiled["trainalt_step"] = trainalt_step
+        #     else:
+        #         self.compiled["trainalt_step"] = tf.function(trainalt_step)
+
 
         for i in range(num_its):
             start = timer()
-            trainalt_step(i)
-            print("elapsed  %.3fs"%(timer()-start),flush=True)
+            losslog = trainalt_step(i)
+            
+            self.myhist.accum('train',[losslog],len(trainidx),tensors=True,mean=True)
+            self.trained_epochs+=len(trainidx)
 
+            print("")
+            for k in losslog:
+                    print(k + ":" + str(losslog[k].numpy()),end=" ")            
+            
+            print("elapsed %.3fs   time per image: %.3fs"%((timer()-start),(timer()-start)/len(trainidx)),flush=True)
+
+            if autosave:
+               if self.modelname is None:
+                   print("no name given, not able to save model!")
+               else:
+                   self.save(self.modelname)
+    
             if showplot:
                 self.myhist.show_train_stat()
+                
+            if callback is not None:
+                callback(i)
 
 
     else:
@@ -2240,7 +2270,10 @@ class PatchWorkModel(Model):
                     end = timer()                
                     print( "  %.2f ms/sample " % (1000*(end-sttime)/(numsamples+numsamples_unl)))
                     for k in log:
-                        print(k + ":" + str(log[k][0]),end=" ")
+                        if len(log[k][0].shape)==0 or log[k][0].shape[0] < 10 :
+                            print(k + ":" + str(log[k][0]),end=" ")
+                        else:
+                            print(k + ": mean=" + str( np.mean(log[k][0])),end=" ")
                     print("")
                     print("learning rate: " + str(self.optimizer._decayed_lr(tf.float32).numpy()))
     
@@ -2282,7 +2315,7 @@ class PatchWorkModel(Model):
                           
                       labelfreqs = tf.concat(labelfreqs,1)
                       labelfreqs = labelfreqs / (0.00001+tf.reduce_sum(labelfreqs,axis=0))
-                      probs = tf.reduce_mean(labelfreqs,axis=1,keepdims=True)
+                      probs = tf.reduce_max(labelfreqs,axis=1,keepdims=True)
                       probs = tf.concat([probs,tf.expand_dims(c_data.getAge(),1)],1)
                       c_data.subsetProb(probs,hard_mining_ratio,hard_mining_maxage)    
                       
