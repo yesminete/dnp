@@ -104,7 +104,7 @@ def createUnet_v1(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,
 
 
 def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False,nonlin=None,
-                  padding='SAME',centralDense=None,noBridge=False,verbose=False,input_shape=None):
+                  padding='SAME',centralDense=None,noBridge=False,upsample2=False,verbose=False,input_shape=None):
   if nD == 3:
       strides = [2,2,2]
       if input_shape is not None:
@@ -207,7 +207,11 @@ def createUnet_v2(depth=4,outK=1,multiplicity=1,feature_dim=5,nD=3,dropout=False
       else:
           theLayers["9_final"] =  [layers.SpatialDropout2D(rate=float(dropout)), conv(outK)]
   else:
-      theLayers["9_final"] =  conv(outK)
+      if upsample2:
+          strides = [2]*nD
+          theLayers["9_final2"] =  conv_up(outK,0)
+      else:
+          theLayers["9_final"] =  conv(outK)
       
   #return patchwork.CNNblock(theLayers,verbose=verbose)
   return CNNblock(theLayers,verbose=verbose)
@@ -736,8 +740,7 @@ class QMembedding(layers.Layer):
           bsize = self.numC
       nchunks = self.numC//bsize
       for k in range(nchunks):
-          end = max(E.shape[0],(k+1)*bsize)
-          
+          end = min(E.shape[0],(k+1)*bsize)
           if self.bias == 1:
               p = tf.einsum('...i,ji->...j',r,E[k*bsize:end,0:-1]) + E[k*bsize:end,-1]
           else:

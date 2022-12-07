@@ -1549,12 +1549,12 @@ class CropGenerator():
                 parent_box_index_label = compindex(lbox,local_boxes,lshape,patch_shapes[level],
                                      pixel_noise,self.interp_type,0)
                 
-
+                
 
         # the index which scatters output into the global image        
         if dest_shapes[level] is not None and not training:
             vratio = tf.concat([patch_shapes[level]/out_patch_shapes[level],[1]],0)
-            local_boxes_out = tf.einsum('Nbxy,y->Nbxy',local_boxes,vratio)            
+            local_boxes_out = tf.einsum('Nbxy,y->Nbxy',local_boxes,vratio)      
             parent_box_scatter_index = compindex(dest_edges[level],local_boxes_out,dest_shapes[level],out_patch_shapes[level],
                                                  0,self.scatter_type,0)
         else:
