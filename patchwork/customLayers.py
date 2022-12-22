@@ -731,10 +731,17 @@ class QMembedding(layers.Layer):
     } )    
     return config
     
-  def apply(self, r, full=False,bsize=16):
+  def apply(self, r, full=False,bsize=16,params={}):
+              
+      ison = lambda y: (y in params and params[y])
+      
+      typ = tf.int64
+      
       E = self.weight
-      idx = tf.zeros(r.shape[0:-1],dtype=tf.int64)
+      idx = tf.zeros(r.shape[0:-1],dtype=typ)
       maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
+      sump = tf.zeros(r.shape[0:-1],dtype=tf.float32)
+      expval = tf.zeros(r.shape[0:-1],dtype=tf.float32)
       tmp = []
       if bsize > self.numC:
           bsize = self.numC
@@ -746,12 +753,18 @@ class QMembedding(layers.Layer):
           else:
               p = tf.einsum('...i,ji->...j',r,E[k*bsize:end,:]) 
                     
-          if full:
+          p = tf.math.exp(p)
+          sump = sump + tf.reduce_sum(p,-1)
+          if ison('full'):
               tmp.append(tf.expand_dims(p,-1))
-              
-          #if k == 0:
-          #    bgnd = p[...,-1]
-              
+          if 'partial' in params:
+              for i in params['partial']:
+                  if i>=(k*bsize) and i < end:
+                      tmp.append(tf.expand_dims(p[...,i-k*bsize],-1))
+          if 'expval' in params:
+              w = tf.cast(params['expval'][k*bsize:end],dtype=tf.float32)
+              expval = expval + tf.einsum('...i,i->...',p,w)
+                            
           Mp = tf.reduce_max(p,-1)  
           Mi = tf.argmax(p,-1)
             
@@ -759,15 +772,22 @@ class QMembedding(layers.Layer):
           maxp = tf.where(Mp>maxp,Mp,maxp)
 
       maxp = tf.where(idx==0,0.0,maxp)  
-      if full:
-          tmp = tf.concat(tmp,-1)
-          maxp = tf.expand_dims(maxp,-1)
-          idx = tf.expand_dims(idx,-1)
-          return idx,maxp,tmp
-      else:
-          maxp = tf.expand_dims(maxp,-1)
-          idx = tf.expand_dims(idx,-1)
-          return idx,maxp
+      maxp = 10000.0*maxp/sump
+      maxp = tf.expand_dims(maxp,-1)
+      idx = tf.expand_dims(idx,-1)
+  
+      
+      cast = lambda x: tf.cast(x,dtype=typ)
+      retlist = [idx,cast(maxp)]
+      
+      if ison('embedding'):
+          retlist.append(cast(50.0*r))
+      if 'expval' in params:
+          retlist.append(cast(tf.expand_dims(50.0*expval/sump,-1)))
+      if ison('full') or 'partial' in params:
+          tmp = 10000.0*tf.concat(tmp,-1)/tf.expand_dims(sump,-1)
+          retlist.append(cast(tmp))
+      return tf.concat(retlist,-1)
       
 
   def call(self, image):         

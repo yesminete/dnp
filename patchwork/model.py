@@ -561,8 +561,11 @@ class PatchWorkModel(Model):
             assert res_nonspatial is not None, "no classifier output for attention in lazyEval available!!"
             attention = res_nonspatial[:,0]
         else:
-            if lazyEval['label'] is None:        
-                attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+            if lazyEval['label'] is None:                        
+                if hasattr(res,'QMembedding'):
+                    attention = reduceFun(attentionFun(res[...,0:res.QMembedding.embedD]),axis=list(range(1,nD+2)))                  
+                else:
+                    attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
             else:
                 attention = reduceFun(attentionFun(res[...,lazyEval['label']:lazyEval['label']+1]),axis=list(range(1,nD+2)))                  
                 
@@ -738,6 +741,7 @@ class PatchWorkModel(Model):
                  max_patching=False,
                  patch_stats= False,
                  stitch_immediate=False,
+                 QMapply_paras={},
                  testIT=False
                  ):
 
@@ -984,19 +988,9 @@ class PatchWorkModel(Model):
         
             
          if hasattr(r[0],'QMembedding') and not init:
-            if True:
-                print("doing QM prediction")
-                for k in level:
-                   idx,probs = r[0].QMembedding.apply(res[k])
-                   #idx = tf.cast(res[k][...,0],dtype=tf.int64)
-                   #probs = res[k][...,0]
-                   probs = probs/tf.reduce_max(probs)
-                   res[k] = tf.concat([idx,tf.cast(probs*10000,dtype=tf.int64)],-1)
-            else:
-                print("doing FULL QM pred.")
-                for k in level:
-                   _,_,res[k] = r[0].QMembedding.apply(res[k],full=True)
-                
+            print("doing QM prediction")
+            for k in level:
+               res[k] = r[0].QMembedding.apply(res[k],params=QMapply_paras)
 
          if single:
            res = res[level[0]]
@@ -1044,6 +1038,7 @@ class PatchWorkModel(Model):
                  testIT=False,
                  verbose=False,
                  return_nibabel=True,
+                 QMapply_paras={},
                  lazyEval = None):
 
       def crop_spatial(img,c):
@@ -1173,6 +1168,7 @@ class PatchWorkModel(Model):
                                         sparse_suppression=sparse_suppression,
                                         verbose=verbose,
                                         testIT=testIT,
+                                        QMapply_paras=QMapply_paras,
                                         scale_to_original=scale_to_original)
 
 
@@ -1281,10 +1277,10 @@ class PatchWorkModel(Model):
                      probs = None
                      if out_typ == 'idx':
                          tmp = res_[...,0:1]
-                         probs = res_[...,1:2]
+                         probs = res_[...,1:]
                          threshold_ = int(10000*ce_threshold)
-                         tmp = tf.where(probs<threshold_,0,tmp)
-                         probs = tf.where(probs<threshold_,0,probs)
+                         tmp = tf.where(probs[...,0:1]<threshold_,0,tmp)
+                        # probs = tf.where(probs<threshold_,0,probs)
                          tmp = np.int32(tmp)
                      elif self.cropper.categorical:           
                          tmp = np.expand_dims(np.argmax(res_,axis=-1),-1)
@@ -1301,7 +1297,7 @@ class PatchWorkModel(Model):
                              tmp = tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1)
                              probs = tf.expand_dims(np.int32( np.amax(res_,axis=-1) * 10000),-1) * np.int32(tmp>0)
                              
-                     out_typ = 'uint16'
+                     out_typ = 'int16'
                          
                      if self.cropper.categorial_label is not None:
                          idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
@@ -1717,7 +1713,8 @@ class PatchWorkModel(Model):
         cnt = 0
         if self.cropper.categorial_label is not None:
             if hasattr(pred,'QMembedding'):
-                predQM,probs = pred.QMembedding.apply(pred)
+                predQM = pred.QMembedding.apply(pred)
+                predQM = predQM[...,0:1]
             for j in self.cropper.categorial_label:
                 if hasattr(pred,'QMembedding'):
                     f1_ = tf.reduce_mean(f1_metric(tf.cast(label==j,dtype=tf.float32),tf.cast(predQM==j,tf.float32),from_logits=from_logits))
