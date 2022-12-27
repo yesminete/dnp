@@ -745,7 +745,7 @@ class QMembedding(layers.Layer):
       tmp = []
       if bsize > self.numC:
           bsize = self.numC
-      nchunks = self.numC//bsize
+      nchunks = self.numC//bsize+1
       for k in range(nchunks):
           end = min(E.shape[0],(k+1)*bsize)
           if self.bias == 1:
