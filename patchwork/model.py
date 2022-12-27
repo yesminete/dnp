@@ -1171,7 +1171,6 @@ class PatchWorkModel(Model):
                                         QMapply_paras=QMapply_paras,
                                         scale_to_original=scale_to_original)
 
-
       if along4dim:
           res = []
           for k in range(a.shape[nD+1]):
@@ -1294,8 +1293,10 @@ class PatchWorkModel(Model):
                          if len(tmp.shape) == nD:
                              tmp = tf.cast(tmp,dtype=tf.int32)
                          else:
-                             tmp = tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1)
+                             tmp = np.int32(tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1))
                              probs = tf.expand_dims(np.int32( np.amax(res_,axis=-1) * 10000),-1) * np.int32(tmp>0)
+                             res = tf.concat([tmp,probs],-1)
+                             
                              
                      out_typ = 'int16'
                          

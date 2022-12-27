@@ -1295,7 +1295,7 @@ def loadAnnotation(annos,asdict=True):
                 
             
         
-def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,typ='localmax',maxpoints=50,nD=3,size=2):
+def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,colormap=None,typ='localmax',maxpoints=50,nD=3,size=2):
 
     x = tf.expand_dims(res,0)
     if len(x.shape) < 5:
@@ -1369,12 +1369,15 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,typ='localma
             points_raw.append(p)
             
             name = 'L'+str(theidx)+' score:'+str(score)
+            col = colorhex[theidx%len(colorhex)]
             if namemap is not None:
                 name = namemap(theidx,score)
+            if colormap is not None:
+                col = colormap(theidx)
             if not np.isnan(p[0]):
                 points.append({ 'coords': [float(p[0]),float(p[1]),float(p[2]),1],
                                 'name': name,
-                                'color': colorhex[theidx%len(colorhex)],
+                                'color': col,
                                 'size': size                              
                     })
     
