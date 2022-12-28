@@ -741,11 +741,13 @@ class QMembedding(layers.Layer):
       idx = tf.zeros(r.shape[0:-1],dtype=typ)
       maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
       sump = tf.zeros(r.shape[0:-1],dtype=tf.float32)
-      expval = tf.zeros(r.shape[0:-1],dtype=tf.float32)
+      expval = 0 #tf.zeros(r.shape[0:-1],dtype=tf.float32)
       tmp = []
       if bsize > self.numC:
           bsize = self.numC
-      nchunks = self.numC//bsize+1
+          nchunks = 1
+      else:
+          nchunks = self.numC//bsize+1
       for k in range(nchunks):
           end = min(E.shape[0],(k+1)*bsize)
           if self.bias == 1:
@@ -762,8 +764,11 @@ class QMembedding(layers.Layer):
                   if i>=(k*bsize) and i < end:
                       tmp.append(tf.expand_dims(p[...,i-k*bsize],-1))
           if 'expval' in params:
-              w = tf.cast(params['expval'][k*bsize:end],dtype=tf.float32)
-              expval = expval + tf.einsum('...i,i->...',p,w)
+              w = tf.cast(params['expval'],dtype=tf.float32)
+              if len(w.shape) == 1:
+                  w = tf.expand_dims(w,0)
+              w = w[:,k*bsize:end]                  
+              expval = expval + tf.einsum('...i,ji->...j',p,w)
                             
           Mp = tf.reduce_max(p,-1)  
           Mi = tf.argmax(p,-1)
@@ -783,7 +788,7 @@ class QMembedding(layers.Layer):
       if ison('embedding'):
           retlist.append(cast(50.0*r))
       if 'expval' in params:
-          retlist.append(cast(tf.expand_dims(50.0*expval/sump,-1)))
+          retlist.append(cast(50.0*expval/tf.expand_dims(sump,-1)))
       if ison('full') or 'partial' in params:
           tmp = 10000.0*tf.concat(tmp,-1)/tf.expand_dims(sump,-1)
           retlist.append(cast(tmp))
