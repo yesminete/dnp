@@ -733,15 +733,18 @@ class QMembedding(layers.Layer):
     
   def apply(self, r, full=False,bsize=16,params={}):
               
+      from math import prod
+      
       ison = lambda y: (y in params and params[y])
       
-      typ = tf.int64
+      typ = tf.int32
       
       E = self.weight
       idx = tf.zeros(r.shape[0:-1],dtype=typ)
       maxp = tf.zeros(r.shape[0:-1],dtype=tf.float32)
       sump = tf.zeros(r.shape[0:-1],dtype=tf.float32)
       expval = 0 #tf.zeros(r.shape[0:-1],dtype=tf.float32)
+      maxidxperlabel = []
       tmp = []
       if bsize > self.numC:
           bsize = self.numC
@@ -759,6 +762,10 @@ class QMembedding(layers.Layer):
           sump = sump + tf.reduce_sum(p,-1)
           if ison('full'):
               tmp.append(tf.expand_dims(p,-1))
+          if 'maxperlabel' in params:
+              tmp = tf.reshape(p,[ prod(p.shape[0:-1]), p.shape[-1] ])
+              maxidxperlabel.append(tf.argmax(tmp,0))
+              
           if 'partial' in params:
               for i in params['partial']:
                   if i>=(k*bsize) and i < end:
@@ -771,16 +778,24 @@ class QMembedding(layers.Layer):
               expval = expval + tf.einsum('...i,ji->...j',p,w)
                             
           Mp = tf.reduce_max(p,-1)  
-          Mi = tf.argmax(p,-1)
+          Mi = tf.cast(tf.argmax(p,-1),dtype=typ)
             
           idx  = tf.where(Mp>maxp,Mi+k*bsize,idx)
           maxp = tf.where(Mp>maxp,Mp,maxp)
+
+      idx = tf.where(r[...,0]==0,tf.cast(0,dtype=typ),idx)
 
       maxp = tf.where(idx==0,0.0,maxp)  
       maxp = 10000.0*maxp/sump
       maxp = tf.expand_dims(maxp,-1)
       idx = tf.expand_dims(idx,-1)
   
+      if len(maxidxperlabel) > 0:
+          maxidxperlabel = tf.concat(maxidxperlabel,0)
+          Z = tf.expand_dims(tf.math.mod(maxidxperlabel,r.shape[2]),1)
+          Y = tf.expand_dims(tf.math.mod(tf.math.floordiv(maxidxperlabel,r.shape[2]),r.shape[1]),1)
+          X = tf.expand_dims(tf.math.mod(tf.math.floordiv(maxidxperlabel,r.shape[2]*r.shape[1]),r.shape[0]),1)
+          maxidxperlabel_tensor = tf.concat([X, Y, Z],1)          
       
       cast = lambda x: tf.cast(x,dtype=typ)
       retlist = [idx,cast(maxp)]
@@ -792,7 +807,11 @@ class QMembedding(layers.Layer):
       if ison('full') or 'partial' in params:
           tmp = 10000.0*tf.concat(tmp,-1)/tf.expand_dims(sump,-1)
           retlist.append(cast(tmp))
-      return tf.concat(retlist,-1)
+      
+      if len(maxidxperlabel) > 0:
+         return tf.concat(retlist,-1),maxidxperlabel_tensor
+      else:
+         return tf.concat(retlist,-1)
       
 
   def call(self, image):         

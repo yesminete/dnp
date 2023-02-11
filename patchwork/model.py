@@ -742,7 +742,8 @@ class PatchWorkModel(Model):
                  patch_stats= False,
                  stitch_immediate=False,
                  QMapply_paras={},
-                 testIT=False
+                 testIT=False,
+                 votemap=False
                  ):
 
 
@@ -953,6 +954,8 @@ class PatchWorkModel(Model):
                         fac = np.math.pow(0.2,len(pred)-1-k)
                         pr = tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k][...,0:last_fdim],0),dest_shape,True,nD,edge_center=False))
                         vr = tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k][...,0:last_fdim],0),dest_shape,True,nD,edge_center=False))
+                        if len(pr.shape) == len(vr.shape)+1:
+                            vr = tf.expand_dims(vr,-1)
                         pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
                         pred_votes = pred_votes + fac*tf.squeeze(pr/(vr+0.00001))
                     res = [pred_votes / (pred_on+0.00001)]
@@ -966,6 +969,11 @@ class PatchWorkModel(Model):
                         res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b**2+sparse_suppression*3) )    
                     else:
                         res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
+                        
+                    if votemap:
+                        for k in level:                        
+                            res[k] = tf.concat([res[k],sumpred[k]],-1)
+                        
              
                 
          if sampling_factor > 1:    
@@ -985,12 +993,23 @@ class PatchWorkModel(Model):
                     res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
          
         
-        
+         maxidxperlabel = None
             
          if hasattr(r[0],'QMembedding') and not init:
             print("doing QM prediction")
             for k in level:
-               res[k] = r[0].QMembedding.apply(res[k],params=QMapply_paras)
+               if votemap:
+                   tmp = r[0].QMembedding.apply(res[k][...,:-1],params=QMapply_paras)     
+                   if isinstance(tmp,tuple):
+                       maxidxperlabel = tmp[1]                   
+                       tmp = tmp[0]
+                   res[k] = tf.concat([tmp,tf.cast(res[k][...,-1:],dtype=tf.int32)],-1)
+               else:
+                   tmp = r[0].QMembedding.apply(res[k],params=QMapply_paras)
+                   if isinstance(tmp,tuple):
+                       res[k] = tmp[0]
+                       maxidxperlabel = tmp[1]
+                   
 
          if single:
            res = res[level[0]]
@@ -1003,7 +1022,10 @@ class PatchWorkModel(Model):
                  pstats = pstats[level[0]]
              return res,pstats
          else:
-             return res
+             if maxidxperlabel is not None:
+                 return res,maxidxperlabel
+             else:
+                 return res
      
      return r[0]
 
@@ -1036,6 +1058,7 @@ class PatchWorkModel(Model):
                  label_names=None,
                  label_colors=None,
                  testIT=False,
+                 votemap=False,
                  verbose=False,
                  return_nibabel=True,
                  QMapply_paras={},
@@ -1126,14 +1149,13 @@ class PatchWorkModel(Model):
 
           a = img1.get_fdata()
           
-          if crop_fdim is not None:
+          if crop_fdim is not None and crop_fdim:
              if len(a.shape) > nD:
                 if crop_fdim == 'mean':
                     a = np.mean(a,axis=-1)
                 else:                    
                     a = a[...,crop_fdim]
 
-        
           a,scrop = crop_spatial(a,scrop)
       
           a = np.expand_dims(np.squeeze(a),0)
@@ -1141,6 +1163,8 @@ class PatchWorkModel(Model):
               a = np.expand_dims(a,nD+1)
           a = tf.convert_to_tensor(a,dtype=self.cropper.ftype)
           ims.append(a)
+          
+          
       a = tf.concat(ims,nD+1)
       
       
@@ -1168,17 +1192,26 @@ class PatchWorkModel(Model):
                                         sparse_suppression=sparse_suppression,
                                         verbose=verbose,
                                         testIT=testIT,
+                                        votemap=votemap,
                                         QMapply_paras=QMapply_paras,
                                         scale_to_original=scale_to_original)
 
       if along4dim:
-          res = []
+          res = []          
           for k in range(a.shape[nD+1]):
               res.append(tf.expand_dims(do_app(a[...,k:k+1]),nD))
           res = tf.concat(res,nD)             
+          if along4dim == 'mean':
+              res = tf.reduce_mean(res,axis=-1,keepdims=True)
           
       else:         
           res = do_app(a)
+          
+      maxidxperlabel = None
+      if isinstance(res,tuple):
+          maxidxperlabel = res[1]
+          res = res[0]
+          
           
       if hasattr(res,'numpy'):
           res = res.numpy()
@@ -1186,7 +1219,7 @@ class PatchWorkModel(Model):
       if nD == 2:
           if len(res.shape) == 3:         
               res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2]])
-          if along4dim:
+          if along4dim == True:
               res = np.reshape(res,[res.shape[0],res.shape[1],1,res.shape[2],res.shape[3]])
           img1.header.set_data_shape(res.shape)
           
@@ -1344,6 +1377,7 @@ class PatchWorkModel(Model):
                          xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
                          xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n              "
                      
+                     pred_nii.header.extensions.clear()
                      pred_nii.header.extensions.append(nib.nifti1.Nifti1Extension(0,bytes(xml,'utf-8')))
 
                      
@@ -1375,9 +1409,15 @@ class PatchWorkModel(Model):
             
       if pred_nii is not None:        
           if return_nibabel:
-              return pred_nii,res
+              if maxidxperlabel is not None:
+                  return pred_nii,res,maxidxperlabel
+              else:
+                  return pred_nii,res
           else:
-              return newaffine,res
+              if maxidxperlabel is not None:              
+                  return newaffine,res,maxidxperlabel
+              else:
+                  return newaffine,res
       else:
           return res
 
@@ -1499,6 +1539,7 @@ class PatchWorkModel(Model):
                 initdat = dummyData
             print("----------------- load/init network by minimal application")
             dummy = model.apply_full(initdat,resolution={"input_edges":np.eye(4),"voxsize":[0.01,0.01,0.01]},
+                                     sampling_factor=0.2,
                                      verbose=False,scale_to_original=False,generate_type='random',repetitions=1,init=True)        
             print("----------------- model and weights loaded")
         except:

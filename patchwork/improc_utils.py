@@ -611,6 +611,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            crop_fdim_labels=None,
                            crop_sdim=None,
                            crop_only_nonzero=False,
+                           unravel_lastdim=False,
                            reslice_labels=True,
                            label_transform=None,
                            integer_labels=False,
@@ -738,8 +739,9 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     bvecs = [toarr(bvecs[0]),toarr(bvecs[1]),toarr(bvecs[2])]       
                     resolution['bval'] = bval;
                     resolution['bvec'] = bvecs;
+                    print('successfully read diff. info from exthdr')                    
                 except Exception as e:
-                    print('exthdr found, expect diff.info. , but failed to parse ...')
+                    pass
                 
             header = img.header
             if template_nii is None:
@@ -1127,9 +1129,14 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             labs = labs_
             
             
-                
         imgs = tf.concat(imgs,nD+1)        
-        trainset.append(imgs)
+        if unravel_lastdim:
+            n_lastdim = imgs.shape[-1]
+            print('*' + str(n_lastdim))
+            for j in range(n_lastdim):
+                trainset.append(imgs[...,j:j+1])
+        else:            
+            trainset.append(imgs)
         
         if classes is not None:
             tmp = tf.convert_to_tensor(classes[k],dtype=ftype)
@@ -1144,15 +1151,36 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
             if integer_labels:
                 labs = tf.cast(labs,dtype=tf.int16)
                 
-                
-            labelset.append(labs)
+            if unravel_lastdim:
+                if n_lastdim != labs.shape[-1]:
+                    if unravel_lastdim == 'onlyinput':
+                        if labs.shape[-1] != 1:
+                            print("input fdim:"+str(n_lastdim))
+                            print("shapelabels: "+str(labs.shape))
+                            print('from ' + fname)
+                            assert 0,'label matrix has a lastdim which is not 1'                        
+                        for j in range(n_lastdim):
+                            labelset.append(labs[...,0:1])
+                    else:
+                        print("input fdim:"+str(n_lastdim))
+                        print("shapelabels: "+str(labs.shape))
+                        print('from ' + fname)
+                        assert 0,'label matrix and image do have the same lastdim'
+                else:
+                    for j in range(n_lastdim):
+                        labelset.append(labs[...,j:j+1])
+            else:           
+                labelset.append(labs)
 
         
 
-
-
-        resolutions.append(resolution)
-        subjects_names.append(k)
+        if unravel_lastdim:
+            for j in range(n_lastdim):            
+                resolutions.append(resolution)
+                subjects_names.append(k + "_" + str(j))
+        else:
+            resolutions.append(resolution)
+            subjects_names.append(k)
         
         if max_num_data is not None and len(trainset) >= max_num_data:
             break
@@ -1309,6 +1337,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,colormap=Non
         points_raw = []
         
         if typ == 'localmax':
+            x = tf.cast(x,dtype=tf.float32)
             if nD == 2:
                 x = tf.squeeze(x,-1)
                 if labelidx is not None:
@@ -1380,6 +1409,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,colormap=Non
                                 'color': col,
                                 'size': size                              
                     })
+            points = sorted(points,key=lambda x:x['name'])
     
         print("number of local maxima after NMS: "  + str(len(points)))
             
@@ -1393,7 +1423,7 @@ def getLocalMaximas(res,affine,threshold,idxMode=False,namemap=None,colormap=Non
         for s in range(0,x.shape[4]):
             points = points + getLM(x[...,s:s+1],labelnum=s)
 
-
+    
         
     annotation = { "type":"pointset",
                    "state":{},

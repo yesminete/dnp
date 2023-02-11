@@ -216,7 +216,7 @@ def stitchResult_normal(r,level, scales,scatter_type,window=None):
                 win = tf.math.sqrt(tf.math.abs(win))
             return tf.scatter_nd(pbox_index,qq*win,sha), tf.scatter_nd(pbox_index,(qq*0+1)*win,sha);
         else:        
-            return tf.scatter_nd(pbox_index,qq,sha), tf.scatter_nd(pbox_index,qq*0+1,sha);
+            return tf.scatter_nd(pbox_index,qq,sha), (tf.scatter_nd(pbox_index,qq*0+1,sha))[...,0:1];
     else:
         return scatter_interp(pbox_index,qq,sha)
 
@@ -1481,6 +1481,7 @@ class CropGenerator():
                     
             return E,R,A
         
+        #-------- end drawboxes
     
         if level == 0:        
             last_boxes = src_boxes
