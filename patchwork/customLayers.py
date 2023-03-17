@@ -1118,7 +1118,7 @@ custom_layers['sigmoid_window'] = sigmoid_window
 
 class warpLayer(layers.Layer):
 
-  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), nD=0,typ=None,**kwargs):
+  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), edges=None, nD=0,typ=None,**kwargs):
     super().__init__(**kwargs)
     nD = len(shape)-1
     self.nD = nD
@@ -1129,6 +1129,10 @@ class warpLayer(layers.Layer):
         self.shape_mult = tf.expand_dims(self.shape_mult,0)
     self.weight = self.add_weight(shape=shape, 
                         initializer=initializer, trainable=False,name=self.name)    
+    self.edges = None
+    if edges is not None:
+        self.edges = tf.cast(edges,dtype=tf.float32)
+        self.edges = tf.linalg.inv(self.edges)
     
         
   def lin_interp(self,data,x):
@@ -1164,17 +1168,21 @@ class warpLayer(layers.Layer):
   def call(self, image):
      if self.typ == 'xyz':
         C = image
+        if self.edges is not None:
+            C = tf.einsum('bxyzi,ji->bxyzj',C,self.edges[0:3,0:3]) +  self.edges[0:3,-1]
+            
+        
      else:
         C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
         C = C/(np.pi*2)
+        C = C*tf.cast(self.shape_mult-1,dtype=tf.float32)
      #C = tf.where(C>0.99,0.99,C)     
-     C = C*tf.cast(self.shape_mult-1,dtype=tf.float32)
      C = tf.where(C<0,0.0,C)
      C = tf.where(C>self.shape_mult-2,self.shape_mult-2,C)
           
      nD = self.nD
      W = self.lin_interp(self.weight,C)
-     W = W * 0.0005
+     #W = W * 0.0005
     # m = tf.reduce_mean(W,keepdims=True,axis=range(1,nD+1))
      #sd = tf.math.reduce_std(W,keepdims=True,axis=range(1,nD+1))
     # W = W/(0.00001+m)

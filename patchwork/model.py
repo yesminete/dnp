@@ -1009,6 +1009,8 @@ class PatchWorkModel(Model):
                    if isinstance(tmp,tuple):
                        res[k] = tmp[0]
                        maxidxperlabel = tmp[1]
+                   else:
+                       res[k] = tmp
                    
 
          if single:
@@ -2024,8 +2026,11 @@ class PatchWorkModel(Model):
            r = tf.range(1,self.num_labels+1)
        for k in range(len(labelset)):
             maxi  = max(c) # tf.reduce_max(labelset[k])
-            #maxi  = tf.reduce_max(labelset[k])
+            #maxi  = tf.reduce_max(labelset[k])+
+            
             dontcarelabel = labelset[k]==-1
+
+            
             labelset[k] = tf.where(dontcarelabel,0,labelset[k])
             labelset[k] = tf.where(labelset[k]>tf.cast(maxi,dtype=labelset[k].dtype),0,labelset[k])
             categorial_label_idxmap=  tf.scatter_nd( tf.expand_dims(c,1), r, [maxi+1])      
