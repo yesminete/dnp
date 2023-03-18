@@ -990,7 +990,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                             resolution['exthdr'] = {'xml':exthdr}
 
                             
-                        img = np.squeeze(img.get_fdata());
+                        img = np.squeeze(img.get_fdata(dtype=np.float32));
+
                         img,_ = crop_spatial(img,scrop)                        
                         if crop_fdim_labels is not None:
                             if len(img.shape) > nD:
@@ -1149,7 +1150,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     print('label matrix inconsistent: ' + fname)
 
             if integer_labels:
-                labs = tf.cast(labs,dtype=tf.int16)
+                labs = tf.cast(tf.round(labs),dtype=tf.int16)
                 
             if unravel_lastdim:
                 if n_lastdim != labs.shape[-1]:
@@ -1481,3 +1482,16 @@ def align_to_physical_coords(im):
     return  nib.nifti1.Nifti1Image(d, newaff , header=im.header)
 
 
+
+
+def nifti_grid(shape,edges,nD=3):
+    sz = shape
+    ftype = tf.float32
+    X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
+    X = tf.expand_dims(tf.expand_dims(tf.cast(X,dtype=ftype),0),-1)
+    Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
+    Z = tf.expand_dims(tf.expand_dims(tf.cast(Z,dtype=ftype),0),-1)
+    N = tf.concat([X,Y,Z],nD+1)       
+    N = tf.einsum('bxyzi,ji->bxyzj',N,edges[0:3,0:3]) +  tf.cast(edges[0:3,-1],dtype=tf.float32)
+
+    return N         
