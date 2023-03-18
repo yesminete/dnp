@@ -1782,7 +1782,54 @@ def createCNNBlockFromObj(obj,custom_objects=None):
       return CNNblock(theLayers)
       
 
-
+def MutualInfoGaussian(x,y,nbins=10,sigma=0.5,nD=2,eps=10**-7):
+    
+    def parzen(a):  # a (b,x,y,z)
+        amin = tf.reduce_min(a,range(1,nD+1),keepdims=True)
+        amax = tf.reduce_max(a,range(1,nD+1),keepdims=True)
+        a = tf.expand_dims((a-amin)/(amax-amin+0.00001)*nbins,-1)
+        c = tf.range(nbins)
+        c = tf.cast(c,tf.float32)
+        for k in range(nD+1): c = tf.expand_dims(c,0)
+        w = tf.exp(-(a-c)**2/sigma**2) # (b,x,y,z,nbins)
+        w = w/tf.reduce_sum(w,-1,keepdims=True)
+        p = tf.reduce_mean(w,range(1,nD+1)) # (b,nbins)
+        return p,w
+        
+    px,wx = parzen(x)
+    py,wy = parzen(y)
+    if nD == 1:
+        pxy = tf.einsum('bxn,bxm->bnm',wx,wy)
+    elif nD == 2:
+        pxy = tf.einsum('bxyn,bxym->bnm',wx,wy)
+    elif nD == 3:
+        pxy = tf.einsum('bxyzn,bxyzm->bnm',wx,wy)
+    N = tf.reduce_prod(wx.shape[1:-1])
+    pxy = pxy / tf.cast(N,tf.float32)
+    px = tf.expand_dims(px,-1)
+    py = tf.expand_dims(py,-2)
+    mi = tf.reduce_sum(pxy * tf.math.log( (pxy + eps) / (px*py+eps) + eps ),[-1,-2])
+    return mi
+        
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
 

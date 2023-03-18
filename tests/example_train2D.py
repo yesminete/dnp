@@ -24,8 +24,9 @@ import multiprocessing
 
 sys.path.append("/home/reisertm")
 sys.path.append("/software")
-import patchwork_dev.patchwork as patchwork
+import patchwork_master.patchwork as patchwork
 
+#%%
 if __name__ != '__main__':
     print("CUDA_VISIBLE_DEVICES=-1")
     os.environ['CUDA_VISIBLE_DEVICES'] = "-1"
