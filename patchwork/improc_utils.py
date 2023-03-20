@@ -725,6 +725,8 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                 
             if img.shape[2] == 1:
                 resolution = np.sqrt(np.sum(img.affine[:,0:2]**2,axis=0))
+                resolution = {"voxsize": img.header['pixdim'][1:3], "input_edges":img.affine}
+                
             else:    
                 resolution = {"voxsize": img.header['pixdim'][1:4], "input_edges":img.affine}
             
@@ -1487,11 +1489,24 @@ def align_to_physical_coords(im):
 def nifti_grid(shape,edges,nD=3):
     sz = shape
     ftype = tf.float32
-    X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
-    X = tf.expand_dims(tf.expand_dims(tf.cast(X,dtype=ftype),0),-1)
-    Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
-    Z = tf.expand_dims(tf.expand_dims(tf.cast(Z,dtype=ftype),0),-1)
-    N = tf.concat([X,Y,Z],nD+1)       
-    N = tf.einsum('bxyzi,ji->bxyzj',N,edges[0:3,0:3]) +  tf.cast(edges[0:3,-1],dtype=tf.float32)
+    if nD ==3:
+        X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
+        X = tf.expand_dims(tf.expand_dims(tf.cast(X,dtype=ftype),0),-1)
+        Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
+        Z = tf.expand_dims(tf.expand_dims(tf.cast(Z,dtype=ftype),0),-1)
+        N = tf.concat([X,Y,Z],nD+1)       
+        N = tf.einsum('bxyzi,ji->bxyzj',N,edges[0:nD,0:nD]) +  tf.cast(edges[0:nD,-1],dtype=tf.float32)
+    else:
+        X,Y = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),indexing='ij')
+        X = tf.expand_dims(tf.expand_dims(tf.cast(X,dtype=ftype),0),-1)
+        Y = tf.expand_dims(tf.expand_dims(tf.cast(Y,dtype=ftype),0),-1)
+        N = tf.concat([X,Y],nD+1)       
+        a = edges[[0,1,3],:]
+        a = a[:,[0,1,3]]
+        N = tf.einsum('bxyi,ji->bxyj',N,a[0:nD,0:nD]) +  tf.cast(a[0:nD,-1],dtype=tf.float32)
+
+        
+        
+        
 
     return N         

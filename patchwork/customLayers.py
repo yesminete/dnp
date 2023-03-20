@@ -1166,10 +1166,14 @@ class warpLayer(layers.Layer):
    
 
   def call(self, image):
+     
      if self.typ == 'xyz':
         C = image
         if self.edges is not None:
-            C = tf.einsum('bxyzi,ji->bxyzj',C,self.edges[0:3,0:3]) +  self.edges[0:3,-1]
+            if self.nD == 2:
+                C = tf.einsum('bxyi,ji->bxyj',C,self.edges[0:2,0:2]) +  self.edges[0:2,-1]
+            else:
+                C = tf.einsum('bxyzi,ji->bxyzj',C,self.edges[0:3,0:3]) +  self.edges[0:3,-1]
             
         
      else:
