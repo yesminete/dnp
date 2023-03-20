@@ -1114,11 +1114,96 @@ class sigmoid_window(layers.Layer):
 custom_layers['sigmoid_window'] = sigmoid_window
     
 
+class deformLayer(layers.Layer):
+
+  def __init__(self,fdims=[32,32,32],nD=3,scale=10,strength=5,**kwargs):
+    super().__init__(**kwargs)
+    self.scale = scale
+    self.strength = strength
+    self.nD = nD
+    self.fdims = fdims
+    self.conv = []
+    if nD == 2:
+        cop = lambda n,**kwargs: layers.Conv2D(n,1,**kwargs)
+    else:
+        cop = lambda n,**kwargs: layers.Conv3D(n,1,**kwargs)
+    for k in self.fdims:
+        self.conv.append(cop(k,use_bias=True))
+        #                     kernel_initializer=tf.keras.initializers.RandomNormal,
+         #                    bias_initializer=tf.keras.initializers.RandomNormal))
+    self.conv.append(layers.BatchNormalization())
+    self.conv_final=cop(nD,use_bias=False)
+
+  def call(self, image):
+      
+     x = image/self.scale
+     for k in range(len(self.conv)):
+         x = self.conv[k](x)
+         x = tf.math.cos(x)
+         
+     x = self.conv_final(x)    
+     x = image+self.strength*x
+     return x
+ 
+custom_layers['deformLayer'] = deformLayer
+
+class affineLayer(layers.Layer):
+
+  def __init__(self,nD=3,**kwargs):
+    super().__init__(**kwargs)
+    def initg(shape,dtype=None):
+        return tf.random.normal(shape)*0
+    def initt(shape,dtype=None):
+        return tf.random.normal(shape)*0
+
+    self.nD = nD
+    self.gen = self.add_weight(shape=[nD,nD], 
+                        initializer=initg, trainable=True,name=self.name)    
+    self.trans= self.add_weight(shape=[nD], 
+                        initializer=initt, trainable=True,name=self.name)    
+
+  def call(self, image):
+     A = tf.linalg.expm(self.gen)
+     x = tf.einsum('mn,...n->...m',A,image) + self.trans
+     return x
+         
+custom_layers['affineLayer'] = affineLayer
 
 
+class lieLayer(layers.Layer):
+
+  def __init__(self,edges,shape,sfac=10,nD=3,sens=0.01,trainable=True,**kwargs):
+    super().__init__(**kwargs)
+    
+    shape = tf.cast(shape,dtype=tf.int32)
+    edges = np.matmul(edges,np.array([[sfac,0,0,0],
+                                    [0,sfac,0,0],
+                                    [0,0,sfac,0],
+                                    [0,0,0,1]]))
+    shape = tf.TensorShape(tf.cast(shape / sfac,dtype=tf.int32))
+    self.fac = sens
+    self.nD = nD
+    self.shape = shape
+    if trainable:
+        initializer=tf.keras.initializers.Zeros()
+    else:
+        initializer=tf.keras.initializers.RandomNormal()
+        
+    self.warp = warpLayer(shape+[nD*(nD+1)],initializer=initializer,edges=edges,typ='xyz',nD=nD,trainable=trainable)
+
+  def call(self, image):
+     x = self.warp(image)
+     nD = self.nD
+     A = tf.linalg.expm(self.fac*tf.reshape(x[...,0:(nD*nD)],x.shape[0:nD+1] + [2,2]))
+     delta = x[...,(nD*nD):nD*(nD+1)]
+     y = tf.einsum('...mn,...n->...m',A,image) + delta*self.fac*1000
+     return y
+ 
+custom_layers['lieLayer'] = lieLayer
+    
 class warpLayer(layers.Layer):
 
-  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), edges=None, nD=0,typ=None,**kwargs):
+  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), edges=None, nD=0,typ=None,trainable=False,**kwargs):
     super().__init__(**kwargs)
     nD = len(shape)-1
     self.nD = nD
@@ -1128,7 +1213,7 @@ class warpLayer(layers.Layer):
     for k in range(nD+1):
         self.shape_mult = tf.expand_dims(self.shape_mult,0)
     self.weight = self.add_weight(shape=shape, 
-                        initializer=initializer, trainable=False,name=self.name)    
+                        initializer=initializer, trainable=trainable,name=self.name)    
     self.edges = None
     if edges is not None:
         self.edges = tf.cast(edges,dtype=tf.float32)
