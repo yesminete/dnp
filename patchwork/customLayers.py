@@ -1149,22 +1149,23 @@ custom_layers['deformLayer'] = deformLayer
 
 class affineLayer(layers.Layer):
 
-  def __init__(self,nD=3,**kwargs):
+  def __init__(self,nD=3,sensA=1,sensT=1000,**kwargs):
     super().__init__(**kwargs)
     def initg(shape,dtype=None):
-        return tf.random.normal(shape)*0
+        return tf.random.normal(shape)*0.001
     def initt(shape,dtype=None):
-        return tf.random.normal(shape)*0
+        return tf.random.normal(shape)/sensT
 
     self.nD = nD
     self.gen = self.add_weight(shape=[nD,nD], 
                         initializer=initg, trainable=True,name=self.name)    
     self.trans= self.add_weight(shape=[nD], 
                         initializer=initt, trainable=True,name=self.name)    
-
+    self.sensT=sensT
+    self.sensA=sensA
   def call(self, image):
-     A = tf.linalg.expm(self.gen)
-     x = tf.einsum('mn,...n->...m',A,image) + self.trans
+     A = tf.linalg.expm(self.gen*self.sensA)
+     x = tf.einsum('mn,...n->...m',A,image) + self.trans*self.sensT
      return x
          
 custom_layers['affineLayer'] = affineLayer
@@ -1172,31 +1173,47 @@ custom_layers['affineLayer'] = affineLayer
 
 class lieLayer(layers.Layer):
 
-  def __init__(self,edges,shape,sfac=10,nD=3,sens=0.01,trainable=True,**kwargs):
+  def __init__(self,edges,shape,sfac=10,nD=3,sens=0.001,sensT=1000,trainable=True,affine=False,**kwargs):
     super().__init__(**kwargs)
     
-    shape = tf.cast(shape,dtype=tf.int32)
-    edges = np.matmul(edges,np.array([[sfac,0,0,0],
-                                    [0,sfac,0,0],
-                                    [0,0,sfac,0],
-                                    [0,0,0,1]]))
-    shape = tf.TensorShape(tf.cast(shape / sfac,dtype=tf.int32))
     self.fac = sens
+    self.sensT = sensT
     self.nD = nD
-    self.shape = shape
+    self.affine = affine
     if trainable:
         initializer=tf.keras.initializers.Zeros()
     else:
         initializer=tf.keras.initializers.RandomNormal()
         
-    self.warp = warpLayer(shape+[nD*(nD+1)],initializer=initializer,edges=edges,typ='xyz',nD=nD,trainable=trainable)
+    self.sfac = list(sfac)
+    self.warp = []
+    if affine:
+        ds = [nD*(nD+1)]
+    else:
+        ds = [nD]
+    for k in range(len(sfac)):
+        shape_ = tf.cast(shape,dtype=tf.int32)
+        edges_ = np.matmul(edges,np.array([[sfac[k],0,0,0],
+                                        [0,sfac[k],0,0],
+                                        [0,0,sfac[k],0],
+                                        [0,0,0,1]]))
+        shape_ = tf.TensorShape(tf.cast(shape_ / sfac[k],dtype=tf.int32))
+        self.warp.append(warpLayer(shape_+ds,initializer=initializer,edges=edges_,typ='xyz',nD=nD,trainable=trainable))
+
+  def distort(self,sigma):
+      self.warp.set_weights(list(map(lambda x: x+tf.random.normal(x.shape,stddev=sigma), self.warp.get_weights())))
 
   def call(self, image):
-     x = self.warp(image)
+     x = 0
+     for k in range(len(self.warp)):
+         x = x + self.warp[k](image)*self.sfac[k]
      nD = self.nD
-     A = tf.linalg.expm(self.fac*tf.reshape(x[...,0:(nD*nD)],x.shape[0:nD+1] + [2,2]))
-     delta = x[...,(nD*nD):nD*(nD+1)]
-     y = tf.einsum('...mn,...n->...m',A,image) + delta*self.fac*1000
+     if self.affine:
+         A = tf.linalg.expm(self.fac*tf.reshape(x[...,0:(nD*nD)],x.shape[0:nD+1] + [nD,nD]))
+         delta = x[...,(nD*nD):nD*(nD+1)]
+         y = tf.einsum('...mn,...n->...m',A,image) + delta*self.fac*self.sensT
+     else:
+         y = image + x[...,0:nD]*self.fac*1000
      return y
  
 custom_layers['lieLayer'] = lieLayer
@@ -1252,6 +1269,8 @@ class warpLayer(layers.Layer):
 
   def call(self, image):
      
+      
+     #%%
      if self.typ == 'xyz':
         C = image
         if self.edges is not None:
@@ -1265,19 +1284,28 @@ class warpLayer(layers.Layer):
         C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
         C = C/(np.pi*2)
         C = C*tf.cast(self.shape_mult-1,dtype=tf.float32)
-     #C = tf.where(C>0.99,0.99,C)     
-     C = tf.where(C<0,0.0,C)
-     C = tf.where(C>self.shape_mult-2,self.shape_mult-2,C)
+     #C = tf.where(C>0.99,0.99,C)    
+     
+     
+     
+     low = C<=0
+     up = C>self.shape_mult-2
+     C = tf.where(low,0.0,C)
+     C = tf.where(up,self.shape_mult-2,C)
           
      nD = self.nD
      W = self.lin_interp(self.weight,C)
+     valid = tf.math.logical_not(tf.reduce_any(tf.math.logical_or(low,up),axis=-1,keepdims=True))
+
+     W = tf.where(valid,W,0.0)
+     #%%
      #W = W * 0.0005
     # m = tf.reduce_mean(W,keepdims=True,axis=range(1,nD+1))
      #sd = tf.math.reduce_std(W,keepdims=True,axis=range(1,nD+1))
     # W = W/(0.00001+m)
      
      
-     return tf.concat([W,image],self.nD+1)
+     return tf.concat([W,tf.cast(valid,dtype=tf.float32),image],self.nD+1)
      
       
   def get_config(self):
@@ -1879,7 +1907,7 @@ def createCNNBlockFromObj(obj,custom_objects=None):
       return CNNblock(theLayers)
       
 
-def MutualInfoGaussian(x,y,nbins=10,sigma=0.5,nD=2,eps=10**-7):
+def MutualInfoGaussian(x,y,nbins=10,sigma=0.5,nD=2,eps=10**-7,mask=None):
     
     def parzen(a):  # a (b,x,y,z)
         amin = tf.reduce_min(a,range(1,nD+1),keepdims=True)
@@ -1906,7 +1934,7 @@ def MutualInfoGaussian(x,y,nbins=10,sigma=0.5,nD=2,eps=10**-7):
     px = tf.expand_dims(px,-1)
     py = tf.expand_dims(py,-2)
     mi = tf.reduce_sum(pxy * tf.math.log( (pxy + eps) / (px*py+eps) + eps ),[-1,-2])
-    return mi
+    return -mi
         
     
     

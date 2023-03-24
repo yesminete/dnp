@@ -312,7 +312,7 @@ class CropGenerator():
                     
                     transforms = None,
                     input_dim_extension = -1,
-                    system = 'matrix',
+                    system = 'world',
                     snapper = None,
                     smoothfac_data = 0,  # 
                     smoothfac_label = 0, #
@@ -1431,10 +1431,11 @@ class CropGenerator():
                 assert False, "not a valid generate_type"
     
             # snap overlapping patches on edges
-            if snapper[level] == 1:
+            if snapper[level] > 0:
+                snapfac = snapper[level]
                 snap = ed(multiply1(shape-1,out_width/width*0.5))
-                points = tf.where(points < snap*1, snap,points)
-                points = tf.where(points > ed(shape-1)-snap*1, ed(shape-1)-snap,points)
+                points = tf.where(points < snap*snapfac, snap*snapfac,points)
+                points = tf.where(points > ed(shape-1)-snap*snapfac, ed(shape-1)-snap*snapfac,points)
             
             points = tf.einsum('bxy,Nby->Nbx',edges[...,0:nD,0:nD],points) + tf.expand_dims(edges[...,0:nD,-1],0)
             points = tf.reshape(points,[b*N,nD])

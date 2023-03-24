@@ -149,6 +149,9 @@ class myHistory :
         import warnings
         warnings.filterwarnings('ignore', '.*plotlib is currently using agg.*', )
 
+        import matplotlib as mpl
+        mpl.use('Agg')
+
         import matplotlib.pyplot as plt
         from matplotlib import gridspec
         

@@ -615,6 +615,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                            reslice_labels=True,
                            label_transform=None,
                            integer_labels=False,
+                           label_negToNan=True,
                            verbose=False,
                            threshold=None,
                            label_cval=np.nan,
@@ -1153,6 +1154,10 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
 
             if integer_labels:
                 labs = tf.cast(tf.round(labs),dtype=tf.int16)
+            else:                
+                if label_negToNan:
+                    labs = tf.where(labs<0,np.nan,labs)
+                
                 
             if unravel_lastdim:
                 if n_lastdim != labs.shape[-1]:
