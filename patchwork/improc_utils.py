@@ -367,7 +367,7 @@ def rep_rans(rans,sizes,nD):
 
 
 
-def resizeNDlinear(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
+def resizeNDlinear_old2(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
 
     if not batch_dim:
         image = tf.expand_dims(image,0)
@@ -579,6 +579,60 @@ def interp3lin(image,X,Y,Z):
 #
 
 
+
+def resizeNDlinear(x,dest_shape,nD=3,batch_dims=0):
+    
+    def lin_interp(data,x):
+  
+        def frac(a):
+            return a-tf.floor(a)
+        if nD == 3:
+            w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]), frac(x[:,..., 2:3])]
+        else:
+            w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]) ]
+  
+        def gather(d,idx,s):
+            q = tf.convert_to_tensor(s)
+            bound = tf.convert_to_tensor(d.shape[batch_dims:batch_dims+nD])
+            for k in range(nD+1):
+                q = tf.expand_dims(q,0)
+                bound = tf.expand_dims(bound,0)
+            idx = idx + q
+            idx = tf.where(idx>=bound,bound-1,idx)        
+                        
+            
+            weight = 1.0
+            for k in range(nD):
+                if s[k] == 1:
+                    weight = weight*w[k]
+                else:
+                    weight = weight*(1-w[k])
+            if batch_dims == 1:                    
+                return tf.gather_nd(d, tf.tile(idx,[d.shape[0],1,1,1,1]) ,batch_dims=1) * weight
+            else:
+                return tf.gather_nd(d, idx ,batch_dims=0) * weight
+        x = tf.cast(x,dtype=tf.int32)
+        if nD == 3:
+            res = gather(data,x,[0,0,0]) + gather(data,x,[1,0,0]) + gather(data,x,[0,1,0]) + gather(data,x,[0,0,1]) + gather(data,x,[0,1,1]) + gather(data,x,[1,0,1]) + gather(data,x,[1,1,0]) + gather(data,x,[1,1,1])
+        else:
+            res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1]) 
+        return res
+       
+    src_shape = x.shape[batch_dims:]
+    f = [(src_shape[i]-1)/(dest_shape[i]-1) for i in range(0,nD)]
+    if nD==2:
+        C = tf.meshgrid(tf.range(0,dest_shape[0],dtype=tf.float32)*f[0],
+                    tf.range(0,dest_shape[1],dtype=tf.float32)*f[1],
+                    indexing='ij')
+    else:
+        C = tf.meshgrid(tf.range(0,dest_shape[0],dtype=tf.float32)*f[0],
+                    tf.range(0,dest_shape[1],dtype=tf.float32)*f[1],
+                    tf.range(0,dest_shape[2],dtype=tf.float32)*f[2],
+                    indexing='ij')
+    C = tf.concat( [ tf.expand_dims(x,-1) for x in C],axis=-1)    
+    return lin_interp(x,C)
+
+
 def bbox2(img):
     if len(img.shape) == 3:
         img = np.max(img,axis=-1)
@@ -725,7 +779,7 @@ def load_data_structured(  contrasts, labels=None, classes=None, subjects=None,
                     print("   loading file:" + fname)           
                 
             if img.shape[2] == 1:
-                resolution = np.sqrt(np.sum(img.affine[:,0:2]**2,axis=0))
+              #  resolution = np.sqrt(np.sum(img.affine[:,0:2]**2,axis=0))
                 resolution = {"voxsize": img.header['pixdim'][1:3], "input_edges":img.affine}
                 
             else:    

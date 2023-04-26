@@ -918,8 +918,11 @@ class PatchWorkModel(Model):
                     start = timer()
                     r = r[0:self.cropper.depth]
                     if (self.spatial_train or max_patching) and not self.spatial_max_train:
-                        if level[0] == 'mix':
-                            level_to_stitch = list(range(0,self.cropper.depth))
+                        if isinstance(level[0],str) and level[0].find('mix') != -1:
+                            s = 0
+                            if len(level[0])>3:
+                                s=int(level[0][3:])
+                            level_to_stitch = list(range(s,self.cropper.depth))
                             mix_levels = True
                             if self.cropper.categorical:
                                 print("mising softmax impl. in mixing proc.")                                
@@ -954,9 +957,11 @@ class PatchWorkModel(Model):
                     start = timer()        
                     last_fdim = pred[-1].shape[-1]
                     for k in range(len(pred)):
+                        if isinstance(pred[k],float):
+                            continue;
                         fac = np.math.pow(0.2,len(pred)-1-k)
-                        pr = tf.squeeze(resizeNDlinear(tf.expand_dims(pred[k][...,0:last_fdim],0),dest_shape,True,nD,edge_center=False))
-                        vr = tf.squeeze(resizeNDlinear(tf.expand_dims(sumpred[k][...,0:last_fdim],0),dest_shape,True,nD,edge_center=False))
+                        pr = tf.squeeze(resizeNDlinear(pred[k][...,0:last_fdim],dest_shape,nD=nD))
+                        vr = tf.squeeze(resizeNDlinear(sumpred[k][...,0:last_fdim],dest_shape,nD=nD))
                         if len(pr.shape) == len(vr.shape)+1:
                             vr = tf.expand_dims(vr,-1)
                         pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
@@ -993,7 +998,7 @@ class PatchWorkModel(Model):
          if scale_to_original:
              with tf.device("/cpu:0"):                
                  for k in level:
-                    res[k] = tf.squeeze(resizeNDlinear(tf.expand_dims(res[k],0),orig_shape,True,nD,edge_center=False))                        
+                    res[k] = tf.squeeze(resizeNDlinear(res[k],orig_shape,nD=nD))
          
         
          maxidxperlabel = None
@@ -1141,7 +1146,8 @@ class PatchWorkModel(Model):
               template_nii = img1
           
               if img1.shape[2] == 1:
-                  resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
+                 # resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
+                  resolution = {"voxsize": img1.header['pixdim'][1:3], "input_edges":img1.affine}                  
               else:
                   if align_physical:
                       img1 = align_to_physical_coords(img1)

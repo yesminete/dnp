@@ -375,10 +375,12 @@ class CropGenerator():
     for k in range(label.shape[0]):
         L = label[k,...]
         L = tf.where(L<0,0,L) 
+        if L.dtype == tf.float32:
+            L = tf.where(tf.math.is_nan(L),0,L)
+            
         if generate_type == 'random_fillholes': # only for application
             L = L
         elif self.categorial_label is None:
-            L = tf.where(tf.math.is_nan(L),0,L)
             if label_weight is not None:
                 L = L*label_weight
         else:

@@ -1163,10 +1163,14 @@ class affineLayer(layers.Layer):
                         initializer=initt, trainable=True,name=self.name)    
     self.sensT=sensT
     self.sensA=sensA
-  def call(self, image):
-     A = tf.linalg.expm(self.gen*self.sensA)
-     x = tf.einsum('mn,...n->...m',A,image) + self.trans*self.sensT
-     return x
+  def call(self, image, inverse=False):
+      if inverse:
+         A = tf.linalg.expm(-self.gen*self.sensA)
+         x = tf.einsum('mn,...n->...m',A,image - self.trans*self.sensT)
+      else:
+         A = tf.linalg.expm(self.gen*self.sensA)
+         x = tf.einsum('mn,...n->...m',A,image) + self.trans*self.sensT
+      return x
          
 custom_layers['affineLayer'] = affineLayer
 
