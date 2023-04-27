@@ -568,7 +568,10 @@ class PatchWorkModel(Model):
                 if hasattr(res,'QMembedding'):
                     attention = reduceFun(attentionFun(res[...,0:res.QMembedding.embedD]),axis=list(range(1,nD+2)))                  
                 else:
-                    attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
+                    if self.cropper.categorical:
+                        attention = reduceFun(attentionFun(res[...,1:self.num_labels]),axis=list(range(1,nD+2)))                  
+                    else:
+                        attention = reduceFun(attentionFun(res[...,0:self.num_labels]),axis=list(range(1,nD+2)))                  
             else:
                 attention = reduceFun(attentionFun(res[...,lazyEval['label']:lazyEval['label']+1]),axis=list(range(1,nD+2)))                  
                 
@@ -924,12 +927,12 @@ class PatchWorkModel(Model):
                                 s=int(level[0][3:])
                             level_to_stitch = list(range(s,self.cropper.depth))
                             mix_levels = True
-                            if self.cropper.categorical:
-                                print("mising softmax impl. in mixing proc.")                                
-                            else:
-                                for k in level_to_stitch:            
-                                  if k < self.cropper.depth-1 or self.finalizeOnApply:
-                                      r[k] = tf.nn.sigmoid(r[k])        
+                            for k in level_to_stitch:            
+                              if k < self.cropper.depth-1 or self.finalizeOnApply:
+                                if self.cropper.categorical:
+                                    r[k] = tf.nn.softmax(r[k])        
+                                else:
+                                    r[k] = tf.nn.sigmoid(r[k])        
                         else:
                             level_to_stitch = level
                         for k in level_to_stitch:            
@@ -962,6 +965,8 @@ class PatchWorkModel(Model):
                         fac = np.math.pow(0.2,len(pred)-1-k)
                         pr = tf.squeeze(resizeNDlinear(pred[k][...,0:last_fdim],dest_shape,nD=nD))
                         vr = tf.squeeze(resizeNDlinear(sumpred[k][...,0:last_fdim],dest_shape,nD=nD))
+                        if sparse_suppression is not None:
+                            vr = tf.math.sqrt(vr**2+sparse_suppression*3)
                         if len(pr.shape) == len(vr.shape)+1:
                             vr = tf.expand_dims(vr,-1)
                         pred_on = pred_on + fac*tf.cast(vr>0,dtype=tf.float32)
@@ -1325,12 +1330,18 @@ class PatchWorkModel(Model):
                          tmp = tf.where(probs[...,0:1]<threshold_,0,tmp)
                         # probs = tf.where(probs<threshold_,0,probs)
                          tmp = np.int32(tmp)
-                     elif self.cropper.categorical:           
+                     elif self.cropper.categorical:      
+                         if votemap:
+                             thevotemap = res_[...,-1:]
+                             res_ = res_[...,0:-1]
                          tmp = np.expand_dims(np.argmax(res_,axis=-1),-1)
                          probs = np.max(res_,axis=-1,keepdims=True)
                          tmp = tf.where(probs<ce_threshold,0.0,tmp)
                          probs = np.int32( (probs * 10000) * np.int32(tmp>0))
+                         if votemap:
+                            probs = tf.concat([probs,thevotemap],-1)
                          tmp = np.int32(tmp)
+                             
                          
                      else:
                          tmp = res_>threshold
