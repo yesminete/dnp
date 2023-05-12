@@ -577,7 +577,9 @@ class PatchWorkModel(Model):
                 
         idx = tf.argsort(attention,0,'DESCENDING')
         if fraction < 1:
-            numps = tf.cast(tf.floor(idx.shape[0]*fraction)+1,dtype=tf.int32)
+            numps = tf.cast(tf.floor(idx.shape[0]*fraction),dtype=tf.int32)
+            if numps == 0:
+                numps = 1
             idx = idx[0:numps]            
 
         if 'batchselection' in lazyEval:
@@ -594,7 +596,7 @@ class PatchWorkModel(Model):
 
       ## get data and cropcoords at currnet scale
       if callable(inputs):
-          inp,coords = inputs(idx=idx)          
+          inp,coords = inputs(idx=idx,output_cropped=last)          
       else:
           inp = inputs['input' + str(k)]
           coords = inputs['cropcoords' + str(k)]
@@ -794,7 +796,7 @@ class PatchWorkModel(Model):
              if 'batches' in lazyEval:
                  lazyEval['fraction'] = 1
              else:
-                 lazyEval['fraction'] = 0.5
+                 lazyEval['fraction'] = 1
          if branch_factor is None and generate_type != 'random':
              branch_factor = round(1/lazyEval['fraction'])
              print("branch factor is " + str(branch_factor))
@@ -843,6 +845,8 @@ class PatchWorkModel(Model):
                 balance = {"ratio":0.9}
                 #print(data.shape)                
                 #print(label_dummy.shape)
+            if lazyEval is not None and 'selfref' in lazyEval:
+                balance = {"selfref":lazyEval['selfref']}
 
             x = self.cropper.sample(data,label_dummy,test=False,generate_type=generate_type,snapper=snapper,
                                     resolutions=resolution,

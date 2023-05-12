@@ -28,9 +28,11 @@ class CropInstanceLazy:
 
   # get input training data 
   def getInputData(self):
-      def getNext(idx=None):          
+      def getNext(idx=None,output_cropped=None):          
           if idx is not None:
               self.lastscale = self.cropper.take_subselection(self.lastscale,idx)
+          if output_cropped is not None:
+              self.lastscale['labels_cropped'] = output_cropped
           self.lastscale = self.localcrop(self.lastscale,self.level)
           self.scales.append(self.lastscale)
           self.level = self.level + 1
@@ -361,7 +363,10 @@ class CropGenerator():
     if len(label.shape) < nD+2:
         label = tf.expand_dims(label,3)
   
-    ratio = balance['ratio']
+    if 'selfref' in balance:
+        ratio = balance['selfref']
+    else:
+        ratio = balance['ratio']
     label_weight = None
     label_reduce = None
     if 'label_reduce' in balance:
@@ -382,7 +387,7 @@ class CropGenerator():
             L = L
         elif self.categorial_label is None:
             if label_weight is not None:
-                L = L*label_weight
+                L = L[...,0:label_weight.shape[-1]]*label_weight
         else:
             if label_weight is not None:
                 if self.categorical:
@@ -829,7 +834,7 @@ class CropGenerator():
           for k in range(len(out_patch_shapes)):
             w = divide1(patch_widths[k],out_patch_shapes[k]-1)
             wperm = tf.gather(w,idxperm)
-            dshape = int32(destshape_size_factor*patch_size_factor*input_width/wperm+1)
+            dshape = int32(tf.round(destshape_size_factor*patch_size_factor*input_width/wperm+1))
             vsz =  divide1(input_width,tensor(dshape-1))
             dedge = tf.matmul(input_edges[0,:,:],tf.linalg.diag(tf.concat([vsz/input_voxsize,[1]],0)))
             dest_edges.append(tf.expand_dims(dedge,0))
@@ -1407,7 +1412,7 @@ class CropGenerator():
             if generate_type == "random" or generate_type == "random_fillholes" or generate_type == "random_deprec":
                 if random_anchors is not None:
                     points = draw_center_from_anchors(random_anchors,edges,shape,N)
-                elif balance is not None:
+                elif balance is not None and label is not None:
                     points = self.draw_center_bylabel(label,balance,generate_type,out_width/width*shape,nD,N)         
                     points = multiply1(shape-1,points)
                 else:
