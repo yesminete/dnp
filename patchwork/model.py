@@ -926,6 +926,7 @@ class PatchWorkModel(Model):
                             if len(level[0])>3:
                                 s=int(level[0][3:])
                             level_to_stitch = list(range(s,self.cropper.depth))
+                            print('mixing: ' + str(level_to_stitch))
                             mix_levels = True
                             for k in level_to_stitch:            
                               if k < self.cropper.depth-1 or self.finalizeOnApply:
@@ -939,6 +940,7 @@ class PatchWorkModel(Model):
                           a,b = x.stitchResult(r,k,window=window)
                           pred[k] += a
                           sumpred[k] += b        
+                        print(">>> #patches last level: " + str(r[-1].shape[0]))
                         print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[level_to_stitch[-1]][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[level_to_stitch[-1]].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
                         print(">>> time elapsed, stitching: " + str(timer() - start) )
                       
@@ -1077,6 +1079,7 @@ class PatchWorkModel(Model):
                  verbose=False,
                  return_nibabel=True,
                  QMapply_paras={},
+                 deprec_2d_res=False,
                  lazyEval = None):
 
       def crop_spatial(img,c):
@@ -1151,8 +1154,10 @@ class PatchWorkModel(Model):
               template_nii = img1
           
               if img1.shape[2] == 1:
-                 # resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
-                  resolution = {"voxsize": img1.header['pixdim'][1:3], "input_edges":img1.affine}                  
+                  if deprec_2d_res:
+                      resolution = np.sqrt(np.sum(img1.affine[:,0:2]**2,axis=0))
+                  else:
+                      resolution = {"voxsize": img1.header['pixdim'][1:3], "input_edges":img1.affine}                  
               else:
                   if align_physical:
                       img1 = align_to_physical_coords(img1)
