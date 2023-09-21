@@ -1224,22 +1224,35 @@ custom_layers['lieLayer'] = lieLayer
     
 class warpLayer(layers.Layer):
 
-  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), edges=None, nD=0,typ=None,trainable=False,**kwargs):
+  def __init__(self, shape, initializer=tf.keras.initializers.Constant(0), edges=None, kfac=None, kcenter=None, nD=0,typ=None,trainable=False,**kwargs):
     super().__init__(**kwargs)
     nD = len(shape)-1
     self.nD = nD
     self.typ=typ
     self.shape = shape
+    self.trainable = trainable
     self.shape_mult = tf.cast(shape[0:nD],dtype=tf.float32)
     for k in range(nD+1):
         self.shape_mult = tf.expand_dims(self.shape_mult,0)
     self.weight = self.add_weight(shape=shape, 
-                        initializer=initializer, trainable=trainable,name=self.name)    
-    self.edges = None
+                        initializer=initializer,name=self.name)    
+    self.edges = edges
     if edges is not None:
-        self.edges = tf.cast(edges,dtype=tf.float32)
-        self.edges = tf.linalg.inv(self.edges)
-    
+        self.edges_ = tf.cast(edges,dtype=tf.float32)        
+        self.edges_ = tf.linalg.inv(self.edges_)
+        
+    self.kfac = kfac    
+    if kfac is None:
+        self.kfac_ = tf.cast(self.shape_mult-1,dtype=tf.float32)/(np.pi*2)
+    else:
+        self.kfac_ = tf.cast(kfac,dtype=tf.float32)/(np.pi*2)
+
+    self.kcenter = kcenter
+    if kcenter is None:
+        self.kcenter_ = tf.cast([0]*nD,dtype=tf.float32)
+    else:
+        self.kcenter_ = tf.cast(kcenter,dtype=tf.float32)
+        
         
   def lin_interp(self,data,x):
     
@@ -1269,47 +1282,64 @@ class warpLayer(layers.Layer):
           else:
               res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1]) 
           return res
-   
+  
 
+
+  def embedCoords(self,wC):
+        wC = (wC-self.kcenter_) / self.kfac_ 
+        return tf.concat([tf.math.cos(wC[...,0:1]),
+                         tf.math.sin(wC[...,0:1]),
+                         tf.math.cos(wC[...,1:2]),
+                         tf.math.sin(wC[...,1:2]),
+                         tf.math.cos(wC[...,2:3]),
+                         tf.math.sin(wC[...,2:3])],self.nD+1)                                   
+    
+  def decodeCoords(self,image):
+        C = -tf.math.atan2(-image[...,1::2],image[...,0::2])            
+        return C*self.kfac_  + self.kcenter_
+    
   def call(self, image):
      
       
      #%%
      if self.typ == 'xyz':
-        C = image
-        if self.edges is not None:
-            if self.nD == 2:
-                C = tf.einsum('bxyi,ji->bxyj',C,self.edges[0:2,0:2]) +  self.edges[0:2,-1]
-            else:
-                C = tf.einsum('bxyzi,ji->bxyzj',C,self.edges[0:3,0:3]) +  self.edges[0:3,-1]
+         C = image
+         if self.edges is not None:
+             if self.nD == 2:
+                C = tf.einsum('bxyi,ji->bxyj',C,self.edges_[0:2,0:2]) +  self.edges_[0:2,-1]
+             else:
+                C = tf.einsum('bxyzi,ji->bxyzj',C,self.edges_[0:3,0:3]) +  self.edges_[0:3,-1]
             
-        
-     else:
-        C = np.pi - tf.math.atan2(image[...,1::2],-image[...,0::2])
-        C = C/(np.pi*2)
-        C = C*tf.cast(self.shape_mult-1,dtype=tf.float32)
-     #C = tf.where(C>0.99,0.99,C)    
-     
-     
-     
-     low = C<=0
-     up = C>self.shape_mult-2
-     C = tf.where(low,0.0,C)
-     C = tf.where(up,self.shape_mult-2,C)
-          
-     nD = self.nD
-     W = self.lin_interp(self.weight,C)
-     valid = tf.math.logical_not(tf.reduce_any(tf.math.logical_or(low,up),axis=-1,keepdims=True))
 
-     W = tf.where(valid,W,0.0)
-     #%%
-     #W = W * 0.0005
-    # m = tf.reduce_mean(W,keepdims=True,axis=range(1,nD+1))
-     #sd = tf.math.reduce_std(W,keepdims=True,axis=range(1,nD+1))
-    # W = W/(0.00001+m)
-     
-     
-     return tf.concat([W,tf.cast(valid,dtype=tf.float32),image],self.nD+1)
+         low = C<=0
+         up = C>self.shape_mult-2
+         C = tf.where(low,0.0,C)
+         C = tf.where(up,self.shape_mult-2,C)
+
+         nD = self.nD
+         W = self.lin_interp(self.weight,C)
+         valid = tf.math.logical_not(tf.reduce_any(tf.math.logical_or(low,up),axis=-1,keepdims=True))
+
+         W = tf.where(valid,W,0.0)
+
+         return tf.concat([W,tf.cast(valid,dtype=tf.float32),image],self.nD+1)
+
+             
+     else:
+         C = self.decodeCoords(image)
+         if self.edges is not None:
+             if self.nD == 2:
+                C = tf.einsum('bxyi,ji->bxyj',C,self.edges_[0:2,0:2]) +  self.edges_[0:2,-1]
+             else:
+                C = tf.einsum('bxyzi,ji->bxyzj',C,self.edges_[0:3,0:3]) +  self.edges_[0:3,-1]
+                        
+         nD = self.nD
+         C = tf.where(C<0,0.0,C)
+         C = tf.where(C>self.shape_mult-2,self.shape_mult-2,C)
+          
+         W = self.lin_interp(self.weight,C)
+        
+         return tf.concat([W,image],self.nD+1)
      
       
   def get_config(self):
@@ -1319,6 +1349,9 @@ class warpLayer(layers.Layer):
             'nD': self.nD,
             'shape': self.shape,
             'typ':self.typ,
+            'edges':self.edges,
+            'kfac':self.kfac,
+            'kcenter':self.kcenter
         } )    
         return config                  
 

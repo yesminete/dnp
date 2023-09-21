@@ -297,7 +297,7 @@ class myHistory :
                     if 'valid_nodisplay_class_f1' in self.validloss_hist:
                         b = tf.squeeze(self.validloss_hist['valid_nodisplay_class_f1'][-1][1])
                         plt.title('f1 scores (valid)')            
-                    else:
+                    elif 'nodisplay_class_f1' in self.trainloss_hist:
                         b = tf.squeeze(self.trainloss_hist['nodisplay_class_f1'][-1][1])
                         plt.title('f1 scores (train)')            
                     if len(b.shape) > 0:
@@ -886,6 +886,7 @@ class PatchWorkModel(Model):
                 r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=False,batch_size=32)
             else:
                 r = self(data_,lazyEval=lazyEval,stitch_immediate=stitch_immediate,testIT=testIT,training=False)
+
                 
             print(">>> time elapsed, network application: " + str(timer() - start) )
             if max_patching:
@@ -927,23 +928,28 @@ class PatchWorkModel(Model):
                     if (self.spatial_train or max_patching) and not self.spatial_max_train:
                         if isinstance(level[0],str) and level[0].find('mix') != -1:
                             s = 0
-                            if len(level[0])>3:
+                            if level[0].find('nohead') == -1 and len(level[0])>3:
                                 s=int(level[0][3:])
                             level_to_stitch = list(range(s,self.cropper.depth))
                             print('mixing: ' + str(level_to_stitch))
                             mix_levels = True
-                            for k in level_to_stitch:            
-                              if k < self.cropper.depth-1 or self.finalizeOnApply:
-                                if self.cropper.categorical:
-                                    r[k] = tf.nn.softmax(r[k])        
-                                else:
-                                    r[k] = tf.nn.sigmoid(r[k])        
+                            if level[0].find('nohead') == -1:
+                                for k in level_to_stitch:            
+                                  if k < self.cropper.depth-1 or self.finalizeOnApply:
+                                    if self.cropper.categorical:
+                                        r[k] = tf.nn.softmax(r[k])        
+                                    else:
+                                        r[k] = tf.nn.sigmoid(r[k])        
                         else:
                             level_to_stitch = level
                         for k in level_to_stitch:            
-                          a,b = x.stitchResult(r,k,window=window)
+                          a,b = x.stitchResult(r,k,window=window)                          
+
+                             
                           pred[k] += a
-                          sumpred[k] += b        
+                          sumpred[k] += b         
+                        
+                  
                         print(">>> #patches last level: " + str(r[-1].shape[0]))
                         print(">>> coverage: " + str(round(100*(tf.reduce_sum(tf.cast(sumpred[level_to_stitch[-1]][...,0]>0,dtype=tf.float32))/ tf.cast(tf.reduce_prod(sumpred[level_to_stitch[-1]].shape[0:nD]),dtype=tf.float32)).numpy())) + "%")
                         print(">>> time elapsed, stitching: " + str(timer() - start) )
@@ -988,7 +994,7 @@ class PatchWorkModel(Model):
                         res = zipper(pred,sumpred,lambda a,b : a/tf.math.sqrt(b**2+sparse_suppression*3) )    
                     else:
                         res = zipper(pred,sumpred,lambda a,b : a/(b+0.00001) )    
-                        
+                          
                     if votemap:
                         for k in level:                        
                             res[k] = tf.concat([res[k],sumpred[k]],-1)
@@ -1034,7 +1040,8 @@ class PatchWorkModel(Model):
 
          if single:
            res = res[level[0]]
-     
+
+        
          end = timer()
          print(">>> total time elapsed: " + str(end - start_total) )
          
@@ -1076,6 +1083,8 @@ class PatchWorkModel(Model):
                  crop_fdim=None,
                  crop_sdim=None,
                  out_typ='int16',
+                 postproc=None,
+                 ccana=None,
                  label_names=None,
                  label_colors=None,
                  testIT=False,
@@ -1085,6 +1094,38 @@ class PatchWorkModel(Model):
                  QMapply_paras={},
                  deprec_2d_res=False,
                  lazyEval = None):
+        
+
+      def conncomp(data):
+            if ccana is None:
+                return data
+
+            import cc3d    
+            print('computing connected components')
+            f = getattr(cc3d,ccana['typ'])    
+            if 'params' in ccana:
+                params = ccana['params']
+            else:
+                if ccana['typ'] == 'largest_k':
+                    params = {'k':1}
+                elif ccana['typ'] == 'dust':
+                    params = {'threshold':100}
+            g = lambda x: f(x,**params)
+            if nD == 3:
+                if len(data.shape) == 3:
+                    data = g(data)
+                else:
+                   for k in range(0,data.shape[3]):
+                      print('.')
+                      data[:,:,:,k] = g(data[:,:,:,k])
+            if nD == 2:
+                if len(data.shape) == 2:
+                    data = g(data)
+                else:
+                    for k in range(0,data.shape[2]):
+                       print('.')
+                       data[:,:,k] = g(data[:,:,k])
+            return data
 
       def crop_spatial(img,c):
         if crop_sdim is not None:
@@ -1108,6 +1149,7 @@ class PatchWorkModel(Model):
             return img,c
         else:
             return img,None
+    
     
       if align_physical is None:
           align_physical = self.align_physical
@@ -1237,6 +1279,8 @@ class PatchWorkModel(Model):
           maxidxperlabel = res[1]
           res = res[0]
           
+      if postproc is not None:
+         res = postproc(res)
           
       if hasattr(res,'numpy'):
           res = res.numpy()
@@ -1272,6 +1316,7 @@ class PatchWorkModel(Model):
                                                       [0,1/facs[1],0,offs[1]],
                                                       [0,0,1/facs[2],offs[2]],
                                                       [0,0,0,1]]))
+      
       pred_nii = None
       if ofname is not None:
           def savenii(name,res_,out_typ,labelidx=None):       
@@ -1329,7 +1374,7 @@ class PatchWorkModel(Model):
                          if labelidx is not None:
                              pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx], newaffine, img1.header)
                          else:
-                             pred_nii = nib.Nifti1Image(res_>threshold, newaffine, img1.header)
+                             pred_nii = nib.Nifti1Image(conncomp(res_>threshold), newaffine, img1.header)
                  if out_typ.find('atls') != -1 or out_typ == 'idx':
                      probs = None
                      if out_typ == 'idx':
@@ -1359,7 +1404,8 @@ class PatchWorkModel(Model):
                          else:
                              tmp = np.int32(tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1))
                              probs = tf.expand_dims(np.int32( np.amax(res_,axis=-1) * 10000),-1) * np.int32(tmp>0)
-                             res = tf.concat([tmp,probs],-1)
+                             tmp = tf.concat([tmp,probs],-1)
+                             res = tmp
                              
                              
                      out_typ = 'int16'
@@ -1414,6 +1460,8 @@ class PatchWorkModel(Model):
                      
                  pred_nii.header.set_slope_inter(1,0)
              else:    
+             
+                
                  pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
                  pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
 
@@ -1671,6 +1719,7 @@ class PatchWorkModel(Model):
             optimizer=None,
             recompile_loss_optim=False,
             dontcare=True,
+            report_perf=True,
             patch_on_cpu=True,
             parallel=False,
             fit_type='custom',
@@ -1892,12 +1941,13 @@ class PatchWorkModel(Model):
                 l = tf.reduce_mean(lmat)
                 if k == depth-1:# or depth_schedule is not None:
                     from_logits = self.finalizeOnApply or (k < self.cropper.depth-1)
-                    hist['output_' + str(k+1) + '_loss'] = l                                
-                    f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=from_logits)                                        
-                    hist['output_' + str(k+1) + '_f1'] = 10**f1
-                    hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
-                    hist['nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
-                    hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
+                    hist['output_' + str(k+1) + '_loss'] = l                 
+                    if report_perf:
+                        f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=from_logits)                                        
+                        hist['output_' + str(k+1) + '_f1'] = 10**f1
+                        hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
+                        hist['nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
+                        hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                                                                                    
                     if hard_mining > 0:
                         order = lmat

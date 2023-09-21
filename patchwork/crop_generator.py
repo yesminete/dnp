@@ -363,10 +363,13 @@ class CropGenerator():
     if len(label.shape) < nD+2:
         label = tf.expand_dims(label,3)
   
+    application_mode = False
     if 'selfref' in balance:
+        application_mode = True
         ratio = balance['selfref']
     else:
         ratio = balance['ratio']
+        
     label_weight = None
     label_reduce = None
     if 'label_reduce' in balance:
@@ -383,7 +386,7 @@ class CropGenerator():
         if L.dtype == tf.float32:
             L = tf.where(tf.math.is_nan(L),0,L)
             
-        if generate_type == 'random_fillholes': # only for application
+        if generate_type == 'random_fillholes' or application_mode: # only for application
             L = L
         elif self.categorial_label is None:
             if label_weight is not None:
