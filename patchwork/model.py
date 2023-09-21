@@ -1907,7 +1907,7 @@ class PatchWorkModel(Model):
                     masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
                     masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
                 else:                
-                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k][...,0:labels.shape[-1]])
                     masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
             else:
                 masked_pred = preds[k]
@@ -1973,7 +1973,7 @@ class PatchWorkModel(Model):
                         masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
                         masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
                     else:
-                        masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k])
+                        masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k][...,0:labels[k].shape[-1]])                                            
                         masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
                 else:
                     masked_pred = preds[k]
