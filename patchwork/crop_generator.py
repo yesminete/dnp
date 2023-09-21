@@ -186,7 +186,7 @@ class CropInstance:
 
     for i in range(depth):
         x = self.scales[i]
-        if x['parent_world_coords'] is not None:
+        if 'parent_world_coords' in x and x['parent_world_coords'] is not None:
             out.append(x['parent_world_coords'])            
 
     if batchdim2 != -1:
