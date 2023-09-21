@@ -2453,7 +2453,8 @@ class PatchWorkModel(Model):
                         else:
                             print(k + ": mean=" + str( np.mean(log[k][0])),end=" ")
                     print("")
-                    print("learning rate: " + str(self.optimizer._decayed_lr(tf.float32).numpy()))
+                    if hasattr(self.optimizer,'_decayed_lr'):
+                        print("learning rate: " + str(self.optimizer._decayed_lr(tf.float32).numpy()))
     
                 if len(patchloss) > 0:
                     patchloss = tf.concat(patchloss,0)
