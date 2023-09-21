@@ -58,7 +58,7 @@ class CropInstance:
     self.intermediate_loss = intermediate_loss
     
     self.scales[0]['age'] = tf.zeros([self.num_patches()])
-    self.attrs = ['data_cropped','local_box_index','labels_cropped','class_labels','age','slope_data','inter_data']
+    self.attrs = ['data_cropped','local_box_index','labels_cropped','parent_world_coords','class_labels','age','slope_data','inter_data']
 
   def extb2dim(self,x,batchdim2):
       if batchdim2 == -1:
@@ -166,15 +166,28 @@ class CropInstance:
     
     
     depth = len(self.scales)
+
     for i in range(depth-1):
         x = self.scales[i]
         if cls_intermediate_loss and (classifier_train or spatial_max_train):
             out.append(x['class_labels'])            
-        if intermediate_loss and spatial_train:
-            out.append(x['labels_cropped'])
+        if intermediate_loss and spatial_train: 
+            if x['labels_cropped'] is None:
+                dummy = math.nan*tf.ones([self.scales[i]['data_cropped'].shape[0],1])
+                out.append(dummy) # dummy train_space
+            else:
+                out.append(x['labels_cropped'])
     if spatial_train and not spatial_max_train:
-        out.append(self.scales[-1]['labels_cropped'])
+        if self.scales[-1]['labels_cropped'] is not None:
+            out.append(self.scales[-1]['labels_cropped'])
+        else:
+            dummy = math.nan*tf.ones([self.scales[i]['data_cropped'].shape[0],1])
+            out.append(dummy) # dummy train_space
 
+    for i in range(depth):
+        x = self.scales[i]
+        if x['parent_world_coords'] is not None:
+            out.append(x['parent_world_coords'])            
 
     if batchdim2 != -1:
         for k in range(len(out)):
@@ -597,6 +610,7 @@ class CropGenerator():
              augment=None,
              test=False,
              training=False,
+             createCoordinateLabels=False,
              lazyEval=None,
              verbose=False):
       
@@ -986,6 +1000,7 @@ class CropGenerator():
                          num_patches=num_patches,
                          branch_factor=branch_factor,
                          training=training,
+                         createCoordinateLabels=createCoordinateLabels,
                          verbose=verbose)
 
 
@@ -1037,6 +1052,7 @@ class CropGenerator():
             toextend = tf.concat([toextend, dummy],-1)
         return toextend
     
+            
     
     if len(pool) == 1:  # typically in application, all dict entries are kept (for stitching)
         result_data = pool[0]
@@ -1236,6 +1252,7 @@ class CropGenerator():
                          num_patches=1,
                          training=False,
                          branch_factor=1 ,
+                         createCoordinateLabels=False,
                          verbose=False):
         
    
@@ -1588,7 +1605,12 @@ class CropGenerator():
           res_labels = self.crop(src_labels,parent_box_index_label,relres,self.get_smoothing(level,'label'),interp_type=self.interp_type,verbose=verbose)
           res_labels = fdim_transform(res_labels,rot_augment,label_transform_behaviour)
         else:
-            res_labels = None
+          res_labels = None
+          
+        parent_world_coords = None
+        if createCoordinateLabels:
+            parent_world_coords = grid(local_boxes,patch_shapes[level],0)
+
             
         if patch_normalization is not None:
             if level == 0:
@@ -1632,6 +1654,7 @@ class CropGenerator():
                   "local_box_index": local_box_index,
     
                   # these are crop coordinates refereing to the very original image
+                  "parent_world_coords" : parent_world_coords,
                   "parent_box_index": parent_box_index,
                   "parent_box_scatter_index": parent_box_scatter_index,
                   "dest_full_size":dest_shapes[level],

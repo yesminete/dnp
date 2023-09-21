@@ -22,7 +22,7 @@ import multiprocessing
 
     
 
-sys.path.append("/home/reisertm")
+#sys.path.append("/home/reisertm")
 sys.path.append("/software")
 import patchwork_master.patchwork as patchwork
 
@@ -39,12 +39,15 @@ else:
     
     # define your data sources 
     contrasts = [ { 'subj1' :  'example2d.nii.gz',  
-                    'subj2' :  'example2d_b.nii.gz'  } ]
+                    'subj2' :  'example2d_b.nii.gz' 
+                    } ]
     labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
                    'subj2' :  'example2d_label_b.nii.gz', 
                      } ]
     
-    subjects = [ 'subj1', 'subj2'];
+    subjects = [ 'subj1'
+                #, 'subj2'
+                ];
     
     # define ou want some validation dta
     valid_ids = []
@@ -95,9 +98,9 @@ else:
         "scheme":{ 
             "patch_size":[32,32],                
             "destvox_mm": None,
-            "destvox_rel":[2,2],
+            "destvox_rel":[3,3],
             "fov_mm":None,
-            "fov_rel":[0.7,0.7],
+            "fov_rel":[0.9,0.9],
          },
         "smoothfac_data" : 0,   
         "smoothfac_label" : 0, 
@@ -122,6 +125,11 @@ else:
     #    "preprocCreator": lambda level: patchwork.customLayers.HistoMaker(trainable=True,init='ct',dropout=0,nD=nD,normalize=False),    
         "intermediate_out":8,
         "intermediate_loss":True,          
+        "forward_type":"bridge",
+
+        'space_loss':{'full':True},
+        'finalBlock':patchwork.customLayers.identity(),
+        
         }
     
     ## DATA IMPORT OPTIONS
@@ -166,8 +174,8 @@ else:
     
     training = {
        "num_patches":100,
-       "augment": {"dphi":0.2, "flip":[0,0] , "dscale":[0.1,0.1] },
-       "epochs":2,
+     #  "augment": {"dphi":0.2, "flip":[0,0] , "dscale":[0.1,0.1] },
+       "epochs":20,
        "num_its":100,                
        "balance":None,#{"ratio":0.5,"autoweight":1},
        #"loss": patchwork.customLayers.TopK_loss2D(K="inf",mismatch_penalty=True),
@@ -307,10 +315,11 @@ else:
         else:
             network['num_labels']= lset[0].shape[nD+1]
             
-        #network['num_labels'] = 1
+        #network['num_labels'] = 2
             
         print('numlabels:' + str(network['num_labels']))
     
+        
         
         # create model
         cgen = patchwork.CropGenerator(**patching)
@@ -319,7 +328,6 @@ else:
         print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> initializing network")
         dataexample = tset[0][0:1,...]    
         themodel.apply_full(dataexample,resolution=rset[0],repetitions=100,generate_type='random',verbose=True)
-        
         
     
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> model summary")
@@ -341,9 +349,7 @@ else:
     #     initial_learning_rate,
     #     decay_steps=10,
     #     decay_rate=0.96,
-    #     staircase=True)
-    
-    
+    #     staircase=True)    
     # training['optimizer'] = tf.optimizers.Adam(learning_rate=lr_schedule, beta_1=0.9, beta_2=0.999, amsgrad=True)
     
     def tocateg(l):
@@ -383,11 +389,13 @@ else:
         lazyTrain['reduceFun'] =  tf.reduce_max             
         lazyTrain['attentionFun'] = tf.math.sigmoid
             
-    
+        lset=[]
         themodel.train(tset,lset,resolutions=rset,**training,
-                       debug=False,              
+                       debug=True,              
                        patch_on_cpu=False,
-                       
+                   #    loss=loss,
+                       dontcare=False,
+                       recompile_loss_optim=True,
                      #  lazyTrain=lazyTrain,
                        
                        
@@ -404,42 +412,51 @@ else:
             #lset = None
         
         sys.stdout.flush()
-    
+    gewinner
     
     
     #%%
     
     import nibabel as nib
     import numpy as np
-    img = nib.load('example2d_b.nii.gz')
-    a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
-    a = tf.convert_to_tensor(a,dtype=tf.float32) 
-    resol = {"voxsize":img.header['pixdim'][1:4],"input_edges":img.affine}
-    
-    res,stats =     themodel.apply_full(a,resolution=resol,
+    #img = nib.load('example2d_b.nii.gz')
+    #a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
+    #a = tf.convert_to_tensor(a,dtype=tf.float32) 
+    #resol = {"voxsize":img.header['pixdim'][1:4],"input_edges":img.affine}
+    a = tset[0]
+    resol = rset[0]
+    res =     themodel.apply_full(a,resolution=resol,
                                   num_patches=500,num_chunks=1,
                                       augment={},
                                       generate_type='random',
-                                      patch_stats=True,
+                                      scale_to_original=False,
+                                  #    patch_stats=True,
                           #            window='cos2',
      #                                 verbose=2,
      #level=2,
-                               testIT=2,
-                                      lazyEval={'fraction':0.3},
-                                      branch_factor=3
+                         #      testIT=2,
+                                  #    lazyEval={'fraction':0.3},
+                                      branch_factor=1
                                       )
     
-    print(stats['max'])
-    plt.imshow(res,vmax=20)
+    #print(stats['max'])
+  #  plt.imshow(res,vmax=20)
     print(tf.reduce_max(res))
+    plt.imshow(res[:,:,7])
+    #%%
+    p = [40,120]
+    a = res[p[0],p[1],:]
+    print(a)
     
+    r = tf.reduce_sum(res*a+themodel.offset*100,-1)
+    plt.imshow(r)
     
     
     
     #%% 
     themodel = patchwork.PatchWorkModel.load(themodel.modelname)
     
-    res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=10,num_chunks=4,
+    res =     themodel.apply_on_nifti('example2d.nii.gz','xxx.nii',out_typ='mask',repetitions=50,num_chunks=10,
                                       generate_type='random',
                                       lazyEval={'fraction':1}
                                       )

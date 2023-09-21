@@ -150,7 +150,7 @@ class myHistory :
         warnings.filterwarnings('ignore', '.*plotlib is currently using agg.*', )
 
         import matplotlib as mpl
-        mpl.use('Agg')
+    #    mpl.use('Agg')
 
         import matplotlib.pyplot as plt
         from matplotlib import gridspec
@@ -348,6 +348,7 @@ class PatchWorkModel(Model):
                
                spatial_train=True,
                spatial_max_train=False,
+               space_loss = None,
                finalBlock=None,
                finalizeOnApply=False,
                finalBlock_all_levels=False,
@@ -401,7 +402,10 @@ class PatchWorkModel(Model):
     self.classifier_train_deprecated = False
     self.spatial_train=spatial_train or spatial_max_train
     self.spatial_max_train=spatial_max_train
-
+    self.space_loss = space_loss
+    if self.space_loss is not None:
+        self.finalizeOnApply = True
+    
     
     
     self.trained_epochs = trained_epochs
@@ -468,8 +472,12 @@ class PatchWorkModel(Model):
        for k in range(self.cropper.depth): 
          clsfier = classifierCreator(level=k,outK=num_classes)
          self.classifiers.append(clsfier)
-        
-        
+    
+    self.external_trainvars = []
+    if self.space_loss is not None:
+        self.space_offset = tf.Variable(tf.zeros([self.cropper.depth]))
+        self.external_trainvars += [self.space_offset]
+
   
   def serialize_(self):
     return   { 'forward_type':self.forward_type,
@@ -480,6 +488,7 @@ class PatchWorkModel(Model):
                'identical_blocks':self.identical_blocks,   
                'block_out':self.block_out,   
                'spatial_train':self.spatial_train,
+               'space_loss':self.space_loss,
                'num_labels':self.num_labels,
 
                'classifiers':self.classifiers,
@@ -662,11 +671,12 @@ class PatchWorkModel(Model):
              output_nonspatial.append(res_nonspatial)
          
          def croplabeldim(res):
-             if self.num_labels != -1 and not hasattr(res,'QMembedding'):
-                 outs = res[...,0:self.num_labels]
-             else:
-                 outs = res
-             return outs
+           #  if self.num_labels != -1 and not hasattr(res,'QMembedding'):
+           #      outs = res[...,0:self.num_labels]
+           #  else:
+           #      outs = res
+           #  return outs
+           return res
                       
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
@@ -1726,8 +1736,12 @@ class PatchWorkModel(Model):
             train_S = True,
             train_U = True,
             train_D = True,
+            train_space=False,
             callback=None
             ):
+
+    if not train_space:
+        train_space = self.space_loss is not None
       
     import logging
     logging.getLogger('tensorflow').setLevel(logging.ERROR)      
@@ -1779,7 +1793,9 @@ class PatchWorkModel(Model):
 
     def getSample(subset,np,valid=False,lazyEval=None,skipLabels=False):
         tset = [trainset[i] for i in subset]
-        lset = [labelset[i] for i in subset]      
+        lset=None
+        if len(labelset) > 0:
+            lset = [labelset[i] for i in subset]      
         if skipLabels:
             lset=None
         rset = None
@@ -1805,19 +1821,16 @@ class PatchWorkModel(Model):
     
             if traintype == 'random' or traintype ==  'random_deprec' :
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type=traintype,max_depth=max_depth,
-                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi,lazyEval=lazyEval,branch_factor=branch_factor,training=True)
+                                        num_patches=np,augment=aug_,balance=balance,dphi=dphi,lazyEval=lazyEval,branch_factor=branch_factor,createCoordinateLabels=train_space,training=True)
             elif traintype == 'tree':
                 c = self.cropper.sample(tset,lset,resolutions=rset,generate_type='tree_full', jitter=jitter,max_depth=max_depth,
-                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,branch_factor=branch_factor,training=True)
-                
+                                        jitter_border_fix=jitter_border_fix,augment=aug_,balance=balance,dphi=dphi,branch_factor=branch_factor,createCoordinateLabels=train_space,training=True)
+            
+        
         return c
     
     
     def computeloss(fun,label,pred):
-        #f = self.pixelfreqs[-1]
-        #w = f / tf.reduce_sum(f)
-        #w = 1/w
-        #w = tf.where(f==0,1,w)
         if self.cropper.categorial_label is not None and not self.cropper.categorical and not hasattr(pred,'QMembedding'):
             lmat = 0.0
             cnt = 0
@@ -1825,8 +1838,10 @@ class PatchWorkModel(Model):
                 lmat += fun(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1])
                 cnt=cnt+1
             lmat = lmat/cnt
-        else:                       
-            lmat = fun(label,pred)#,class_weight=w)
+        else:  
+            if self.num_labels != -1 and not hasattr(pred,'QMembedding'):
+                    pred = pred[...,0:self.num_labels]
+            lmat = fun(label,pred)
         return lmat
 
     def computeF1perf(label,pred,from_logits=False):
@@ -1847,7 +1862,7 @@ class PatchWorkModel(Model):
                 th.append(th_)
                 cnt=cnt+1
         else:                       
-            for j in range(0,self.num_labels):
+            for j in range(0,min(self.num_labels,label.shape[-1],pred.shape[-1])  )  :
                 f1_,th_ = f1_metric_best(tf.cast(label[...,j:j+1],dtype=tf.float32),pred[...,j:j+1],from_logits=from_logits)
                 f1.append(f1_)
                 th.append(th_)
@@ -1909,7 +1924,31 @@ class PatchWorkModel(Model):
                 hist[prefix+'_nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
                 
       return hist
+ 
     
+  
+    
+    def relDistanceLoss(x,y,level,full='dummy',typ='patchwise',weight=1,d0=500,s0=50):
+        sz = x.shape
+        n = tf.reduce_prod(sz[1:-1])
+        bsz = sz[0]
+        x=tf.reshape(x,[-1,x.shape[-1]])
+        y=tf.reshape(y,[-1,y.shape[-1]])
+        indices = tf.range(start=0, limit=x.shape[0], dtype=tf.int32)
+        shuffled_indices = tf.random.shuffle(indices)
+    
+        if typ == 'patchwise':
+            offset = tf.repeat(tf.range(start=0, limit=bsz, dtype=tf.int32)*n,n)    
+            shuffled_indices = tf.math.mod(shuffled_indices,n) + offset
+        
+        
+        shuffled_x = tf.gather(x, shuffled_indices)
+        shuffled_y = tf.gather(y, shuffled_indices)  
+        l = tf.einsum('xy,xy->x',shuffled_y,y)+self.space_offset[level]*100
+        d2 = tf.math.sqrt(tf.reduce_sum((shuffled_x-x)**2,-1))
+        t = tf.math.sigmoid( -(d2-d0)/s0 )
+        return weight*tf.keras.losses.binary_crossentropy (t,l,from_logits=True)
+   
     def train_step_supervised(images,lossfun):
             
       hist = {}
@@ -1919,12 +1958,14 @@ class PatchWorkModel(Model):
       
       trainvars = self.block_variables
       trainvars = trainvars + self.finalBlock.trainable_variables
-              
+      if hasattr(self,'external_trainvars'):
+          trainvars = trainvars + self.external_trainvars
+
       with tf.GradientTape() as tape:
         preds = self(data, training=True)
             
         loss = 0
-        depth = len(labels)
+        depth = min(len(labels),self.cropper.depth)
         for k in range(depth):
             if lossfun[k] is not None:
                 if dontcare:
@@ -1937,35 +1978,49 @@ class PatchWorkModel(Model):
                 else:
                     masked_pred = preds[k]
                     masked_label = labels[k]
-                lmat = computeloss(lossfun[k],masked_label,masked_pred)
-                l = tf.reduce_mean(lmat)
-                if k == depth-1:# or depth_schedule is not None:
-                    from_logits = self.finalizeOnApply or (k < self.cropper.depth-1)
-                    hist['output_' + str(k+1) + '_loss'] = l                 
-                    if report_perf:
-                        f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=from_logits)                                        
-                        hist['output_' + str(k+1) + '_f1'] = 10**f1
-                        hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
-                        hist['nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
-                        hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
-                                                                                   
-                    if hard_mining > 0:
-                        order = lmat
-                        if hard_mining_order=='f1':
-                            order = computeF1perf_center(masked_label,masked_pred,from_logits=from_logits)
-                            
-                        if len(order.shape) < self.cropper.ndim+1:
-                            hist['loss_per_patch'] = tf.reduce_mean(order,axis=1)
-                        else:
-                            hist['loss_per_patch'] = tf.reduce_mean(order,axis=list(range(1,self.cropper.ndim+1)))
+                
+                if len(masked_label.shape) > 2: # then it is not a dummy
+                    lmat = computeloss(lossfun[k],masked_label,masked_pred)
+                    l = tf.reduce_mean(lmat)
+                    loss += l
                     
-                loss += l
+                    if k == depth-1:# or depth_schedule is not None:
+                        from_logits = self.finalizeOnApply or (k < self.cropper.depth-1)
+                        hist['output_' + str(k+1) + '_loss'] = l      
+                        if report_perf:    
+                            f1list,th,f1 = computeF1perf(masked_label,masked_pred,from_logits=from_logits)                                        
+                            hist['output_' + str(k+1) + '_f1'] = 10**f1
+                            hist['output_' + str(k+1) + '_threshold'] = 10**(sum(th)/len(th))
+                            hist['nodisplay_class_f1'] = tf.cast(f1list,dtype=tf.float32)
+                            hist['nodisplay_class_threshold'] = tf.cast(th,dtype=tf.float32)
+                                                                                       
+                        if hard_mining > 0:
+                            order = lmat
+                            if hard_mining_order=='f1':
+                                order = computeF1perf_center(masked_label,masked_pred,from_logits=from_logits)
+                                
+                            if len(order.shape) < self.cropper.ndim+1:
+                                hist['loss_per_patch'] = tf.reduce_mean(order,axis=1)
+                            else:
+                                hist['loss_per_patch'] = tf.reduce_mean(order,axis=list(range(1,self.cropper.ndim+1)))
+                        
+                if train_space:
+                    
+                    if self.space_loss is not None and 'full' in self.space_loss and self.space_loss['full']:
+                        l = relDistanceLoss(labels[k+depth],preds[k],k,**self.space_loss)
+                    elif k < self.cropper.depth-1:
+                        l = relDistanceLoss(labels[k+depth],preds[k][...,self.num_labels:],k,**self.space_loss)
+                    loss += l
+                  #  if k == depth-1:
+                    hist['output_' + str(k+1) + '_spc'] = l
+
             
       gradients = tape.gradient(loss,trainvars)
       self.optimizer.apply_gradients(zip(gradients, trainvars))
       return hist
   
     
+  
     def train_step_discriminator(labeled,unlabeled):
       hist = {}
 
