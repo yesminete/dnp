@@ -879,10 +879,18 @@ class CropGenerator():
                   }
 
       def toboxes(edges):
-          i_ = [0,1,3] if self.ndim == 2 else [0,1,2,3]
-          boxes = edges[i_,:]
-          return tensor(boxes[:,i_])
-
+          if self.ndim == 2:
+              if self.system=='world':
+                  i_ = [0,1,3]
+                  boxes = edges[i_,:]
+                  return tensor(boxes[:,i_])
+              else:
+                  vsz = tf.math.sqrt(tf.reduce_sum(edges**2,0))
+                  vsz = [vsz[0],vsz[1],1.0]
+                  return tensor(tf.linalg.diag(vsz))
+          else:
+              return tensor(edges)
+        
 
       if isinstance(resolution_,dict) and "input_edges" in resolution_:
           src_boxes = toboxes(resolution_['input_edges'])

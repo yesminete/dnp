@@ -442,12 +442,24 @@ class PatchWorkModel(Model):
             for k in range(self.cropper.depth): 
               self.block_out.append(intermediate_out)
     
-    blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level])
 
     import inspect
     signature = inspect.signature(blockCreator)
-    if 'input_shape' in signature.parameters:
+
+    if 'input_shape' in signature.parameters and 'inK' in signature.parameters:
+        assert self.input_fdim is not None, "pass input_fdim to the model when using outK in the blockCreator"
+            
+        def blkCreator_(level):
+            if level == 0:
+                return blockCreator(level=level,outK=self.block_out[level],input_shape=cropper.get_patchsize(level),inK=self.input_fdim) 
+            else:
+                return blockCreator(level=level,outK=self.block_out[level],input_shape=cropper.get_patchsize(level),
+                                    inK=self.input_fdim+self.block_out[level-1]) 
+        blkCreator = blkCreator_
+    elif 'input_shape' in signature.parameters:
         blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level],input_shape=cropper.get_patchsize(level))   
+    else:
+        blkCreator = lambda level:  blockCreator(level=level,outK=self.block_out[level])
         
     if not identical_blocks:
         theBlockCreator = blkCreator
@@ -943,7 +955,7 @@ class PatchWorkModel(Model):
                             level_to_stitch = list(range(s,self.cropper.depth))
                             print('mixing: ' + str(level_to_stitch))
                             mix_levels = True
-                            if level[0].find('nohead') == -1:
+                            if level[0].find('nohead') == -1 and not hasattr(r[0],'QMembedding'):
                                 for k in level_to_stitch:            
                                   if k < self.cropper.depth-1 or self.finalizeOnApply:
                                     if self.cropper.categorical:
@@ -1084,6 +1096,7 @@ class PatchWorkModel(Model):
                  level=-1,
                  augment=None,
                  along4dim=False,
+                 squeeze=False,
                  align_physical=None,
                  ce_threshold=0.01,
                  window=None,
@@ -1427,6 +1440,8 @@ class PatchWorkModel(Model):
                              tmp = tf.concat([tmp,probs],-1)
                              res = tmp
                      
+                     if self.cropper.ndim==2 and squeeze:
+                        tmp = np.squeeze(tmp)
                      
                      pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
                      #j = KColormap.jet; str = ""; for (var k = 0; k < 256; k++) str += "[" +j[0][k] +"," +j[1][k] +"," +j[2][k] +"],"; 
@@ -1471,6 +1486,8 @@ class PatchWorkModel(Model):
                  pred_nii.header.set_slope_inter(1,0)
              else:    
              
+                 if self.cropper.ndim==2 and squeeze:
+                     res_ = np.squeeze(res_)
                 
                  pred_nii = nib.Nifti1Image(res_*fac, newaffine, img1.header)
                  pred_nii.header.set_slope_inter(1/(0.000001+fac),0.0000000)
@@ -1746,6 +1763,7 @@ class PatchWorkModel(Model):
     import logging
     logging.getLogger('tensorflow').setLevel(logging.ERROR)      
     def f1_metric(y_true, y_pred,from_logits=False,start_reduce=0):
+        y_true = tf.where(y_true>0.0,1.0,0.0)
         
         sz = y_true.shape
         def sumy(x):
@@ -1764,6 +1782,8 @@ class PatchWorkModel(Model):
         return f1_val      
       
     def f1_metric_best(y_true, y_pred,from_logits=False):
+        y_true = tf.where(y_true>0.0,1.0,0.0)
+        
         if from_logits:
             y_pred = tf.nn.sigmoid(y_pred)
         
@@ -1907,7 +1927,7 @@ class PatchWorkModel(Model):
                     masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
                     masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
                 else:                
-                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k][...,0:labels.shape[-1]])
+                    masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k][...,0:labels[k].shape[-1]])
                     masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
             else:
                 masked_pred = preds[k]
@@ -1957,7 +1977,8 @@ class PatchWorkModel(Model):
       labels = images[1]
       
       trainvars = self.block_variables
-      trainvars = trainvars + self.finalBlock.trainable_variables
+      if self.finalBlock is not None:
+          trainvars = trainvars + self.finalBlock.trainable_variables
       if hasattr(self,'external_trainvars'):
           trainvars = trainvars + self.external_trainvars
 

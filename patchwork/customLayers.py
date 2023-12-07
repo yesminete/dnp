@@ -1657,6 +1657,9 @@ def topk_loss2(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penal
 
         
 def topk_loss(y,x,K=1,from_logits=True,losstype='bc',combi=False,mismatch_penalty=False,nD=3):
+    
+    y = tf.where(y>0.0,1.0,0.0) # be sure we have binary labels
+    
     sz = y.shape
     if nD==2:
         nvx = sz[1]*sz[2]
@@ -1977,17 +1980,111 @@ def MutualInfoGaussian(x,y,nbins=10,sigma=0.5,nD=2,eps=10**-7,mask=None):
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+def henriksUnet(input_shape,inK,outK):
+    image = tf.keras.Input(shape=(input_shape[0],input_shape[1],input_shape[2],inK),name='image')
+
+    def f(j):
+       fdims = [16,24,32,48,64,128]
+       return fdims[j]
+    depth_u=5
+
+    def cblock(x,f,k,  **kwargs):
+        x = layers.BatchNormalization()(x)
+        x = layers.LeakyReLU()(x)
+        x = layers.Conv3D(f,k,padding='SAME',**kwargs)(x)
+        return x
+
+    def cblock_e(x,y,f,k,  **kwargs):
+        x = layers.BatchNormalization()(x)
+        x = layers.LeakyReLU()(x)
+        x = layers.Conv3D(f,k,padding='SAME',**kwargs)(x)
+
+        e = layers.Conv3D(f,1)(y)
+        x = layers.Add()([x,e])
+
+        return x
+
+    def preproc(x):
+        return layers.Conv3D(f(0),3,padding='SAME')(x)
+
+    ## segmenter
+    x = preproc(image)
+    b = []
+    for k in range(depth_u):
+        x = cblock(x,f(k),3)
+        b.append(cblock(x,f(k),3))
+        x = cblock(x,f(k+1),3,strides=[2,2,2])
+
+    for k in range(depth_u):
+        j = depth_u-k-1
+        x = cblock(x,f(j+1),3)
+        x = layers.UpSampling3D()(x)
+        x = layers.Concatenate()([x,b[j]])
+        x = cblock(x,f(j+1),3)
+
+    x = layers.BatchNormalization()(x)        
+    x = layers.Conv3D(outK,1)(x)
+
+    return tf.keras.Model(inputs=image,outputs=x)
+
+
+
+
+def UnetPlusPlus(input_shape,inK,outK,fdims=[16,24,32,48,64,128],depth=6):
+    image = tf.keras.Input(shape=(input_shape[0],input_shape[1],input_shape[2],inK),name='image')
+
+    def f(j):
+       return fdims[j]
+   
+    depth_u=depth
+
+    def cblock(x,f,k,  **kwargs):
+        x = layers.BatchNormalization()(x)
+        x = layers.LeakyReLU()(x)
+        x = layers.Conv3D(f,k,padding='SAME',**kwargs)(x)
+        return x
+
+    def preproc(x):
+        return layers.Conv3D(f(0),3,padding='SAME')(x)
+
+    ## segmenter
+    x = preproc(image)
+    scales = []
+    for k in range(depth_u):
+        scales.append([])
+        x = cblock(x,f(k),3)
+        scales[k].append(x)
+        if k < depth_u-1:
+            x = cblock(x,f(k+1),3,strides=[2,2,2])
+
+    for s in range(depth_u-1):
+        for k in range(depth_u-1-s):
+            x = cblock(scales[k+1][-1],f(k),3)
+            x = layers.UpSampling3D()(x)
+            for j in range(len(scales[k])):
+                x = x + scales[k][j]
+            #x = layers.Concatenate()([x,scales[k][-1]])
+            x = cblock(x,f(k),3)
+            scales[k].append(x)
+
+    x = scales[0][-1]
+    x = layers.BatchNormalization()(x)        
+    x = layers.Conv3D(outK,1)(x)
+
+    return tf.keras.Model(inputs=image,outputs=x)
+
+
+
+
+
+
+
+
+
+
+
     
     
     
