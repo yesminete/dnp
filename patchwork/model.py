@@ -350,7 +350,7 @@ class PatchWorkModel(Model):
                spatial_max_train=False,
                space_loss = None,
                finalBlock=None,
-               finalizeOnApply=False,
+               finalizeOnApply=True,
                finalBlock_all_levels=False,
 
                classifierCreator=None,
@@ -682,24 +682,22 @@ class PatchWorkModel(Model):
              res_nonspatial = self.classifiers[k](tf.concat([inp,res],nD+1),training=training) 
              output_nonspatial.append(res_nonspatial)
          
-         def croplabeldim(res):
-           #  if self.num_labels != -1 and not hasattr(res,'QMembedding'):
-           #      outs = res[...,0:self.num_labels]
-           #  else:
-           #      outs = res
-           #  return outs
-           return res
+         def applyFB(fb,res):
+           fbres = fb(res)
+           if hasattr(res,'deep_out'):
+              fbres.deep_out = res.deep_out
+           return fbres
                       
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
              if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and (k == self.cropper.depth-1 or self.finalBlock_all_levels):
                    if isinstance(self.finalBlock,list):
                        for fb in self.finalBlock:
-                           output.append(croplabeldim(fb(res)))
+                           output.append(applyFB(fb,res))
                    else:                    
-                       output.append(croplabeldim(self.finalBlock(res,training=training)))
+                       output.append(applyFB(lambda x: self.finalBlock(x,training=training),res))
              else:
-                 output.append(croplabeldim(res))
+                 output.append(res)
          
 
     ## undo the sequueze of potential batch_dim2 and reduce via max or stitch
@@ -957,7 +955,7 @@ class PatchWorkModel(Model):
                             mix_levels = True
                             if level[0].find('nohead') == -1 and not hasattr(r[0],'QMembedding'):
                                 for k in level_to_stitch:            
-                                  if k < self.cropper.depth-1 or self.finalizeOnApply:
+                                  if k < self.cropper.depth-1:
                                     if self.cropper.categorical:
                                         r[k] = tf.nn.softmax(r[k])        
                                     else:
@@ -965,9 +963,7 @@ class PatchWorkModel(Model):
                         else:
                             level_to_stitch = level
                         for k in level_to_stitch:            
-                          a,b = x.stitchResult(r,k,window=window)                          
-
-                             
+                          a,b = x.stitchResult(r,k,window=window)                                                       
                           pred[k] += a
                           sumpred[k] += b         
                         
@@ -1850,20 +1846,30 @@ class PatchWorkModel(Model):
         return c
     
     
-    def computeloss(fun,label,pred):
-        if self.cropper.categorial_label is not None and not self.cropper.categorical and not hasattr(pred,'QMembedding'):
-            lmat = 0.0
-            cnt = 0
-            for j in self.cropper.categorial_label:
-                lmat += fun(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1])
-                cnt=cnt+1
-            lmat = lmat/cnt
-        else:  
-            if self.num_labels != -1 and not hasattr(pred,'QMembedding'):
-                    pred = pred[...,0:self.num_labels]
-            lmat = fun(label,pred)
-        return lmat
+    def computeloss(fun,label,prediction):
+        
+        def theloss(pred):
+            if self.cropper.categorial_label is not None and not self.cropper.categorical and not hasattr(pred,'QMembedding'):
+                lmat = 0.0
+                cnt = 0
+                for j in self.cropper.categorial_label:
+                    lmat += fun(tf.cast(label==j,dtype=tf.float32),pred[...,cnt:cnt+1])
+                    cnt=cnt+1
+                lmat = lmat/cnt
+            else:  
+                if self.num_labels != -1 and not hasattr(pred,'QMembedding'):
+                        pred = pred[...,0:self.num_labels]
+                lmat = fun(label,pred)
+            return lmat
 
+        if hasattr(prediction,'deep_out'):
+            loss = theloss(prediction)
+            for k in range(len(prediction.deep_out)):                
+               loss = loss + theloss(prediction.deep_out[k])
+            return loss
+        else:
+            return theloss(prediction)
+    
     def computeF1perf(label,pred,from_logits=False):
         f1=[]
         th=[]

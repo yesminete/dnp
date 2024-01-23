@@ -2032,7 +2032,7 @@ def henriksUnet(input_shape,inK,outK):
 
 
 
-def UnetPlusPlus(input_shape,inK,outK,fdims=[16,24,32,48,64,128],depth=6):
+def UnetPlusPlus(input_shape,inK,outK,fdims=[16,24,32,48,64,128],depth=6,output_levels=False):
     image = tf.keras.Input(shape=(input_shape[0],input_shape[1],input_shape[2],inK),name='image')
 
     def f(j):
@@ -2073,19 +2073,54 @@ def UnetPlusPlus(input_shape,inK,outK,fdims=[16,24,32,48,64,128],depth=6):
     x = layers.BatchNormalization()(x)        
     x = layers.Conv3D(outK,1)(x)
 
-    return tf.keras.Model(inputs=image,outputs=x)
-
-
-
-
-
-
-
-
+    
+    if output_levels:
+        out = []
+        for k in range(depth_u-1):
+#            out.append( scales[0][k] )
+            out.append( layers.Conv3D(outK,1,padding='SAME')( scales[0][k] ) )
+            
+        out.append(x)
+        return tf.keras.Model(inputs=image,outputs=out)
+    else:
+        return tf.keras.Model(inputs=image,outputs=x)
 
 
 
     
+
+class Uppp(layers.Layer):
+  def __init__(self,input_shape,inK,outK,fdims=[16,24,32,48,64,128],depth=6,deep_loss=True,**kwargs):
+    super().__init__(**kwargs)
+    self.cnn = UnetPlusPlus(input_shape,inK,outK,fdims=fdims,depth=depth,output_levels=True)
+    self.input_shape_ = input_shape
+    self.inK = inK
+    self.outK = outK
+    self.fdims = fdims
+    self.depth = depth
+    self.deep_loss = deep_loss
+    
+  def get_config(self):
+        config = super().get_config().copy()
+        config.update(
+        {
+            'input_shape': self.input_shape_,
+            'inK': self.inK,
+            'outK': self.outK,
+            'fdims': self.fdims,
+            'depth': self.depth
+        } )    
+        return config                  
+          
+  def call(self, image):         
+      x = self.cnn(image)            
+      res = x[-1]
+      if self.deep_loss:
+          res.deep_out = x[0:-1]
+      return res
+
+custom_layers['Uppp'] = Uppp
+
     
     
     
