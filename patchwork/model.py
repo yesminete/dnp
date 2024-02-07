@@ -1336,6 +1336,7 @@ class PatchWorkModel(Model):
                                                       [0,0,1/facs[2],offs[2]],
                                                       [0,0,0,1]]))
       
+      print('saving nifti')
       pred_nii = None
       if ofname is not None:
           def savenii(name,res_,out_typ,labelidx=None):       
@@ -1508,7 +1509,7 @@ class PatchWorkModel(Model):
           else:
              pred_nii = savenii(ofname,res,out_typ)
               
-            
+      print('done')            
       if pred_nii is not None:        
           if return_nibabel:
               if maxidxperlabel is not None:

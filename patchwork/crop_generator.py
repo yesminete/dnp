@@ -58,7 +58,8 @@ class CropInstance:
     self.intermediate_loss = intermediate_loss
     
     self.scales[0]['age'] = tf.zeros([self.num_patches()])
-    self.attrs = ['data_cropped','local_box_index','labels_cropped','parent_world_coords','class_labels','age','slope_data','inter_data']
+    self.attrs = ['data_cropped','local_box_index','labels_cropped','parent_world_coords',
+                  'class_labels','age','slope_data','inter_data','gradient_effect_mean','gradient_effect_sd']
 
   def extb2dim(self,x,batchdim2):
       if batchdim2 == -1:
@@ -745,6 +746,7 @@ class CropGenerator():
       dscale = 0
       independent_augmentation=False
       pixel_noise = 0
+      gradient_effect = None
       
       
 
@@ -769,6 +771,8 @@ class CropGenerator():
                   pixel_noise = tensor(augment['pixel_noise'])
               if 'independent_augmentation' in augment:
                   independent_augmentation = augment['independent_augmentation']
+              if 'gradient_effect' in augment:
+                  gradient_effect = augment['gradient_effect']
           else:
               print("augmenting ...")
               trainset_,labels_ = augment(trainset_,labels_)
@@ -1001,6 +1005,7 @@ class CropGenerator():
                          vscale = vscale,
                          patch_normalization = patch_normalization,
                          independent_augmentation=independent_augmentation,
+                         gradient_effect=gradient_effect,
                          pixel_noise = pixel_noise,
                          input_transform_behaviour = input_transform_behaviour,
                          label_transform_behaviour = label_transform_behaviour,                         
@@ -1253,6 +1258,7 @@ class CropGenerator():
                          vscale = 0,
                          patch_normalization = False,
                          independent_augmentation = False,
+                         gradient_effect = None,
                          pixel_noise = 0,
                          input_transform_behaviour = None,
                          label_transform_behaviour = None,
@@ -1616,7 +1622,7 @@ class CropGenerator():
           res_labels = None
           
         parent_world_coords = None
-        if createCoordinateLabels:
+        if createCoordinateLabels or gradient_effect is not None:
             parent_world_coords = grid(local_boxes,patch_shapes[level],0)
 
             
@@ -1636,6 +1642,52 @@ class CropGenerator():
         else:
             slope_data = None
             inter_data = None
+            
+        if gradient_effect is not None:
+            
+            offset_ = 1
+            magnitude = 1
+            threshold = None
+            global_norm = True
+            if 'offset' in gradient_effect:
+                offset_ = gradient_effect['offset']
+            if 'magnitude' in gradient_effect:
+                magnitude = gradient_effect['magnitude']
+            if 'threshold' in gradient_effect:
+                threshold = gradient_effect['threshold']
+            if 'global' in gradient_effect:
+                global_norm = gradient_effect['global']
+            
+            if isinstance(threshold,list):
+                threshold = threshold[level]
+            if isinstance(magnitude,list):
+                magnitude = magnitude[level]
+            if isinstance(offset_,list):
+                offset_ = offset_[level]
+            if (global_norm and level == 0) or not global_norm:                                
+                gradient_effect_mean = tf.reduce_mean(parent_world_coords,keepdims=True,axis=range(1,nD+1))
+                gradient_effect_sd = tf.math.reduce_std(parent_world_coords,keepdims=True,axis=range(1,nD+1))
+            else:
+                gradient_effect_mean =  tf.tile(crops['gradient_effect_mean'],[N]+[1]*(nD+1))
+                gradient_effect_sd =  tf.tile(crops['gradient_effect_sd'],[N]+[1]*(nD+1))
+                
+            
+            mog = (parent_world_coords-gradient_effect_mean)/gradient_effect_sd
+                        
+            plane = tf.random.normal([res_data.shape[0]] + [1]*nD + [nD])
+            mog = tf.reduce_sum(mog*plane,-1,keepdims=True) 
+            if threshold is not None:
+                offset = tf.random.uniform([res_data.shape[0]] + [1]*nD + [1])
+                mog = tf.where(mog > (offset*threshold),1.0,0.0)
+            else:
+                offset = tf.random.normal([res_data.shape[0]] + [1]*nD + [1])
+                mog = 1+magnitude*(mog + offset*offset_)
+                
+            res_data = res_data*mog
+            
+        else:
+            gradient_effect_mean=None
+            gradient_effect_sd=None
             
                             
         if vscale > 0:
@@ -1669,7 +1721,9 @@ class CropGenerator():
                   "affine_augment":affine_augment,
                   "rot_augment":rot_augment,
                   "slope_data":slope_data,
-                  "inter_data":inter_data
+                  "inter_data":inter_data,
+                  "gradient_effect_mean":gradient_effect_mean,
+                  "gradient_effect_sd":gradient_effect_sd
     
                   }
     
@@ -1691,6 +1745,8 @@ class CropGenerator():
                  'rot_augment',
                  'slope_data',
                  'inter_data',
+                 'gradient_effect_mean',
+                 'gradient_effect_sd',                 
                  'class_labels']
         for p in props:
             if p in x:
