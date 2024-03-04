@@ -690,11 +690,12 @@ class PatchWorkModel(Model):
                       
          ## apply a finalBlock on the last spatial output    
          if self.spatial_train:
-             if (training == False or not self.finalizeOnApply) and self.finalBlock is not None and (k == self.cropper.depth-1 or self.finalBlock_all_levels):
+             hasblock = self.finalBlock is not None
+             if (training == False or not self.finalizeOnApply) and (self.finalBlock is not None) and (k == self.cropper.depth-1 or self.finalBlock_all_levels):
                    if isinstance(self.finalBlock,list):
                        for fb in self.finalBlock:
                            output.append(applyFB(fb,res))
-                   else:                    
+                   else:      
                        output.append(applyFB(lambda x: self.finalBlock(x,training=training),res))
              else:
                  output.append(res)
@@ -1115,7 +1116,7 @@ class PatchWorkModel(Model):
                  lazyEval = None):
         
 
-      def conncomp(data):
+      def conncomp(data,idx=None):
             if ccana is None:
                 return data
 
@@ -1134,16 +1135,32 @@ class PatchWorkModel(Model):
                 if len(data.shape) == 3:
                     data = g(data)
                 else:
-                   for k in range(0,data.shape[3]):
-                      print('.')
-                      data[:,:,:,k] = g(data[:,:,:,k])
+                   if idx is not None:
+                       data_old = data[:,:,:,0]
+                       data = data_old*0
+                       for j in idx:
+                          c = g(np.where(data_old==j,1.0,0.0))
+                          data = np.where(c,j,data)
+                       data = tf.expand_dims(data,-1)
+                   else:
+                       for k in range(0,data.shape[3]):
+                          print('.')
+                          data[:,:,:,k] = g(data[:,:,:,k])
             if nD == 2:
                 if len(data.shape) == 2:
                     data = g(data)
                 else:
-                    for k in range(0,data.shape[2]):
-                       print('.')
-                       data[:,:,k] = g(data[:,:,k])
+                   if idx is not None:
+                       data_old = data[:,:,0]
+                       data = data_old*0
+                       for j in idx:
+                          c = g(np.where(data_old==j,1.0,0.0))
+                          data = np.where(c,j,data)
+                       data = tf.expand_dims(data,-1)
+                   else:
+                        for k in range(0,data.shape[2]):
+                           print('.')
+                           data[:,:,k] = g(data[:,:,k])
             return data
 
       def crop_spatial(img,c):
@@ -1392,19 +1409,19 @@ class PatchWorkModel(Model):
                          
                      else:
                          if labelidx is not None:
-                             pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx], newaffine, img1.header)
+                             pred_nii = nib.Nifti1Image(res_>threshold[...,labelidx:labelidx+1], newaffine, img1.header)
                          else:
                              pred_nii = nib.Nifti1Image(conncomp(res_>threshold), newaffine, img1.header)
                  if out_typ.find('atls') != -1 or out_typ == 'idx':
                      probs = None
-                     if out_typ == 'idx':
+                     if out_typ == 'idx':   # usually coming from QMembedding, first image is idxmap, second is probabilty
                          tmp = res_[...,0:1]
                          probs = res_[...,1:]
                          threshold_ = int(10000*ce_threshold)
                          tmp = tf.where(probs[...,0:1]<threshold_,0,tmp)
                         # probs = tf.where(probs<threshold_,0,probs)
                          tmp = np.int32(tmp)
-                     elif self.cropper.categorical:      
+                     elif self.cropper.categorical: # trained with CC-like loss, i.e. lastdim is of size 1+numberlabels
                          if votemap:
                              thevotemap = res_[...,-1:]
                              res_ = res_[...,0:-1]
@@ -1415,27 +1432,35 @@ class PatchWorkModel(Model):
                          if votemap:
                             probs = tf.concat([probs,thevotemap],-1)
                          tmp = np.int32(tmp)
-                             
-                         
+                                                      
                      else:
                          tmp = res_>threshold
-                         if len(tmp.shape) == nD:
-                             tmp = tf.cast(tmp,dtype=tf.int32)
-                         else:
-                             tmp = np.int32(tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1))
-                             probs = tf.expand_dims(np.int32( np.amax(res_,axis=-1) * 10000),-1) * np.int32(tmp>0)
-                             tmp = tf.concat([tmp,probs],-1)
-                             res = tmp
+                         if len(tmp.shape) == nD:  # if it is already an index map, do nothing, just cast
+                             tmp = tf.cast(res_,dtype=tf.int32)
+                         else:  
+                             if self.finalBlock is not None and hasattr(self.finalBlock,'name') and self.finalBlock.name == 'softmax0':
+                                 # ccloss but with n channels, ccloss0
+                                 res_ext = tf.concat([1-tf.reduce_sum(res_,-1,keepdims=True),res_],-1)
+                                 tmp = np.int32(tf.expand_dims(np.argmax(res_ext,axis=-1),-1))
+                                 probs = tf.expand_dims(np.int32( np.amax(res_ext,axis=-1) * 10000),-1) * np.int32(tmp>0)
+                                 res = tmp                                 
+                             else: # ordin. multiclass problem trained with BC, i.e. lastdim = numberlabels
+                                 tmp = np.int32(tf.expand_dims((np.argmax(tmp*res_,axis=-1)+1)*(np.sum(tmp,axis=-1)>0),-1))
+                                 probs = tf.expand_dims(np.int32( np.amax(res_,axis=-1) * 10000),-1) * np.int32(tmp>0)
+                                 res = tmp
                              
                              
                      out_typ = 'int16'
                          
-                     if self.cropper.categorial_label is not None:
+                     if self.cropper.categorial_label is not None: # of there is an indexmapping given, map back
                          idxmap = tf.cast([0] + self.cropper.categorial_label_original,dtype=tf.int32)
                          tmp = tf.gather(idxmap,tmp)
-                         if probs is not None:
-                             tmp = tf.concat([tmp,probs],-1)
-                             res = tmp
+                         
+                     tmp = conncomp(tmp,idx=self.cropper.categorial_label_original)
+                         
+                     if probs is not None:
+                         tmp = tf.concat([tmp,probs],-1)
+                         res = tmp
                      
                      if self.cropper.ndim==2 and squeeze:
                         tmp = np.squeeze(tmp)
@@ -1443,7 +1468,7 @@ class PatchWorkModel(Model):
                      pred_nii = nib.Nifti1Image(tmp, newaffine, img1.header)
                      #j = KColormap.jet; str = ""; for (var k = 0; k < 256; k++) str += "[" +j[0][k] +"," +j[1][k] +"," +j[2][k] +"],"; 
                      if self.info is not None and 'xml' in self.info:
-                        xml = self.info['xml']
+                        xml = self.info['xml'] + '   '
                      else:
                          colors = [[0,0,0],[0,0,135],[0,0,139],[0,0,143],[0,0,147],[0,0,151],[0,0,155],[0,0,159],[0,0,163],[0,0,167],[0,0,171],[0,0,175],[0,0,179],[0,0,183],[0,0,187],[0,0,191],[0,0,195],[0,0,199],[0,0,203],[0,0,207],[0,0,211],[0,0,215],[0,0,219],[0,0,223],[0,0,227],[0,0,231],[0,0,235],[0,0,239],[0,0,243],[0,0,247],[0,0,251],[0,0,255],[0,4,255],[0,8,255],[0,12,255],[0,16,255],[0,20,255],[0,24,255],[0,28,255],[0,32,255],[0,36,255],[0,40,255],[0,44,255],[0,48,255],[0,52,255],[0,56,255],[0,60,255],[0,64,255],[0,68,255],[0,72,255],[0,76,255],[0,80,255],[0,84,255],[0,88,255],[0,92,255],[0,96,255],[0,100,255],[0,104,255],[0,108,255],[0,112,255],[0,116,255],[0,120,255],[0,124,255],[0,128,255],[0,131,255],[0,135,255],[0,139,255],[0,143,255],[0,147,255],[0,151,255],[0,155,255],[0,159,255],[0,163,255],[0,167,255],[0,171,255],[0,175,255],[0,179,255],[0,183,255],[0,187,255],[0,191,255],[0,195,255],[0,199,255],[0,203,255],[0,207,255],[0,211,255],[0,215,255],[0,219,255],[0,223,255],[0,227,255],[0,231,255],[0,235,255],[0,239,255],[0,243,255],[0,247,255],[0,251,255],[0,255,255],[4,255,251],[8,255,247],[12,255,243],[16,255,239],[20,255,235],[24,255,231],[28,255,227],[32,255,223],[36,255,219],[40,255,215],[44,255,211],[48,255,207],[52,255,203],[56,255,199],[60,255,195],[64,255,191],[68,255,187],[72,255,183],[76,255,179],[80,255,175],[84,255,171],[88,255,167],[92,255,163],[96,255,159],[100,255,155],[104,255,151],[108,255,147],[112,255,143],[116,255,139],[120,255,135],[124,255,131],[128,255,128],[131,255,124],[135,255,120],[139,255,116],[143,255,112],[147,255,108],[151,255,104],[155,255,100],[159,255,96],[163,255,92],[167,255,88],[171,255,84],[175,255,80],[179,255,76],[183,255,72],[187,255,68],[191,255,64],[195,255,60],[199,255,56],[203,255,52],[207,255,48],[211,255,44],[215,255,40],[219,255,36],[223,255,32],[227,255,28],[231,255,24],[235,255,20],[239,255,16],[243,255,12],[247,255,8],[251,255,4],[255,255,0],[255,251,0],[255,247,0],[255,243,0],[255,239,0],[255,235,0],[255,231,0],[255,227,0],[255,223,0],[255,219,0],[255,215,0],[255,211,0],[255,207,0],[255,203,0],[255,199,0],[255,195,0],[255,191,0],[255,187,0],[255,183,0],[255,179,0],[255,175,0],[255,171,0],[255,167,0],[255,163,0],[255,159,0],[255,155,0],[255,151,0],[255,147,0],[255,143,0],[255,139,0],[255,135,0],[255,131,0],[255,128,0],[255,124,0],[255,120,0],[255,116,0],[255,112,0],[255,108,0],[255,104,0],[255,100,0],[255,96,0],[255,92,0],[255,88,0],[255,84,0],[255,80,0],[255,76,0],[255,72,0],[255,68,0],[255,64,0],[255,60,0],[255,56,0],[255,52,0],[255,48,0],[255,44,0],[255,40,0],[255,36,0],[255,32,0],[255,28,0],[255,24,0],[255,20,0],[255,16,0],[255,12,0],[255,8,0],[255,4,0],[255,0,0],[251,0,0],[247,0,0],[243,0,0],[239,0,0],[235,0,0],[231,0,0],[227,0,0],[223,0,0],[219,0,0],[215,0,0],[211,0,0],[207,0,0],[203,0,0],[199,0,0],[195,0,0],[191,0,0],[187,0,0],[183,0,0],[179,0,0],[175,0,0],[171,0,0],[167,0,0],[163,0,0],[159,0,0],[155,0,0],[151,0,0],[147,0,0],[143,0,0],[139,0,0],[135,0,0],[131,0,0],[128,0,0]]
                          #colors = [[255,0,0],[0,255,0],[0,0,255],[255,255,0],[255,0,255],[0,255,255],[255,128,0],[255,0,128],[128,255,128],[0,128,255],[128,128,128],[185,170,155]]
@@ -1472,9 +1497,10 @@ class PatchWorkModel(Model):
                                 #rgb = colors[k%len(colors)]
                             else:
                                 rgb = label_colors[k]
+                            print("writing xml header")
                             body += '<Label Key="{}" Red="{}" Green="{}" Blue="{}" Alpha="1"><![CDATA[{}]]></Label>\n'.format(key,rgb[0]/255,rgb[1]/255,rgb[2]/255,labelname)
                          xmlpost = '  </LabelTable>  <StudyMetaDataLinkSet>  </StudyMetaDataLinkSet>  <VolumeType><![CDATA[Label]]></VolumeType>   </VolumeInformation></CaretExtension>'
-                         xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n              "
+                         xml = xmlpre + "\n" + body + "\n" + xmlpost + "\n               \n                "
                      
                      pred_nii.header.extensions.clear()
                      pred_nii.header.extensions.append(nib.nifti1.Nifti1Extension(0,bytes(xml,'utf-8')))
@@ -2001,7 +2027,7 @@ class PatchWorkModel(Model):
                         masked_pred = tf.where(labels[k]==-1,tf.cast(0,preds[k].dtype),preds[k])
                         masked_label = tf.where(labels[k]==-1,tf.cast(0,labels[k].dtype),labels[k])
                     else:
-                        masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k][...,0:labels[k].shape[-1]])                                            
+                        masked_pred = tf.where(tf.math.is_nan(labels[k]),0.0,preds[k][...,0:labels[k].shape[-1]])                                         
                         masked_label = tf.where(tf.math.is_nan(labels[k]),0.0,labels[k])
                 else:
                     masked_pred = preds[k]

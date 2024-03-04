@@ -633,7 +633,29 @@ class identity(layers.Layer):
 custom_layers['identity'] = identity
 
 
+class softmax0(layers.Layer):
+  def __init__(self,**kwargs):
+    super().__init__(**kwargs)
+  def call(self, l):         
+    x = tf.math.exp(l)
+    y = 1+tf.reduce_sum(x,axis=-1,keepdims=True)
+    return x/y 
+custom_layers['softmax0'] = softmax0
 
+
+def CrossEntropy0():
+    
+    def crossentropy0(l,p,from_logits=True):
+        
+        sz = p.shape
+        if from_logits:
+            p = tf.concat([tf.zeros(sz[0:-1]+[1]),p],-1)
+            return tf.losses.sparse_categorical_crossentropy(l,p,from_logits=True)
+        else:
+            psum = tf.reduce_sum(p,axis=-1,keepdims=True)
+            p = tf.concat([1-psum,p],-1)
+            tf.losses.sparse_categorical_crossentropy(l,p,from_logits=False)
+    return crossentropy0
     
 class iFFTlayer(layers.Layer):
   def __init__(self,out_shape=[32,32,32],out_fdim=6,kmax=2,**kwargs):    

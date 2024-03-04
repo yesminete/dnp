@@ -1552,3 +1552,44 @@ def nifti_grid(shape,edges,nD=3):
         
 
     return N         
+
+
+def cropnifti(im,border=5,bbox=None):
+    if bbox is None:
+        a = im.dataobj[:,:,:,0];
+        Z = np.squeeze(np.argwhere(np.sum(np.sum(a,axis=0),axis=0)>0))
+        Y = np.squeeze(np.argwhere(np.sum(np.sum(a,axis=0),axis=-1)>0))
+        X = np.squeeze(np.argwhere(np.sum(np.sum(a,axis=-1),axis=-1)>0))
+        bbox = {}
+        bbox['X0'] = max(X[0]-border,0)
+        bbox['X1'] = min(X[-1]+border,a.shape[0])
+        bbox['Y0'] = max(Y[0]-border,0)
+        bbox['Y1'] = min(Y[-1]+border,a.shape[1])
+        bbox['Z0'] = max(Z[0]-border,0)
+        bbox['Z1'] = min(Z[-1]+border,a.shape[2])
+        
+        
+    off = np.array([bbox['X0'],bbox['Y0'],bbox['Z0'],1])
+    print(off)
+    affine = np.array(im.affine);
+
+    affine[:,3] = np.matmul(im.affine,off)
+    if len(im.dataobj.shape) == 4:
+        cropped = nib.Nifti1Image(im.dataobj[bbox['X0']:bbox['X1'],bbox['Y0']:bbox['Y1'],bbox['Z0']:bbox['Z1'],:], affine, im.header)
+    else:
+        cropped = nib.Nifti1Image(im.dataobj[bbox['X0']:bbox['X1'],bbox['Y0']:bbox['Y1'],bbox['Z0']:bbox['Z1']], affine, im.header)    
+    return cropped,bbox
+
+def generate_outline(mask,contrast,num=0,threshold=0.5,factor=10000):
+
+    a = mask.get_fdata()
+    if len(a.shape) == 4:
+        a = a[:,:,:,num:num+1]
+    else:
+        a = tf.expand_dims(a,-1)
+    x = tf.reshape(tf.cast(a>threshold,dtype=tf.float32),[1] +  list(a.shape[0:-1]) + [1])
+    y = tf.cast(tf.nn.conv3d(x,tf.ones([3,3,3,1,1]),[1,1,1,1,1],'SAME')>2,tf.float32)
+    outline = y*(1-x)
+    res = contrast.get_fdata()
+    res = tf.where(outline[0,:,:,:,0]>0,factor,res)
+    return nib.Nifti1Image(res, contrast.affine, contrast.header)
