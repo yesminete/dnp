@@ -1640,7 +1640,7 @@ class PatchWorkModel(Model):
     if immediate_init and model.input_fdim is not None: 
 
         if notmpfile:
-            model.load_weights(weightspath)   
+            model.load_weights(weightspath).expect_partial()    
         else:
                 
             import tempfile
@@ -1655,7 +1655,7 @@ class PatchWorkModel(Model):
             head_tail = os.path.split(name) 
             loading_name_tmp = os.path.join(tmpdir, head_tail[1])
                         
-            model.load_weights(loading_name_tmp + suffix)            
+            model.load_weights(loading_name_tmp + suffix).expect_partial()                
         
         
         try:
@@ -1679,7 +1679,7 @@ class PatchWorkModel(Model):
         if not notmpfile:
             shutil.rmtree(tmpdir)
     else:        
-        model.load_weights(weightspath)   
+        model.load_weights(weightspath).expect_partial()       
 
 
     model.modelname = name
