@@ -1020,15 +1020,23 @@ class PatchWorkModel(Model):
                         
              
                 
-         if sampling_factor > 1:    
-             sigma = sampling_factor-1
-             for k in level:
-                if nD==2:
-                    res[k] = tf.squeeze(conv_gauss2D_fft(tf.expand_dims(res[k],0),sigma),0)
-                if nD==3:
-                    res[k] = tf.squeeze(conv_gauss3D_fft(tf.expand_dims(res[k],0),sigma),0)
-             
-                
+         if isinstance(sampling_factor,list) or sampling_factor > 1: 
+             if not isinstance(sampling_factor,list):
+                 sigma = sampling_factor-1
+             else:
+                 if sampling_factor[-1] == 'mm':
+                     dvsz = tf.cast(sampling_factor[0:-1],dtype=tf.float32)
+                     sigma = resolution['voxsize']/dvsz-1
+                 else:
+                     sigma = sampling_factor-1
+             if all(sigma > 0):
+                 for k in level:
+                    if nD==2:
+                       res[k] = tf.squeeze(conv_gauss2D_fft(tf.expand_dims(res[k],0),sigma),0)
+                    if nD==3:
+                       res[k] = tf.squeeze(conv_gauss3D_fft(tf.expand_dims(res[k],0),sigma),0)
+            
+           
          sz = data.shape
          orig_shape = sz[1:(nD+1)]
          if scale_to_original:
