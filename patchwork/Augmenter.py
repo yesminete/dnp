@@ -7,18 +7,11 @@ Created on Mon Apr 13 11:37:27 2020
 """
 
 import numpy as np
-#from PIL import Image
-#import cv2
-
-import tensorflow as tf
-
-
-from random import sample 
-from .improc_utils import *
+import torch
+import torch.nn.functional as F
 
 def Augmenter( morph_width = 150,
                 morph_strength=0.25,
-                rotation_dphi=0.1,
                 flip = None ,
                 scaling = None,
                 normal_noise=0,
@@ -27,12 +20,16 @@ def Augmenter( morph_width = 150,
                 
 
     def augment(data,labels):
-        
+
+            if isinstance(data, np.ndarray):
+                data = torch.from_numpy(data)
+            if labels is not None and isinstance(labels, np.ndarray):
+                labels = torch.from_numpy(labels)
+
             sz = data.shape
-            if len(sz) == 4:
-                nD = 2
-            if len(sz) == 5:
-                nD = 3
+            if len(sz) != 4:
+                raise ValueError('Augmenter supports only 2-D images with shape [batch, h, w, c]')
+            nD = 2
     
             if not include_original:
                 data_res = []
@@ -43,38 +40,32 @@ def Augmenter( morph_width = 150,
                 if labels is not None:
                     labels_res = [labels]
     
-            for k in range(repetitions):            
-                if nD == 2:
-                    X,Y = sampleDefField_2D(sz)                    
-                    data_ = interp2lin(data,Y,X)        
-                    if labels is not None:
-                        labels_ = interp2lin(labels,Y,X)            
-                if nD == 3:
-                    X,Y,Z = sampleDefField_3D(sz)
-                    data_ = interp3lin(data,X,Y,Z)        
-                    if labels is not None:                
-                        labels_ = interp3lin(labels,X,Y,Z)            
+            for k in range(repetitions):
+                X,Y = sampleDefField_2D(sz, data.device)
+                data_ = interp2lin(data,Y,X)
+                if labels is not None:
+                    labels_ = interp2lin(labels,Y,X)
                 
                 if normal_noise > 0:
-                    data_ = data_ + tf.random.normal(data_.shape, mean=0,stddev=normal_noise)
+                    data_ = data_ + torch.randn_like(data_) * normal_noise
                 
                 if flip is not None:
                     for j in range(nD):
                         if flip[j]:
                             if np.random.uniform() > 0.5:
-                                data_ = np.flip(data_,j+1)
+                                data_ = torch.flip(data_,dims=[j+1])
                                 if labels is not None:
-                                    labels_ = np.flip(labels_,j+1)
+                                    labels_ = torch.flip(labels_,dims=[j+1])
                                 
                 
                 
                 data_res.append(data_)
                 if labels is not None:            
                     labels_res.append(labels_)
-            data_res = tf.concat(data_res,0)
+            data_res = torch.cat(data_res,0)
             
             if labels is not None:            
-                labels_res = tf.concat(labels_res,0)
+                labels_res = torch.cat(labels_res,0)
                 return data_res,labels_res
             else:            
                 return data_res,None
@@ -82,77 +73,61 @@ def Augmenter( morph_width = 150,
     
 
 
-    def sampleDefField_2D(sz):
-        
-        X,Y = np.meshgrid(np.arange(0,sz[2]),np.arange(0,sz[1]))
-        
-        phi = np.random.uniform(low=-rotation_dphi,high=rotation_dphi)
-        
-        wid = morph_width/4
-        s = wid*wid*morph_strength
-        dx = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
-        dx = np.squeeze(dx)
-        dy = conv_gauss2D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),3),wid)
-        dy = np.squeeze(dy)
-        
-        scfacs = [1,1]
-        if scaling is not None:
-            if isinstance(scaling,list):
-                scfacs = [1+np.random.uniform(-1,1)*scaling[0],1+np.random.uniform(-1,1)*scaling[1]]
-            else:
-                sciso = scaling*np.random.uniform(-1,1)
-                scfacs = [1+sciso,1+sciso]
-        
-        
-        cx = 0.5*sz[2]
-        cy = 0.5*sz[1]
-        nX = scfacs[0]*tf.math.cos(phi)*(X-cx) - scfacs[0]*tf.math.sin(phi)*(Y-cy) + cx + s*dx
-        nY = scfacs[1]*tf.math.sin(phi)*(X-cx) + scfacs[1]*tf.math.cos(phi)*(Y-cy) + cy + s*dy
-        #dY = np.random.normal(0,s,X.shape)
-        
-        return nX,nY        
-    
+    def gaussian_kernel(std, device):
+        size = int(4 * std + 1)
+        coords = torch.arange(size, dtype=torch.float32, device=device) - size // 2
+        g = torch.exp(-(coords ** 2) / (2 * std * std))
+        g = g / g.sum()
+        kernel = torch.outer(g, g)
+        kernel = kernel / kernel.sum()
+        return kernel.view(1, 1, size, size)
 
-    def sampleDefField_3D(sz):
-        
-        X,Y,Z = np.meshgrid(np.arange(0,sz[1]),np.arange(0,sz[2]),np.arange(0,sz[3]),indexing='ij')
-        
-        
-        wid = morph_width/4
-        s = wid*wid*morph_strength
-        dx = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dx = np.squeeze(dx)
-        dy = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dy = np.squeeze(dy)
-        dz = conv_gauss3D_fft(np.expand_dims(np.expand_dims(np.random.normal(0,1,X.shape),0),4),wid)
-        dz = np.squeeze(dz)
-        
-        
-        scfacs = [1,1,1]
+    def smooth_noise(shape, std, device):
+        noise = torch.randn(1, 1, *shape, device=device)
+        k = gaussian_kernel(std, device)
+        return F.conv2d(noise, k, padding="same")[0, 0]
+
+    def interp2lin(image, Y, X):
+        if isinstance(image, np.ndarray):
+            image = torch.from_numpy(image)
+        B, H, W, C = image.shape
+        grid_x = 2 * X / (W - 1) - 1
+        grid_y = 2 * Y / (H - 1) - 1
+        grid = torch.stack((grid_x, grid_y), dim=-1)
+        grid = grid.unsqueeze(0).repeat(B, 1, 1, 1)
+        out = F.grid_sample(image.permute(0, 3, 1, 2), grid, mode="bilinear", align_corners=True)
+        return out.permute(0, 2, 3, 1)
+
+    def sampleDefField_2D(sz, device):
+
+        X, Y = torch.meshgrid(
+            torch.arange(0, sz[2], dtype=torch.float32, device=device),
+            torch.arange(0, sz[1], dtype=torch.float32, device=device),
+            indexing="xy",
+        )
+
+        wid = morph_width / 4.0
+        s = wid * wid * morph_strength
+        dx = smooth_noise((sz[1], sz[2]), wid, device)
+        dy = smooth_noise((sz[1], sz[2]), wid, device)
+
+        scfacs = [1.0, 1.0]
         if scaling is not None:
-            if isinstance(scaling,list):
-                scfacs = [1+np.random.uniform(-1,1)*scaling[0],1+np.random.uniform(-1,1)*scaling[1],1+np.random.uniform(-1,1)*scaling[2]]
+            if isinstance(scaling, list):
+                scfacs = [
+                    1 + np.random.uniform(-1, 1) * scaling[0],
+                    1 + np.random.uniform(-1, 1) * scaling[1],
+                ]
             else:
-                sciso = scaling*np.random.uniform(-1,1)
-                scfacs = [1+sciso,1+sciso,1+sciso]
-        
-        
-        cx = 0.5*sz[1]
-        cy = 0.5*sz[2]
-        cz = 0.5*sz[3]
-        
-        u, _, vh = np.linalg.svd(np.eye(3) + rotation_dphi*np.random.normal(0,1,[3,3]), full_matrices=True)
-        R = np.dot(u[:, :6] , vh)
-        
-        dx = s*dx
-        dy = s*dy
-        dz = s*dz
-        
-        nX = scfacs[0]*R[0,0]*(X-cx) + scfacs[0]*R[0,1]*(Y-cy) + scfacs[0]*R[0,2]*(Z-cz) + cx + dx
-        nY = scfacs[1]*R[1,0]*(X-cx) + scfacs[1]*R[1,1]*(Y-cy) + scfacs[1]*R[1,2]*(Z-cz) + cy + dy
-        nZ = scfacs[2]*R[2,0]*(X-cx) + scfacs[2]*R[2,1]*(Y-cy) + scfacs[2]*R[2,2]*(Z-cz) + cz + dz
-        
-        return nX,nY,nZ
+                sciso = scaling * np.random.uniform(-1, 1)
+                scfacs = [1 + sciso, 1 + sciso]
+
+        cx = 0.5 * sz[2]
+        cy = 0.5 * sz[1]
+        nX = scfacs[0] * (X - cx) + cx + s * dx
+        nY = scfacs[1] * (Y - cy) + cy + s * dy
+
+        return nX, nY
     
 
     return augment
