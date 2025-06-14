@@ -1,5 +1,5 @@
-tensorflow==2.12.0
 numpy
 nibabel
 matplotlib
 connected-components-3d
+torch
