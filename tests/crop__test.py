@@ -19,7 +19,6 @@ from tensorflow.keras import layers
 
 from timeit import default_timer as timer
 
-import nibabel as nib
 import matplotlib.pyplot as plt
 
 import patchwork2.model as patchwork
@@ -35,16 +34,14 @@ import patchwork2.customLayers as customLayers
 trainset = []
 labelset = []
 
+img = np.random.rand(64, 64).astype(np.float32)
+a = np.expand_dims(np.expand_dims(img, 0), 3)
+trainset.append(tf.convert_to_tensor(a, dtype=tf.float32))
 
+label = (np.random.rand(64, 64) > 0.5).astype(np.float32)
+a = np.expand_dims(label, 0)
 
-img = nib.load('example2d.nii.gz')
-a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
-trainset.append( tf.convert_to_tensor(a,dtype=tf.float32) )
-
-label = nib.load('example2d_label.nii.gz')
-a = np.expand_dims(np.squeeze(label.get_fdata()),0)
-
-labelset.append( tf.convert_to_tensor(a[...,8:9],dtype=tf.float32) )
+labelset.append(tf.convert_to_tensor(a[..., np.newaxis], dtype=tf.float32))
 
 
 #%% 2D

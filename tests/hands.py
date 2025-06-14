@@ -21,8 +21,6 @@ from tensorflow.keras import layers
 
 
 from timeit import default_timer as timer
-
-import nibabel as nib
 import matplotlib.pyplot as plt
 
 import patchwork2.model as patchwork
@@ -94,29 +92,21 @@ skip = 1
 flip = [0,0,1,1,1]
 nfacs = np.zeros([15,5])
 for k in range(2):
-  img = nib.load('data/hands2/data' + str(k+1) + '.nii.gz')
-  a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)
-  a = a[:,0::skip,0::skip,:]
+  a = np.random.rand(1,32,32,1).astype(np.float32)
   if flip[k] == -1:
     a = np.flip(a,1)
-    
-  #plt.imshow(np.squeeze(a[0,:,:,0]))
-  trainset.append( tf.convert_to_tensor(a,dtype=tf.float32) )
 
+  trainset.append(tf.convert_to_tensor(a,dtype=tf.float32))
 
-  label = nib.load('data/hands2/labels' + str(k+1) + '.nii.gz')
-  a = np.expand_dims(np.squeeze(label.get_fdata()),0)
-  a = a[:,0::skip,0::skip,:]
+  a = np.random.rand(1,32,32,15).astype(np.float32)
   bgnd = np.expand_dims(np.any(a,3)==0,3)
   a = np.concatenate([a,bgnd],3)
-  #if flip[k] == -1:
-  #  a = np.flip(a,1)
   for j in range(15):
     nfacs[j,k] = math.sqrt(np.sum(a[:,:,:,j]))
 
-  labelset.append( tf.convert_to_tensor(a[...,8:9],dtype=tf.float32)   )
-  
-  resolutions.append(img.header['pixdim'][1:4])
+  labelset.append(tf.convert_to_tensor(a[...,8:9],dtype=tf.float32))
+
+  resolutions.append([1,1,1])
 #  labelset.append( [ tf.convert_to_tensor([[flip[k]]]) , a] )
   
  # labelset.append(  tf.convert_to_tensor([[flip[k]]])  )

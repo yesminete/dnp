@@ -12,7 +12,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 
-import numpy as npss
+import numpy as np
 import tensorflow as tf
 import math
 from tensorflow.keras import Model
@@ -32,16 +32,19 @@ import patchwork2 as patchwork
 
 
 # define your data sources 
-contrasts = [ { 'subj1' :  'example2d.nii.gz',  
-                'subj2' :  'example2d.nii.gz'  },
-              { 'subj1' :  'example2d.nii.gz',
-               'subj2' :  'example2d.nii.gz' }
-          #       },
-          #    { 'subj1' :  'example2d.nii.gz'
-          #        }
-              ]
-labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
-                'subj2' :  'example2d_label.nii.gz' } ]
+contrasts = [ {
+    'subj1': np.random.rand(64, 64).astype(np.float32),
+    'subj2': np.random.rand(64, 64).astype(np.float32)
+  },
+  {
+    'subj1': np.random.rand(64, 64).astype(np.float32),
+    'subj2': np.random.rand(64, 64).astype(np.float32)
+  }
+          ]
+labels   = [ {
+    'subj1': (np.random.rand(64, 64) > 0.5).astype(np.float32),
+    'subj2': (np.random.rand(64, 64) > 0.5).astype(np.float32)
+  } ]
 
 subjects = [ 'subj1', 'subj2'];
 

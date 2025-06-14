@@ -38,12 +38,14 @@ else:
         pass
     
     # define your data sources 
-    contrasts = [ { 'subj1' :  'example2d.nii.gz',  
-                    'subj2' :  'example2d_b.nii.gz' 
-                    } ]
-    labels   = [  { 'subj1' :  'example2d_label.nii.gz', 
-                   'subj2' :  'example2d_label_b.nii.gz', 
-                     } ]
+    contrasts = [ {
+        'subj1': np.random.rand(64, 64).astype(np.float32),
+        'subj2': np.random.rand(64, 64).astype(np.float32)
+    } ]
+    labels   = [ {
+        'subj1': (np.random.rand(64, 64) > 0.5).astype(np.float32),
+        'subj2': (np.random.rand(64, 64) > 0.5).astype(np.float32)
+    } ]
     
     subjects = [ 'subj1'
                 #, 'subj2'
@@ -417,7 +419,6 @@ else:
     
     #%%
     
-    import nibabel as nib
     import numpy as np
     #img = nib.load('example2d_b.nii.gz')
     #a = np.expand_dims(np.expand_dims(np.squeeze(img.get_fdata()),0),3)

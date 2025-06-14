@@ -19,7 +19,6 @@ from tensorflow.keras import layers
 
 from timeit import default_timer as timer
 
-import nibabel as nib
 import matplotlib.pyplot as plt
 
 import patchwork2.model as patchwork
@@ -35,9 +34,8 @@ fi = '/software/patchwork2/s004.nii'
 trainset = []
 labelset = []
 
-img = nib.load(fi)
-ie = img.affine
-img = img.get_fdata()
+img = np.random.rand(32, 32, 32).astype(np.float32)
+ie = np.eye(4)
 
 #ie = np.array([[-1,0,0,100],[0,-1,0,-10000],[0,0,-1,-500],[0,0,0,1]])
 if 0:

@@ -12,7 +12,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 
-import numpy as npss
+import numpy as np
 import tensorflow as tf
 import math
 from tensorflow.keras import Model
@@ -31,14 +31,22 @@ import patchwork2 as patchwork
 
 
 # define your data sources 
-contrasts = [ { 'subj1' :  'data/brain/subj1/t1.nii' ,
-                'subj2' :  'data/brain/subj2/t1.nii' },
-              { 'subj1' :  'data/brain/subj1/flair.nii' ,
-                'subj2' :  'data/brain/subj2/flair.nii' } ]
-labels   = [ { 'subj1' :  'data/brain/subj1/PV.nii.gz' ,
-                'subj2' :  'data/brain/subj2/PV.nii.gz' },
-              { 'subj1' :  'data/brain/subj1/ML.nii.gz' ,
-                'subj2' :  'data/brain/subj2/ML.nii.gz' } ]
+contrasts = [ {
+    'subj1': np.random.rand(32, 32, 32).astype(np.float32),
+    'subj2': np.random.rand(32, 32, 32).astype(np.float32)
+  },
+  {
+    'subj1': np.random.rand(32, 32, 32).astype(np.float32),
+    'subj2': np.random.rand(32, 32, 32).astype(np.float32)
+  } ]
+labels   = [ {
+    'subj1': (np.random.rand(32, 32, 32) > 0.5).astype(np.float32),
+    'subj2': (np.random.rand(32, 32, 32) > 0.5).astype(np.float32)
+  },
+  {
+    'subj1': (np.random.rand(32, 32, 32) > 0.5).astype(np.float32),
+    'subj2': (np.random.rand(32, 32, 32) > 0.5).astype(np.float32)
+  } ]
 
 subjects = [ 'subj1','subj2' ];
 
