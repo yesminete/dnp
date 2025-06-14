@@ -6,133 +6,59 @@ Created on Mon Mar 23 15:29:09 2020
 @author: reisertm
 """
 
-import tensorflow as tf
-import nibabel as nib
 import numpy as np
-from nibabel.processing import (resample_from_to, resample_to_output, smooth_image)
+import tensorflow as tf
+import torch
+import torch.nn.functional as F
+import nibabel as nib
+from nibabel.processing import resample_from_to, resample_to_output, smooth_image
 import json
 import os
 
 ########## Cropmodel ##########################################
 
-def gaussian2D(std):  
-  size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()+1
-  X,Y = tf.meshgrid(list(range(-size,size)),list(range(-size,size)))
-  X = tf.cast(X,dtype=tf.float32)
-  Y = tf.cast(Y,dtype=tf.float32)
-  gauss_kernel = tf.exp(-(X*X + Y*Y)/(2*std*std))
-  return gauss_kernel / tf.reduce_sum(gauss_kernel)
+def gaussian2D(std):
+    size = int(np.floor(2.5 * std)) + 1
+    coords = np.arange(-size, size, dtype=np.float32)
+    X, Y = np.meshgrid(coords, coords, indexing="ij")
+    g = np.exp(-(X ** 2 + Y ** 2) / (2 * std * std))
+    g = g / np.sum(g)
+    return torch.from_numpy(g)
 
-def conv_gauss2D(img,std):
-  g = gaussian2D(std)
-  g = tf.expand_dims(g,2)
-  g = tf.expand_dims(g,3)
-  r = []
-  for k in range(img.shape[3]):
-    r.append(tf.nn.conv2d(img[:,:,:,k:k+1],g,1,'SAME'))
-  r = tf.concat(r,3)
-  return r
+def conv_gauss2D(img, std):
+    if isinstance(img, np.ndarray):
+        img = torch.from_numpy(img)
+    if isinstance(std, (float, int)):
+        std = float(std)
+    kernel = gaussian2D(std)
+    kernel = kernel.view(1, 1, *kernel.shape)
+    padding = kernel.shape[-1] // 2
+    if img.dim() == 3:
+        img = img.unsqueeze(0)
+    img = img.permute(0, 3, 1, 2)
+    kernel = kernel.repeat(img.shape[1], 1, 1, 1)
+    out = F.conv2d(img, kernel, padding=padding, groups=img.shape[1])
+    return out.permute(0, 2, 3, 1)
 
-def conv_boxcar2D(img,std):
-  box = tf.ones(std,dtype=img.dtype) / tf.cast(np.prod(std),dtype=img.dtype)
-  box = tf.expand_dims(box,2)
-  box = tf.expand_dims(box,3)
-  if len(img.shape) < 4:
-      img = tf.expand_dims(img,3)  
-  r = []
-  for k in range(img.shape[3]):
-    r.append(tf.nn.conv2d(img[:,:,:,k:k+1],box,1,'SAME'))
-  r = tf.concat(r,3)
-  return r
+def conv_boxcar2D(img, std):
+    if isinstance(img, np.ndarray):
+        img = torch.from_numpy(img)
+    if isinstance(std, int):
+        std = [std, std]
+    kernel = torch.ones(1, 1, std[0], std[1], dtype=img.dtype)
+    kernel = kernel / kernel.numel()
+    padding = (std[0] // 2, std[1] // 2)
+    if img.dim() == 3:
+        img = img.unsqueeze(0)
+    img = img.permute(0, 3, 1, 2)
+    kernel = kernel.repeat(img.shape[1], 1, 1, 1)
+    out = F.conv2d(img, kernel, padding=padding, groups=img.shape[1])
+    return out.permute(0, 2, 3, 1)
 
-def conv_gauss2D_fft(img,std):
-    
-  if isinstance(std,float) or isinstance(std,int):
-      std = [std]*2
-    
-  sz = img.shape
-  pad = np.floor(std*2)
-  s0 = np.int32(sz[1]+pad[0])
-  s1 = np.int32(sz[2]+pad[1])
-  X,Y = tf.meshgrid(list(range(0,s0)),list(range(0,s1)),indexing='ij')
-  X = tf.cast(X,dtype=tf.float32)
-  Y = tf.cast(Y,dtype=tf.float32)
-  X = X - 0.5*(sz[1]+pad[0])
-  Y = Y - 0.5*(sz[2]+pad[1])
-  gauss_kernel = tf.exp(-(X*X/(2*std[0]*std[0]) + Y*Y/(2*std[1]*std[1])))
-  gauss_kernel = gauss_kernel / tf.reduce_sum(gauss_kernel)
-  gauss_kernel = tf.cast(gauss_kernel,dtype=tf.complex64)
-  gauss_kernel = tf.signal.fftshift(gauss_kernel,[0,1])
-  gfft = tf.signal.fft2d(gauss_kernel)  
-  gfft = tf.expand_dims(gfft,0)
-  pads = tf.cast([[0,0],[0,pad[0]],[0,pad[1]]],tf.int32)
+def conv_gauss2D_fft(img, std):
+    """Gaussian smoothing using convolution."""
+    return conv_gauss2D(img, std)
 
-
-  if len(img.shape) < 4:
-      img = tf.expand_dims(img,3)
-
-  r = []
-  for k in range(img.shape[3]):
-    t = tf.squeeze(img[:,:,:,k])
-    if len(t.shape) == 2:
-        t = tf.expand_dims(t,0)
-    t = tf.cast(t,dtype=tf.complex64)
-    t = tf.pad(t,pads,mode='REFLECT')
-    t = tf.signal.fft2d(t)
-    t = t * gfft
-    t = tf.signal.ifft2d(t )
-    t = t[:,0:sz[1],0:sz[2]]
-    t = tf.math.real(t)
-    t = tf.expand_dims(t,3)                   
-    r.append(t)
-  r = tf.concat(r,3)
-  return r
-
-def conv_gauss3D_fft(img,std):
-    
-  if isinstance(std,float) or isinstance(std,int):
-      std = [std]*3
-    
-    
-  sz = img.shape
-  pad = np.floor(std*2)
-  s0 = np.int32(sz[1]+pad[0])
-  s1 = np.int32(sz[2]+pad[1])
-  s2 = np.int32(sz[3]+pad[2])
-  X,Y,Z = tf.meshgrid(list(range(0,s0)),list(range(0,s1)),list(range(0,s2)),indexing='ij')
-  X = tf.cast(X,dtype=tf.float32)
-  Y = tf.cast(Y,dtype=tf.float32)
-  Z = tf.cast(Z,dtype=tf.float32)
-  X = X - 0.5*(sz[1]+pad[0])
-  Y = Y - 0.5*(sz[2]+pad[1])
-  Z = Z - 0.5*(sz[3]+pad[2])
-  gauss_kernel = tf.exp(-(X*X/(2*std[0]*std[0]) + Y*Y/(2*std[1]*std[1]) + Z*Z/(2*std[2]*std[2])))
-  gauss_kernel = gauss_kernel / tf.reduce_sum(gauss_kernel)
-  gauss_kernel = tf.cast(gauss_kernel,dtype=tf.complex64)
-  gauss_kernel = tf.signal.fftshift(gauss_kernel,[0,1,2])
-  gfft = tf.signal.fft3d(gauss_kernel)  
-  gfft = tf.expand_dims(gfft,0)
-  pads = tf.cast([[0,0],[0,pad[0]],[0,pad[1]],[0,pad[2]]],tf.int32)
-
-  if len(img.shape) < 5:
-      img = tf.expand_dims(img,4)
-
-  r = []
-  for k in range(img.shape[4]):
-    t = tf.squeeze(img[:,:,:,:,k])
-    if len(t.shape) == 3:
-        t = tf.expand_dims(t,0)
-    t = tf.cast(t,dtype=tf.complex64)
-    t = tf.pad(t,pads,mode='REFLECT')
-    t = tf.signal.fft3d(t)
-    t = t * gfft
-    t = tf.signal.ifft3d(t )
-    t = t[:,0:sz[1],0:sz[2],0:sz[3]]
-    t = tf.math.real(t)
-    t = tf.expand_dims(t,4)                   
-    r.append(t)
-  r = tf.concat(r,4)
-  return r
 
 
 def globalmax(x,dummy):
@@ -141,47 +67,28 @@ def globalmax(x,dummy):
     return x*tf.cast(0.0,dtype=x.dtype) + tf.reduce_max(x,axis=axis,keepdims=True)
 
 
-def gaussian3D(std):  
-  size = tf.cast(tf.math.floor(2.5*std),tf.int32).numpy()+1
-  X,Y,Z = tf.meshgrid(list(range(-size,size)),list(range(-size,size)),list(range(-size,size)))
-  X = tf.cast(X,dtype=tf.float32)
-  Y = tf.cast(Y,dtype=tf.float32)
-  Z = tf.cast(Y,dtype=tf.float32)
-  gauss_kernel = tf.exp(-(X*X + Y*Y + Z*Z)/(2*std*std))
-  return gauss_kernel / tf.reduce_sum(gauss_kernel)
 
 
-def conv_boxcar3D(img,std):
-  box = tf.ones(std,dtype=img.dtype) / tf.cast(np.prod(std),dtype=img.dtype)
-  box = tf.expand_dims(box,3)
-  box = tf.expand_dims(box,4)
-  r = []
-  if len(img.shape) < 5:
-      img = tf.expand_dims(img,4)
-  for k in range(img.shape[4]):
-    r.append(tf.nn.conv3d(img[:,:,:,:,k:k+1],box,(1,1,1,1,1),'SAME'))
-  r = tf.concat(r,4)
-  return r
 
-def poolmax_boxcar3D(img,std):
-  r = []
-  if len(img.shape) < 5:
-      img = tf.expand_dims(img,4)
-  r = tf.cast(tf.nn.max_pool3d(tf.cast(img,tf.float32),ksize=std,strides=[1,1,1],padding='SAME'),dtype=img.dtype)
-  return r
 
-def mixture_boxcar3D(img,std):
-  r = tf.concat([conv_boxcar3D(img,std),
-                 poolmax_boxcar3D(img,std),
-                 -poolmax_boxcar3D(-img,std)],4)
-  return r
 
 def poolmax_boxcar2D(img,std):
-  r = []
-  if len(img.shape) < 4:
-      img = tf.expand_dims(img,3)
-  r = tf.nn.max_pool2d(img,ksize=std,strides=[1,1],padding='SAME')
-  return r
+    if isinstance(img, np.ndarray):
+        img = torch.from_numpy(img)
+    if isinstance(std, int):
+        std = [std, std]
+    if img.dim() == 3:
+        img = img.unsqueeze(0)
+    img = img.permute(0, 3, 1, 2)
+    out = F.max_pool2d(img, kernel_size=std, stride=1, padding=(std[0] // 2, std[1] // 2))
+    return out.permute(0, 2, 3, 1)
+
+def mixture_boxcar2D(img, std):
+    """Concatenate mean and max filtered images"""
+    smooth = conv_boxcar2D(img, std)
+    mx = poolmax_boxcar2D(img, std)
+    mxn = poolmax_boxcar2D(-img, std)
+    return torch.cat([smooth, mx, -mxn], dim=-1)
 
   # to get a nice shape which dividable by divisor 
 def getClosestDivisable(x,divisor):
@@ -393,7 +300,7 @@ def resizeNDlinear_old2(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
         X = tf.cast(X,dtype=tf.float32)/(dest_shape[0]-1)*(sz[1]-1)
         Y = tf.cast(Y,dtype=tf.float32)/(dest_shape[1]-1)*(sz[2]-1)
         Z = tf.cast(Z,dtype=tf.float32)/(dest_shape[2]-1)*(sz[3]-1)
-        res = interp3lin(image,X,Y,Z)
+        raise NotImplementedError("3D interpolation has been removed")
         
     if not batch_dim:
         return res[0,...]
@@ -403,66 +310,20 @@ def resizeNDlinear_old2(image,dest_shape,batch_dim=True,nD=3,edge_center=False):
 
 
 
-def interp2lin(image,X,Y):
-
-    nD = 2    
-    Xint = np.floor(X)
-    Yint = np.floor(Y)
-    Xfrc = X-Xint
-    Yfrc = Y-Yint
-    sz = image.shape
-    
-    if image.shape[3] == 1:
-        im =  lambda i: np.expand_dims(np.squeeze(image[i,...]),nD)
-    else:
-        im =  lambda i: np.squeeze(image[i,...])
-    
-    def getIndex(X,Y,x,y):
-        X = X+x
-        X[X<0] = 0
-        X[X>=sz[1]] = sz[1]-1
-        Y = Y+y
-        Y[Y<0] = 0
-        Y[Y>=sz[2]] = sz[2]-1        
-        index=np.concatenate([np.expand_dims(X,nD),np.expand_dims(Y,nD)],nD)
-        index = tf.convert_to_tensor(index,dtype=tf.int32)
-        return index
-   
-    
-    ftype = image.dtype
-   
-    res = [0]*sz[0]
-
-
-    
-    index = getIndex(Xint,Yint,0,0)
-    w = tf.expand_dims((1-Xfrc)*(1-Yfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,0,1)
-    w = tf.expand_dims((1-Xfrc)*(Yfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-    
-    index = getIndex(Xint,Yint,1,0)
-    w = tf.expand_dims((Xfrc)*(1-Yfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-    
-    index = getIndex(Xint,Yint,1,1)
-    w = tf.expand_dims((Xfrc)*(Yfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-        res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    res = tf.concat(res,0)
-    
-
-    return res 
+def interp2lin(image, X, Y):
+    if isinstance(image, np.ndarray):
+        image = torch.from_numpy(image)
+    if isinstance(X, np.ndarray):
+        X = torch.from_numpy(X)
+    if isinstance(Y, np.ndarray):
+        Y = torch.from_numpy(Y)
+    B, H, W, C = image.shape
+    grid_x = 2 * X / (W - 1) - 1
+    grid_y = 2 * Y / (H - 1) - 1
+    grid = torch.stack((grid_x, grid_y), dim=-1)
+    grid = grid.unsqueeze(0).repeat(B, 1, 1, 1)
+    out = F.grid_sample(image.permute(0, 3, 1, 2), grid, mode="bilinear", align_corners=True)
+    return out.permute(0, 2, 3, 1)
 
 
 
@@ -472,151 +333,6 @@ def interp2lin(image,X,Y):
 
 
 
-def interp3lin(image,X,Y,Z):
-
-    nD = 3    
-    Xint = np.floor(X)
-    Yint = np.floor(Y)
-    Zint = np.floor(Z)
-    Xfrc = X-Xint
-    Yfrc = Y-Yint
-    Zfrc = Z-Zint
-    sz = image.shape
-    
-    if image.shape[4] == 1:
-        im =  lambda i: np.expand_dims(np.squeeze(image[i,...]),nD)
-    else:
-        im =  lambda i: np.squeeze(image[i,...])
-    
-    def getIndex(X,Y,Z,x,y,z):
-        X = X+x
-        X[X<0.0] = 0.0
-        X[X>=sz[1]] = sz[1]-1
-        Y = Y+y
-        Y[Y<0] = 0
-        Y[Y>=sz[2]] = sz[2]-1        
-        Z = Z+z
-        Z[Z<0] = 0
-        Z[Z>=sz[3]] = sz[3]-1        
-        index=np.concatenate([np.expand_dims(X,nD),np.expand_dims(Y,nD),np.expand_dims(Z,nD)],nD)
-        index = tf.convert_to_tensor(index,dtype=tf.int32)
-        return index
-    
-    res = [0]*sz[0]
-    
-    ftype = image.dtype
-    
-    index = getIndex(Xint,Yint,Zint,0,0,0)
-    w = tf.expand_dims((1-Xfrc)*(1-Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,1,0,0)
-    w = tf.expand_dims((Xfrc)*(1-Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,0,1,0)
-    w = tf.expand_dims((1-Xfrc)*(Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,1,1,0)
-    w = tf.expand_dims((Xfrc)*(Yfrc)*(1-Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,0,0,1)
-    w = tf.expand_dims((1-Xfrc)*(1-Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,1,0,1)
-    w = tf.expand_dims((Xfrc)*(1-Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,0,1,1)
-    w = tf.expand_dims((1-Xfrc)*(Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    index = getIndex(Xint,Yint,Zint,1,1,1)
-    w = tf.expand_dims((Xfrc)*(Yfrc)*(Zfrc),nD)
-    w = tf.cast(w,ftype)
-    for i in range(sz[0]): 
-       res[i] = res[i] + tf.expand_dims(w*tf.gather_nd(im(i),index),0)
-
-    res = tf.concat(res,0)
-
-    return res 
-
-
-# loads nifti data into tf.tensors
-#
-# contrasts = [ { 'subj1' :  '/path/to/subj1/T1.nii' ,
-#                 'subj2' :  '/path/to/subj2/T1.nii' },
-#               { 'subj1' :  '/path/to/subj1/T2.nii' ,
-#                 'subj2' :  '/path/to/subj2/T2.nii' } ]
-#              
-# labels =    [ { 'subj1' :  '/path/to/subj1/hippo.nii' ,
-#                 'subj2' :  '/path/to/subj2/thal.nii' },
-#               { 'subj1' :  '/path/to/subj1/hippo.nii' ,
-#                 'subj2' :  '/path/to/subj2/thal.nii' } ]
-#
-# class  =    { 'subj1' :  [0,1,0],
-#               'subj2' :  [0,0,1] }
-#
-# class  =    { 'subj1' :  1,
-#               'subj2' :  0 }
-#
-
-
-
-def resizeNDlinear(x,dest_shape,nD=3,batch_dims=0):
-    
-    def lin_interp(data,x):
-  
-        def frac(a):
-            return a-tf.floor(a)
-        if nD == 3:
-            w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]), frac(x[:,..., 2:3])]
-        else:
-            w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]) ]
-  
-        def gather(d,idx,s):
-            q = tf.convert_to_tensor(s)
-            bound = tf.convert_to_tensor(d.shape[batch_dims:batch_dims+nD])
-            for k in range(nD+1):
-                q = tf.expand_dims(q,0)
-                bound = tf.expand_dims(bound,0)
-            idx = idx + q
-            idx = tf.where(idx>=bound,bound-1,idx)        
-                        
-            
-            weight = 1.0
-            for k in range(nD):
-                if s[k] == 1:
-                    weight = weight*w[k]
-                else:
-                    weight = weight*(1-w[k])
-            if batch_dims == 1:                    
-                return tf.gather_nd(d, tf.tile(idx,[d.shape[0],1,1,1,1]) ,batch_dims=1) * weight
-            else:
-                return tf.gather_nd(d, idx ,batch_dims=0) * weight
-        x = tf.cast(x,dtype=tf.int32)
-        if nD == 3:
-            res = gather(data,x,[0,0,0]) + gather(data,x,[1,0,0]) + gather(data,x,[0,1,0]) + gather(data,x,[0,0,1]) + gather(data,x,[0,1,1]) + gather(data,x,[1,0,1]) + gather(data,x,[1,1,0]) + gather(data,x,[1,1,1])
-        else:
-            res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1]) 
-        return res
        
     src_shape = x.shape[batch_dims:]
     f = [(src_shape[i]-1)/(dest_shape[i]-1) for i in range(0,nD)]

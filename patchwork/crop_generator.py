@@ -220,10 +220,7 @@ def stitchResult_normal(r,level, scales,scatter_type,window=None):
         if window == 'cos' or window == 'cos2' :
             shape = qq.shape[1:]
             nD =  len(shape)-1
-            if nD == 2:
-                A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),indexing='ij')
-            if nD == 3:
-                A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),tf.range(0,shape[2],dtype=tf.float32),indexing='ij')
+            A = tf.meshgrid(tf.range(0,shape[0],dtype=tf.float32),tf.range(0,shape[1],dtype=tf.float32),indexing='ij')
             win = 1.0
             for k in range(nD):
                 win = win*tf.math.sin(divide1(A[k],tf.cast(shape[k]-1,dtype=tf.float32))*np.pi)
@@ -277,10 +274,7 @@ def scatter_interp(x,data,sz):
       
       def frac(a):
           return a-tf.floor(a)
-      if nD == 3:
-          w = [frac(x[:,0:1,0:1,0:1, 0:1]),frac(x[:,0:1,0:1,0:1, 1:2]), frac(x[:,0:1,0:1,0:1, 2:3])]
-      else:
-          w = [frac(x[:,0:1,0:1, 0:1]),frac(x[:,0:1,0:1, 1:2]) ]
+      w = [frac(x[:,0:1,0:1, 0:1]),frac(x[:,0:1,0:1, 1:2]) ]
 
       def stitch(d,idx,s):
           q = tf.convert_to_tensor(s)
@@ -301,10 +295,7 @@ def scatter_interp(x,data,sz):
                
           return res_,sums_
       x = tf.cast(x,dtype=tf.int32)
-      if nD == 3:
-          ids = [[0,0,0],[0,0,1],[0,1,0],[1,0,0],[0,1,1],[1,0,1],[1,1,0],[1,1,1]]
-      else:
-          ids = [[0,0],[0,1],[1,0],[1,1]]
+      ids = [[0,0],[0,1],[1,0],[1,1]]
       res = 0
       sums = 0
       for k in ids:
@@ -365,7 +356,9 @@ class CropGenerator():
     self.keepAspect = keepAspect
     self.create_indicator_classlabels = create_indicator_classlabels
     self.depth = depth
-    self.ndim = ndim
+    if ndim != 2:
+        raise ValueError("Only 2-D data supported")
+    self.ndim = 2
     self.ftype=ftype
     self.snapper = snapper
     self.num_labels = num_labels
@@ -888,17 +881,14 @@ class CropGenerator():
                   }
 
       def toboxes(edges):
-          if self.ndim == 2:
-              if self.system=='world':
-                  i_ = [0,1,3]
-                  boxes = edges[i_,:]
-                  return tensor(boxes[:,i_])
-              else:
-                  vsz = tf.math.sqrt(tf.reduce_sum(edges**2,0))
-                  vsz = [vsz[0],vsz[1],1.0]
-                  return tensor(tf.linalg.diag(vsz))
+          if self.system == 'world':
+              i_ = [0,1,3]
+              boxes = edges[i_,:]
+              return tensor(boxes[:,i_])
           else:
-              return tensor(edges)
+              vsz = tf.math.sqrt(tf.reduce_sum(edges**2,0))
+              vsz = [vsz[0],vsz[1],1.0]
+              return tensor(tf.linalg.diag(vsz))
         
 
       if isinstance(resolution_,dict) and "input_edges" in resolution_:
@@ -1137,30 +1127,18 @@ class CropGenerator():
       res_data = []
       if smoothfac is not None:
         if (isinstance(smoothfac,float) or isinstance(smoothfac,int)) and smoothfac > 0.0:              
-            if self.ndim == 2:
-                  conv_gauss = conv_gauss2D_fft
-            elif self.ndim == 3:
-                  conv_gauss = conv_gauss3D_fft          
+            conv_gauss = conv_gauss2D_fft
             sigmas = smoothfac*resolution
             if verbose:
                 print(' Gaussian smooth: ', sigmas)
             data_smoothed =  conv_gauss(data_parent,tf.constant(sigmas,dtype=self.ftype))
         elif smoothfac == 'boxcar' or smoothfac == 'max' or smoothfac == 'mixture'  or smoothfac == 'globalmax':
             if smoothfac == 'boxcar':
-                if self.ndim == 2:
-                      conv_box = conv_boxcar2D
-                elif self.ndim == 3:
-                      conv_box = conv_boxcar3D                            
+                conv_box = conv_boxcar2D
             if smoothfac == 'mixture':
-                if self.ndim == 2:
-                      conv_box = mixture_boxcar2D
-                elif self.ndim == 3:
-                      conv_box = mixture_boxcar3D                            
+                conv_box = mixture_boxcar2D
             if smoothfac == 'max':
-                if self.ndim == 2:
-                      conv_box = poolmax_boxcar2D
-                elif self.ndim == 3:
-                      conv_box = poolmax_boxcar3D                            
+                conv_box = poolmax_boxcar2D
             if smoothfac == 'globalmax':
                 conv_box = globalmax
             sz = np.round(resolution)
@@ -1212,10 +1190,7 @@ class CropGenerator():
 
       def frac(a):
           return a-tf.floor(a)
-      if self.ndim == 3:
-          w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]), frac(x[:,..., 2:3])]
-      else:
-          w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]) ]
+      w = [frac(x[:,..., 0:1]),frac(x[:,..., 1:2]) ]
 
       def gather(d,idx,s):
           q = tf.convert_to_tensor(s)
@@ -1231,10 +1206,7 @@ class CropGenerator():
                   
           return tf.gather_nd(d, idx ,batch_dims=1) * weight
       x = tf.cast(x,dtype=tf.int32)
-      if self.ndim == 3:
-          res = gather(data,x,[0,0,0]) + gather(data,x,[1,0,0]) + gather(data,x,[0,1,0]) + gather(data,x,[0,0,1]) + gather(data,x,[0,1,1]) + gather(data,x,[1,0,1]) + gather(data,x,[1,1,0]) + gather(data,x,[1,1,1])
-      else:
-          res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1]) 
+      res = gather(data,x,[0,0]) + gather(data,x,[1,0]) + gather(data,x,[0,1]) + gather(data,x,[1,1])
       return res
       
       
@@ -1322,21 +1294,14 @@ class CropGenerator():
             ex1 = lambda x: tf.expand_dims(x,1)
         
             nD = len(shape)
-            if nD == 2:
-                A = tf.meshgrid(tf.range(0,shape[0],dtype=edges.dtype),tf.range(0,shape[1],dtype=edges.dtype),indexing='ij')
-            if nD == 3:
-                A = tf.meshgrid(tf.range(0,shape[0],dtype=edges.dtype),tf.range(0,shape[1],dtype=edges.dtype),tf.range(0,shape[2],dtype=edges.dtype),indexing='ij')
+            A = tf.meshgrid(tf.range(0,shape[0],dtype=edges.dtype),tf.range(0,shape[1],dtype=edges.dtype),indexing='ij')
             for k in range(nD):
                 A[k] = A[k] + tf.random.normal(A[k].shape)*pixel_noise
                 A[k] = tf.expand_dims(tf.expand_dims(A[k],0),nD+1)
             R = tf.concat(A,nD+1)
             R = tf.tile(R, [edges.shape[0]] + [1]*(nD+1) )
-            if nD == 2:
-                R = tf.einsum('bxy,bijy->bijx',edges[...,0:nD,0:nD],R) 
-                R = R+ex1(ex1(edges[:,0:nD,-1]))
-            else:
-                R = tf.einsum('bxy,bijky->bijkx',edges[...,0:nD,0:nD],R) 
-                R = R+ex1(ex1(ex1(edges[:,0:nD,-1])))
+            R = tf.einsum('bxy,bijy->bijx',edges[...,0:nD,0:nD],R)
+            R = R+ex1(ex1(edges[:,0:nD,-1]))
             return R
     
         
@@ -1356,8 +1321,6 @@ class CropGenerator():
                 uplim = tf.cast(sz,itype)-2
             ex = lambda x: tf.expand_dims(x,0)
             uplim = ex(ex(ex(uplim)))
-            if nD == 3:
-                uplim = ex(uplim)
             
             R = tf.where(R<0,tf.cast(0,dtype=itype),R)
             R = tf.where(R>uplim,uplim,R)
@@ -1462,10 +1425,7 @@ class CropGenerator():
                 # tree 
                 nboxes = tf.math.floor(1/w + 1)
                 ran = lambda i: tf.range(0.5,nboxes[i],dtype=edges.dtype)
-                if nD == 2:
-                     A = tf.meshgrid(ran(0),ran(1),indexing='ij')
-                else:
-                     A = tf.meshgrid(ran(0),ran(1),ran(2),indexing='ij')
+                A = tf.meshgrid(ran(0),ran(1),indexing='ij')
                 N = int32(tf.reduce_prod(nboxes))
                 for k in range(nD):
                     A[k] = tensor(tf.reshape(A[k],[N,1,1]))
